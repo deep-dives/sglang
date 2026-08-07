@@ -1,56 +1,60 @@
 ---
-title: Rerank models
+title: 重排序模型
 ---
-SGLang offers comprehensive support for rerank models by incorporating optimized serving frameworks with a flexible programming interface. This setup enables efficient processing of cross-encoder reranking tasks, improving the accuracy and relevance of search result ordering. SGLang’s design ensures high throughput and low latency during reranker model deployment, making it ideal for semantic-based result refinement in large-scale retrieval systems.
+SGLang 通过优化的服务化框架与灵活的程序接口，为重排序模型提供了全面支持。这套设计能高效处理交叉编码器（cross-encoder）重排序任务，提升搜索结果排序的准确性与相关性。SGLang 的设计确保重排序模型部署时具备高吞吐与低延迟，非常适合大规模检索系统中的基于语义的结果精排。
 
 <Warning>
-Rerank models in SGLang fall into two categories:
+SGLang 中的重排序模型分为两类：
 
-- **Cross-encoder rerank models**: run with `--is-embedding` (embedding runner).
-- **Decoder-only rerank models**: run **without** `--is-embedding` and use next-token logprob scoring (yes/no).
-  - Text-only (e.g. Qwen3-Reranker)
-  - Multimodal (e.g. Qwen3-VL-Reranker): also supports image/video content
+- **交叉编码器重排序模型**：使用 `--is-embedding`（嵌入 runner）运行。
+- **仅解码器（decoder-only）重排序模型**：**不加** `--is-embedding` 运行，使用下一 token 的 logprob 评分（yes/no）。
+  - 纯文本（例如 Qwen3-Reranker）
+  - 多模态（例如 Qwen3-VL-Reranker）：还支持图像/视频内容
 
-Some models may require `--trust-remote-code`.
+某些模型可能需要 `--trust-remote-code`。
 </Warning>
 
-## Supported rerank models
+<Note>
+💡 AI Infra 学习笔记：检索系统里常区分两类模型：双编码器（bi-encoder）与交叉编码器（cross-encoder）。双编码器把 query 和 document 分别编码成向量，靠向量相似度做召回，速度快但精度有限——嵌入模型就属于这一类；交叉编码器把 query 和 document 拼在一起过一遍模型打分，精度高但慢，通常作为召回后的精排阶段。SGLang 对两类都支持：交叉编码器走嵌入 runner（`--is-embedding`），解码器式重排序器则用下一 token 的 logprob 做 yes/no 打分。理解这个"粗召回 + 精排"的分层架构，是理解 RAG/向量检索系统性能设计的钥匙。
+</Note>
+
+## 支持的重排序模型
 
 <table>
   <thead>
     <tr>
-      <th>Model Family (Rerank)</th>
-      <th>Example HuggingFace Identifier</th>
-      <th>Chat Template</th>
-      <th>Description</th>
+      <th>模型系列（重排序）</th>
+      <th>示例 HuggingFace 标识符</th>
+      <th>对话模板</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><strong>BGE-Reranker (BgeRerankModel)</strong></td>
+      <td><strong>BGE-Reranker（BgeRerankModel）</strong></td>
       <td><code>BAAI/bge-reranker-v2-m3</code></td>
       <td>N/A</td>
-      <td>Currently only support <code>attention-backend</code> <code>triton</code> and <code>torch_native</code>. High-performance cross-encoder reranker model from BAAI. Suitable for reranking search results based on semantic relevance.</td>
+      <td>目前仅支持 <code>attention-backend</code> 的 <code>triton</code> 与 <code>torch_native</code>。来自 BAAI 的高性能交叉编码器重排序模型，适合基于语义相关性对搜索结果重排序。</td>
     </tr>
     <tr>
-      <td><strong>Qwen3-Reranker (decoder-only yes/no)</strong></td>
+      <td><strong>Qwen3-Reranker（仅解码器 yes/no）</strong></td>
       <td><code>Qwen/Qwen3-Reranker-8B</code></td>
       <td><code>examples/chat_template/qwen3_reranker.jinja</code></td>
-      <td>Decoder-only reranker using next-token logprob scoring for labels (yes/no). Launch <strong>without</strong> <code>--is-embedding</code>.</td>
+      <td>使用下一 token 的 logprob 对标签（yes/no）打分的仅解码器重排序器。启动时<strong>不要</strong>加 <code>--is-embedding</code>。</td>
     </tr>
     <tr>
-      <td><strong>Qwen3-VL-Reranker (multimodal yes/no)</strong></td>
+      <td><strong>Qwen3-VL-Reranker（多模态 yes/no）</strong></td>
       <td><code>Qwen/Qwen3-VL-Reranker-2B</code></td>
       <td><code>examples/chat_template/qwen3_vl_reranker.jinja</code></td>
-      <td>Multimodal decoder-only reranker supporting text, images, and videos. Uses yes/no logprob scoring. Launch <strong>without</strong> <code>--is-embedding</code>.</td>
+      <td>支持文本、图像与视频的多模态仅解码器重排序器，使用 yes/no logprob 打分。启动时<strong>不要</strong>加 <code>--is-embedding</code>。</td>
     </tr>
   </tbody>
 </table>
 
 
-## Cross-Encoder Rerank (embedding runner)
+## 交叉编码器重排序（嵌入 runner）
 
-### Launch Command
+### 启动命令
 
 ```shell
 python3 -m sglang.launch_server \
@@ -63,7 +67,7 @@ python3 -m sglang.launch_server \
   --port 30000
 ```
 
-### Example Client Request
+### 示例客户端请求
 
 ```python
 import requests
@@ -91,17 +95,17 @@ for item in response_json:
         print(f"Score: {item['score']:.2f} - Index: {item['index']}")
 ```
 
-**Request Parameters:**
+**请求参数：**
 
-- `query` (required): The query text to rank documents against
-- `documents` (required): List of documents to be ranked
-- `model` (required): Model to use for reranking
-- `top_n` (optional): Maximum number of documents to return. Defaults to returning all documents. If specified value is greater than the total number of documents, all documents will be returned.
-- `return_documents` (optional): Whether to return documents in the response. Defaults to `True`.
+- `query`（必填）：用于对文档排序的查询文本
+- `documents`（必填）：待排序的文档列表
+- `model`（必填）：用于重排序的模型
+- `top_n`（可选）：返回的最大文档数。默认为返回全部文档。如果指定值大于文档总数，则返回全部文档。
+- `return_documents`（可选）：是否在响应中返回文档。默认为 `True`。
 
-## Qwen3-Reranker (decoder-only yes/no rerank)
+## Qwen3-Reranker（仅解码器 yes/no 重排序）
 
-### Launch Command
+### 启动命令
 
 ```shell
 python3 -m sglang.launch_server \
@@ -114,10 +118,14 @@ python3 -m sglang.launch_server \
 ```
 
 <Note>
-Qwen3-Reranker uses decoder-only logprob scoring (yes/no). Do NOT launch it with `--is-embedding`.
+Qwen3-Reranker 使用仅解码器的 logprob 打分（yes/no）。请勿用 `--is-embedding` 启动它。
 </Note>
 
-### Example Client Request (supports optional instruct, top_n, and return_documents)
+<Note>
+💡 AI Infra 学习笔记：Qwen3-Reranker 这类"仅解码器 yes/no 重排序器"把重排问题包装成了一次生成任务——把 query 与文档拼进提示词，让模型只产出 yes/no，再取 yes/no 对应 token 的 logprob 作为相关性分数。这样它就能复用 LLM 的上下文建模能力，而 SGLang 的 KV 缓存/前缀缓存也能直接生效。要注意：它既然走生成路径，就**不能**用嵌入 runner 的 `--is-embedding` 启动，否则 `/v1/rerank` 无从计算 logprob。
+</Note>
+
+### 示例客户端请求（支持可选的 instruct、top_n 与 return_documents）
 
 ```shell
 curl -X POST http://127.0.0.1:8001/v1/rerank \
@@ -136,27 +144,27 @@ curl -X POST http://127.0.0.1:8001/v1/rerank \
   }'
 ```
 
-**Request Parameters:**
+**请求参数：**
 
-- `query` (required): The query text to rank documents against
-- `documents` (required): List of documents to be ranked
-- `model` (required): Model to use for reranking
-- `instruct` (optional): Instruction text for the reranker
-- `top_n` (optional): Maximum number of documents to return. Defaults to returning all documents. If specified value is greater than the total number of documents, all documents will be returned.
-- `return_documents` (optional): Whether to return documents in the response. Defaults to `True`.
+- `query`（必填）：用于对文档排序的查询文本
+- `documents`（必填）：待排序的文档列表
+- `model`（必填）：用于重排序的模型
+- `instruct`（可选）：给重排序器的指令文本
+- `top_n`（可选）：返回的最大文档数。默认为返回全部文档。如果指定值大于文档总数，则返回全部文档。
+- `return_documents`（可选）：是否在响应中返回文档。默认为 `True`。
 
-### Response Format
+### 响应格式
 
-`/v1/rerank` returns a list of objects (sorted by descending score):
+`/v1/rerank` 返回一个对象列表（按分数降序排列）：
 
-- `score`: float, higher means more relevant
-- `document`: the original document string (only included when `return_documents` is `true`)
-- `index`: the original index in the input `documents`
-- `meta_info`: optional debug/usage info (may be present for some models)
+- `score`：浮点数，越大表示相关性越高
+- `document`：原始文档字符串（仅当 `return_documents` 为 `true` 时包含）
+- `index`：在输入 `documents` 中的原始索引
+- `meta_info`：可选的调试/用量信息（某些模型可能提供）
 
-The number of returned results is controlled by the `top_n` parameter. If `top_n` is not specified or is greater than the total number of documents, all documents are returned.
+返回结果的数量由 `top_n` 参数控制。如果未指定 `top_n` 或其值大于文档总数，则返回全部文档。
 
-Example (with `return_documents: true`):
+示例（`return_documents: true`）：
 
 ```json
 [
@@ -166,7 +174,7 @@ Example (with `return_documents: true`):
 ]
 ```
 
-Example (with `return_documents: false`):
+示例（`return_documents: false`）：
 
 ```json
 [
@@ -176,7 +184,7 @@ Example (with `return_documents: false`):
 ]
 ```
 
-Example (with `top_n: 2`):
+示例（`top_n: 2`）：
 
 ```json
 [
@@ -185,17 +193,17 @@ Example (with `top_n: 2`):
 ]
 ```
 
-### Common Pitfalls
+### 常见坑
 
-- **`--chat-template` is required.** Without `--chat-template examples/chat_template/qwen3_reranker.jinja`, the server does not recognize the model as a decoder-only reranker and returns a 400 error: `"This model does not appear to be an embedding model by default. Please add `--is-embedding`..."`. The fix is to add the chat template flag, NOT `--is-embedding`.
-- If you launch Qwen3-Reranker with `--is-embedding`, `/v1/rerank` cannot compute yes/no logprob scores. Relaunch **without** `--is-embedding`.
-- If you see a validation error like "score should be a valid number" and the backend returned a list, upgrade to a version that coerces `embedding[0]` into `score` for rerank responses.
+- **必须加 `--chat-template`。** 不加 `--chat-template examples/chat_template/qwen3_reranker.jinja` 时，服务端无法识别该模型是仅解码器重排序器，会返回 400 错误：`"This model does not appear to be an embedding model by default. Please add `--is-embedding`..."`。解决办法是加上 chat template 参数，而**不是** `--is-embedding`。
+- 如果你用 `--is-embedding` 启动 Qwen3-Reranker，`/v1/rerank` 将无法计算 yes/no logprob 分数。请**去掉** `--is-embedding` 重新启动。
+- 如果遇到类似 "score should be a valid number" 的校验错误，且后端返回的是列表，请升级到能把 `embedding[0]` 强转为 `score` 以用于重排序响应的版本。
 
-## Qwen3-VL-Reranker (multimodal decoder-only rerank)
+## Qwen3-VL-Reranker（多模态仅解码器重排序）
 
-Qwen3-VL-Reranker extends the Qwen3-Reranker to support multimodal content, allowing reranking of documents containing text, images, and videos.
+Qwen3-VL-Reranker 扩展了 Qwen3-Reranker，以支持多模态内容，可对包含文本、图像和视频的文档进行重排序。
 
-### Launch Command
+### 启动命令
 
 ```shell
 python3 -m sglang.launch_server \
@@ -208,10 +216,10 @@ python3 -m sglang.launch_server \
 ```
 
 <Note>
-Qwen3-VL-Reranker uses decoder-only logprob scoring (yes/no) like Qwen3-Reranker. Do NOT launch it with `--is-embedding`.
+Qwen3-VL-Reranker 与 Qwen3-Reranker 一样使用仅解码器的 logprob 打分（yes/no）。请勿用 `--is-embedding` 启动它。
 </Note>
 
-### Text-Only Reranking (backward compatible)
+### 纯文本重排序（向后兼容）
 
 ```python
 import requests
@@ -237,7 +245,7 @@ for item in results:
     print(f"Score: {item['score']:.4f} - {item['document'][:60]}...")
 ```
 
-### Image Reranking (text query, image/mixed documents)
+### 图像重排序（文本查询，图像/混合文档）
 
 ```python
 import requests
@@ -280,7 +288,7 @@ for item in results:
     print(f"Index: {item['index']}, Score: {item['score']:.4f}")
 ```
 
-### Multimodal Query Reranking (query with image)
+### 多模态查询重排序（带图像的查询）
 
 ```python
 import requests
@@ -321,20 +329,20 @@ for item in results:
     print(f"Index: {item['index']}, Score: {item['score']:.4f}")
 ```
 
-### Request Parameters (Multimodal)
+### 请求参数（多模态）
 
-- `query` (required): Can be a string (text-only) or a list of content parts:
-  - `&#123;"type": "text", "text": "..."&#125;` for text
-  - `&#123;"type": "image_url", "image_url": &#123;"url": "..."&#125;&#125;` for images
-  - `&#123;"type": "video_url", "video_url": &#123;"url": "..."&#125;&#125;` for videos
-- `documents` (required): List where each document can be a string or list of content parts (same format as query)
-- `instruct` (optional): Instruction text for the reranker
-- `top_n` (optional): Maximum number of documents to return
-- `return_documents` (optional): Whether to return documents in the response (default: `false`)
+- `query`（必填）：可以是字符串（纯文本）或内容片段列表：
+  - `&#123;"type": "text", "text": "..."&#125;` 用于文本
+  - `&#123;"type": "image_url", "image_url": &#123;"url": "..."&#125;&#125;` 用于图像
+  - `&#123;"type": "video_url", "video_url": &#123;"url": "..."&#125;&#125;` 用于视频
+- `documents`（必填）：文档列表，每个文档可以是字符串或内容片段列表（格式与 query 相同）
+- `instruct`（可选）：给重排序器的指令文本
+- `top_n`（可选）：返回的最大文档数
+- `return_documents`（可选）：是否在响应中返回文档（默认：`false`）
 
-### Common Pitfalls
+### 常见坑
 
-- Always use `--chat-template examples/chat_template/qwen3_vl_reranker.jinja` for Qwen3-VL-Reranker.
-- Do NOT launch with `--is-embedding`.
-- For best results, use `--disable-radix-cache` to avoid caching issues with multimodal content.
-- **Note**: Currently only `Qwen3-VL-Reranker-2B` is tested and supported. The 8B model may have different behavior and is not guaranteed to work with this template.
+- 对 Qwen3-VL-Reranker 始终使用 `--chat-template examples/chat_template/qwen3_vl_reranker.jinja`。
+- 请勿用 `--is-embedding` 启动。
+- 为获得最佳效果，使用 `--disable-radix-cache` 以避免多模态内容的缓存问题。
+- **注意**：目前只测试并支持 `Qwen3-VL-Reranker-2B`。8B 模型可能有不同行为，不保证能与此模板配合工作。

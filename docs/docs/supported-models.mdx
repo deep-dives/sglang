@@ -1,87 +1,85 @@
 ---
-title: Supported models
-description: See which families of SGLang-compatible models are actively maintained.
+title: 支持的模型
+description: 查看 SGLang 当前积极维护的模型系列。
 mode: wide
 ---
 
-SGLang supports model families across text generation, retrieval, and reward workflows. Browse the sections below for the primary product paths and jump to the detail pages when you are ready to explore a specific class.
+SGLang 支持覆盖文本生成、检索与奖励工作流的各类模型系列。浏览下方各主要产品路径，需要深入了解某一类模型时，可跳转到对应详情页。
 
-### Text generation
+### 文本生成
 
 <CardGroup cols={3}>
   <Card
-    title="Large language models"
+    title="大语言模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/generative_models"
     img="/cards/LLM-card.png"
   >
-    Production-tuned Llama and Qwen families validated for high-throughput
-    serving.
+    面向生产调优的 Llama 与 Qwen 系列，已针对高吞吐量服务验证。
   </Card>
   <Card
-    title="Vision language models"
+    title="视觉语言模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/multimodal_language_models"
     img="/cards/VLM-card.png"
   >
-    Vision-text hybrids that stay responsive on multi-GPU setups.
+    视觉-文本混合模型，在多 GPU 环境下依然保持响应迅速。
   </Card>
   <Card
-    title="Diffusion language models"
+    title="扩散语言模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./sglang-diffusion/index"
     img="/cards/dLLM-card.png"
   >
-    Score-based and diffusion backbones for structured text generation
-    workflows.
+    面向结构化文本生成流程的基于评分（score-based）与扩散骨干模型。
   </Card>
 </CardGroup>
 
-### Retrieval and ranking
+### 检索与排序
 
 <CardGroup cols={3}>
   <Card
-    title="Embedding models"
+    title="嵌入模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/embedding_models"
     img="/cards/Embedding-card.png"
   >
-    Dense and sparse embeddings optimized with FlashInfer kernels.
+    用 FlashInfer kernel 优化过的稠密与稀疏嵌入。
   </Card>
   <Card
-    title="Rerank models"
+    title="重排序模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/rerank_models"
     img="/cards/Rerank-card.png"
   >
-    Low-latency rerankers for multi-stage retrieval pipelines.
+    面向多阶段检索管线的低延迟重排序器。
   </Card>
   <Card
-    title="Classification models"
+    title="分类模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/classify_models"
     img="/cards/Classification-card.png"
   >
-    Lightweight classifiers covering safety, intent, and context filters.
+    覆盖安全、意图与上下文过滤的轻量分类器。
   </Card>
 </CardGroup>
 
-### Specialized models
+### 专项模型
 
 <CardGroup cols={3}>
   <Card
-    title="Reward models"
+    title="奖励模型"
     mode="card"
     className="max-w-sm mx-auto"
     href="./supported-models/reward_models"
     img="/cards/Reward-card.png"
   >
-    RLHF and reward scoring pipelines optimized for production latency.
+    针对生产延迟优化的 RLHF 与奖励评分管线。
   </Card>
 </CardGroup>

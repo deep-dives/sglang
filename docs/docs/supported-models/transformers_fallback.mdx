@@ -1,11 +1,15 @@
 ---
-title: "Transformers Fallback in SGLang"
+title: "SGLang 中的 Transformers 回退"
 ---
-`sglang` can fall back to using models that are available in `transformers`. This works for most decoder-style language models and support for vision-language models is coming soon!
+`sglang` 可以回退到使用 `transformers` 中可用的模型。这适用于大多数解码器风格的纯文本模型，对视觉语言模型的支持即将推出！
 
-## Example launch Command
+<Note>
+💡 AI Infra 学习笔记：推理引擎通常为常见架构手写高性能 kernel（SGLang 的原生实现），但长尾模型永远覆盖不完。Transformers 回退就是"保底通道"：当 SGLang 没有某架构的原生实现时，直接借用 Hugging Face transformers 的前向逻辑运行。代价是性能——它缺少 SGLang 的分页注意力、CUDA 图等优化，速度通常明显低于原生实现，因此只建议作为兼容性兜底，而非生产首选。这也是推理引擎生态中"原生 kernel 覆盖 vs 通用回退"取舍的缩影。
+</Note>
 
-By default, we will use sglang implementation if it is available. Otherwise, we will fall back to transformers one. However, you can switch the implementation by setting `--model-impl` to `transformers`.
+## 示例启动命令
+
+默认情况下，如果存在 sglang 实现，我们会优先使用它；否则会回退到 transformers 实现。你也可以通过设置 `--model-impl` 为 `transformers` 来切换实现。
 
 ```shell Launch Server
 python3 -m sglang.launch_server \
@@ -15,17 +19,17 @@ python3 -m sglang.launch_server \
   --model-impl transformers
 ```
 
-## Supported features
+## 支持的功能
 
-### Quantization
+### 量化
 
-Transformers fall back has supported most of available quantization in SGLang (except GGUF). See [Quantization page](../advanced_features/quantization) for more information about supported quantization in SGLang.
+Transformers 回退支持 SGLang 中大多数可用的量化方式（GGUF 除外）。关于 SGLang 支持的量化，详见 [量化页面](../advanced_features/quantization)。
 
-### Remote code
+### 远程代码
 
-This fallback also means that any model on the hub that can be used in `transformers` with `trust_remote_code=True` that correctly implements attention can be used in production!
+这种回退方式还意味着，hub 上任何可以在 `transformers` 中以 `trust_remote_code=True` 使用、且正确实现了注意力的模型，都可以投入生产使用！
 
-A model just needs the following two things:
+一个模型只需满足以下两点：
 
 ```python Example
 from transformers import PreTrainedModel
@@ -50,10 +54,10 @@ class MyModel(PreTrainedModel):
   _supports_attention_backend = True
 ```
 
-Here is what happens in the background:
+后台会发生以下事情：
 
-1. The config is loaded
-2. `MyModel` python class is loaded from the `auto_map`, and we check that the model `_supports_attention_backend`.
-3. The `TransformersModel` backend is used. See `/srt/models/transformers`, which leverages `self.config._attn_implementation = "sglang"`, thus the need to use `ALL_ATTENTION_FUNCTIONS`.
+1. 加载配置
+2. 从 `auto_map` 加载 `MyModel` Python 类，并检查模型是否设置了 `_supports_attention_backend`。
+3. 使用 `TransformersModel` 后端。参见 `/srt/models/transformers`，它利用 `self.config._attn_implementation = "sglang"`，因此需要使用 `ALL_ATTENTION_FUNCTIONS`。
 
-That's it!
+就是这样！

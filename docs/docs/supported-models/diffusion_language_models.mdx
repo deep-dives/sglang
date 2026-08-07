@@ -1,11 +1,15 @@
 ---
-title: Diffusion language models
+title: 扩散语言模型
 ---
-Diffusion language models have shown promise for non-autoregressive text generation with parallel decoding capabilities. Unlike auto-regressive language models, different diffusion language models require different decoding strategies.
+扩散语言模型在具备并行解码能力的非自回归文本生成方面展现出潜力。与自回归语言模型不同，不同的扩散语言模型需要不同的解码策略。
 
-## Example Launch Command
+<Note>
+💡 AI Infra 学习笔记：扩散语言模型（dLLM）走的是非自回归生成路线——解码时不再逐 token 顺序产出，而是并行"去噪"出整段文本，因此天然具备并行解码能力、吞吐潜力更大。但这给推理引擎带来新挑战：每个请求收敛所需的步数不同，若沿用传统锁步（lockstep）批处理，先收敛的请求会被慢请求拖住（即队头阻塞）。SGLang 的 FDFO 调度正是为了解决这类非自回归解码下的调度问题，其思路与自回归场景的 continuous batching 异曲同工。
+</Note>
 
-SGLang supports different DLLM algorithms such as `LowConfidence` and `JointThreshold`.
+## 示例启动命令
+
+SGLang 支持 `LowConfidence` 和 `JointThreshold` 等不同的 dLLM 算法。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -16,9 +20,9 @@ python3 -m sglang.launch_server \
   --port 30000
 ```
 
-## First-Done-First-Out (FDFO) Scheduling
+## 先完成先出（First-Done-First-Out，FDFO）调度
 
-FDFO scheduling is **enabled by default**: each request leaves the batch as soon as its block is resolved, instead of advancing in lockstep where fast-converging requests must wait for slow long-tail requests before leaving the batch (head-of-line blocking). This improves throughput and is orthogonal to `--dllm-algorithm`, so it works with any dLLM algorithm. Pass `--no-dllm-fdfo` to fall back to synchronous lockstep scheduling:
+FDFO 调度**默认启用**：每个请求一旦其块被解析就立即离开批次，而不是以锁步方式推进——在锁步方式下，快速收敛的请求必须等待慢速的长尾请求才能离开批次（队头阻塞）。这能提升吞吐量，且与 `--dllm-algorithm` 相互独立，因此适用于任何 dLLM 算法。传入 `--no-dllm-fdfo` 可回退到同步的锁步调度：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -29,11 +33,11 @@ python3 -m sglang.launch_server \
   --port 30000
 ```
 
-## Example Configuration File
+## 示例配置文件
 
-Depending on the algorithm selected, the configuration parameters vary.
+配置参数因所选算法而异。
 
-LowConfidence Config:
+LowConfidence 配置：
 
 ```yaml Config
 # Confidence threshold for accepting predicted tokens
@@ -46,7 +50,7 @@ threshold: 0.95
 block_size: 32
 ```
 
-JointThreshold Config:
+JointThreshold 配置：
 
 ```yaml Config
 # Decoding threshold for Mask-to-Token (M2T) phase
@@ -65,11 +69,11 @@ max_post_edit_steps: 16
 penalty_lambda: 0
 ```
 
-## Example Client Code Snippet
+## 示例客户端代码片段
 
-Just like other supported models, diffusion language models can be used via the REST API or Python client.
+与其他受支持的模型一样，扩散语言模型可以通过 REST API 或 Python 客户端使用。
 
-Python client example for making a generation request to the launched server:
+向已启动的服务端发起生成请求的 Python 客户端示例：
 
 ```python Example
 import sglang as sgl
@@ -96,7 +100,7 @@ if __name__ == '__main__':
     main()
 ```
 
-Curl example for making a generation request to the launched server:
+向已启动的服务端发起生成请求的 curl 示例：
 
 ```bash Command
 curl -X POST "http://127.0.0.1:30000/generate" \
@@ -114,38 +118,38 @@ curl -X POST "http://127.0.0.1:30000/generate" \
     }'
 ```
 
-## Supported Models
+## 支持的模型
 
-Below the supported models are summarized in a table.
+下表汇总了支持的模型。
 
 <table>
   <thead>
     <tr>
-      <th>Model Family</th>
-      <th>Example Model</th>
-      <th>Description</th>
+      <th>模型系列</th>
+      <th>示例模型</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><strong>LLaDA2.0 (mini, flash)</strong></td>
       <td><code>inclusionAI/LLaDA2.0-flash</code></td>
-      <td>LLaDA2.0-flash is a diffusion language model featuring a 100B Mixture-of-Experts (MoE) architecture.</td>
+      <td>LLaDA2.0-flash 是一个扩散语言模型，采用 100B 混合专家（MoE）架构。</td>
     </tr>
     <tr>
       <td><strong>SDAR (JetLM)</strong></td>
       <td><code>JetLM/SDAR-8B-Chat</code></td>
-      <td>SDAR series diffusion language model (Chat), dense architecture.</td>
+      <td>SDAR 系列扩散语言模型（Chat 版），稠密架构。</td>
     </tr>
     <tr>
       <td><strong>SDAR (JetLM)</strong></td>
       <td><code>JetLM/SDAR-30B-A3B-Chat</code></td>
-      <td>SDAR series diffusion language model (Chat), MoE architecture.</td>
+      <td>SDAR 系列扩散语言模型（Chat 版），MoE 架构。</td>
     </tr>
     <tr>
       <td><strong>DiffusionGemma</strong></td>
       <td><code>google/diffusiongemma-26B-A4B-it</code></td>
-      <td>Uniform-state (renoising) block-diffusion multimodal (text + image) MoE, 25.2B total / 3.8B active, served with the <code>Gemma4Renoise</code> sampler.</td>
+      <td>均匀状态（re-noising）块扩散多模态（文本 + 图像）MoE 模型，共 25.2B 参数 / 3.8B 激活，使用 <code>Gemma4Renoise</code> 采样器服务。</td>
     </tr>
   </tbody>
 </table>

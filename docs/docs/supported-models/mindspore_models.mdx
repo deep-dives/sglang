@@ -1,26 +1,26 @@
 ---
-title: "MindSpore Models"
+title: "MindSpore 模型"
 ---
-## Introduction
+## 简介
 
-MindSpore is a high-performance AI framework optimized for Ascend NPUs. This doc guides users to run MindSpore models in SGLang.
+MindSpore 是一个针对 Ascend NPU 优化的高性能 AI 框架。本文档指导用户如何在 SGLang 中运行 MindSpore 模型。
 
-## Requirements
+## 环境要求
 
-MindSpore currently only supports Ascend NPU devices. Users need to first install Ascend CANN 8.5.
-The CANN software packages can be downloaded from the [Ascend Official Website](https://www.hiascend.com).
+MindSpore 目前仅支持 Ascend NPU 设备。用户需要先安装 Ascend CANN 8.5。
+CANN 软件包可从 [Ascend 官网](https://www.hiascend.com) 下载。
 
-## Supported Models
+## 支持的模型
 
-Currently, the following models are supported:
+目前支持以下模型：
 
-- **Qwen3**: Dense and MoE models
+- **Qwen3**：稠密与 MoE 模型
 - **DeepSeek V3/R1**
-- *More models coming soon...*
+- *更多模型即将推出...*
 
-## Installation
+## 安装
 
-> **Note**: Currently, MindSpore models are provided by an independent package `sgl-mindspore`. Support for MindSpore is built upon current SGLang support for Ascend NPU platform. Please first [install SGLang for Ascend NPU](../hardware-platforms/ascend-npus/getting-started/installation) and then install `sgl-mindspore`:
+> **注意**：目前，MindSpore 模型由独立包 `sgl-mindspore` 提供。对 MindSpore 的支持建立在 SGLang 现有的 Ascend NPU 平台支持之上。请先 [为 Ascend NPU 安装 SGLang](../hardware-platforms/ascend-npus/getting-started/installation)，然后再安装 `sgl-mindspore`：
 
 ```bash Install
 git clone https://github.com/mindspore-lab/sgl-mindspore.git
@@ -29,13 +29,13 @@ pip install -e .
 ```
 
 
-## Run Model
+## 运行模型
 
-Current SGLang-MindSpore supports Qwen3 and DeepSeek V3/R1 models. This doc uses Qwen3-8B as an example.
+当前 SGLang-MindSpore 支持 Qwen3 与 DeepSeek V3/R1 模型。本文档以 Qwen3-8B 为例。
 
-### Offline inference
+### 离线推理
 
-Use the following script for offline inference:
+使用以下脚本进行离线推理：
 
 ```python Offline Infer
 import sglang as sgl
@@ -66,9 +66,9 @@ for prompt, output in zip(prompts, outputs):
     print("---")
 ```
 
-### Start server
+### 启动服务端
 
-Launch a server with MindSpore backend:
+使用 MindSpore 后端启动服务端：
 
 ```bash Command
 # Basic server startup
@@ -82,7 +82,7 @@ python3 -m sglang.launch_server \
     --dp-size 1
 ```
 
-For distributed server with multiple nodes:
+多节点分布式服务端：
 
 ```bash Command
 # Multi-node distributed server
@@ -99,11 +99,11 @@ python3 -m sglang.launch_server \
     --dp-size 2
 ```
 
-## Troubleshooting
+## 故障排查
 
-#### Debug Mode
+#### 调试模式
 
-Enable sglang debug logging by log-level argument.
+通过 log-level 参数启用 SGLang 调试日志。
 
 ```bash Debug Mode
 python3 -m sglang.launch_server \
@@ -115,38 +115,39 @@ python3 -m sglang.launch_server \
     --log-level DEBUG
 ```
 
-Enable mindspore info and debug logging by setting environments.
+通过设置环境变量启用 MindSpore 的 info 与 debug 日志。
 
 ```bash Command
 export GLOG_v=1  # INFO
 export GLOG_v=0  # DEBUG
 ```
 
-#### Explicitly select devices
+#### 显式选择设备
 
-Use the following environment variable to explicitly select the devices to use.
+使用以下环境变量显式选择要使用的设备。
 
 ```bash Command
 export ASCEND_RT_VISIBLE_DEVICES=4,5,6,7  # to set device
 ```
 
-#### Some communication environment issues
+#### 部分通信环境问题
 
-In case of some environment with special communication environment, users need set some environment variables.
+在具有特殊通信环境的环境中，用户需要设置一些环境变量。
 
 ```bash Disable LCCL
 export MS_ENABLE_LCCL=off # current not support LCCL communication mode in SGLang-MindSpore
 ```
 
-#### Some dependencies of protobuf
+#### protobuf 的部分依赖问题
 
-In case of some environment with special protobuf version, users need set some environment variables to avoid binary version mismatch.
+在具有特殊 protobuf 版本的环境中，用户需要设置一些环境变量以避免二进制版本不匹配。
 
 ```bash Command
 export PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION=python  # to avoid protobuf binary version mismatch
 ```
 
-## Support
-For MindSpore-specific issues:
+## 支持
 
-- Refer to the [MindSpore documentation](https://www.mindspore.cn/)
+针对 MindSpore 特定问题：
+
+- 请参考 [MindSpore 文档](https://www.mindspore.cn/)

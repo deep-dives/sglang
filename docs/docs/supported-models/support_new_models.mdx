@@ -1,117 +1,98 @@
 ---
-title: "How to Support New Models"
-description: "This document explains how to add support for new language models and multimodal large language models (MLLMs) in SGLang. It also covers how to test new models and register external implementations."
+title: "如何支持新模型"
+description: "本文档说明如何在 SGLang 中添加对新的语言模型和多模态大语言模型（MLLM）的支持，并介绍如何测试新模型以及注册外部实现。"
 ---
-This document explains how to add support for new language models and multimodal large language models (MLLMs) in
-SGLang. It also covers how to test new models and register external implementations.
+本文档说明如何在 SGLang 中添加对新的语言模型和多模态大语言模型（MLLM）的支持，并介绍如何测试新模型以及注册外部实现。
 
-## How to Support a New Language Model
+## 如何支持新的语言模型
 
-To support a new model in SGLang, you only need to add a single file under
-the [SGLang Models Directory](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/models). You can learn
-from existing model implementations and create a new file for your model. For most models, you should be able to find a
-similar model to start with (e.g., starting from Llama). Also refer how
-to [port a Model from vLLM to SGLang](#port-a-model-from-vllm-to-sglang)
+要在 SGLang 中支持一个新模型，你只需在 [SGLang 模型目录](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/models) 下添加一个文件。你可以参考现有的模型实现，为你的模型创建新文件。对大多数模型来说，你都能找到一个相近的模型作为起点（例如从 Llama 开始）。另外请参考如何[将模型从 vLLM 移植到 SGLang](#port-a-model-from-vllm-to-sglang)。
 
-## How to Support a New Multimodal Large Language Model
+<Note>
+💡 AI Infra 学习笔记：推理引擎对"模型支持"的抽象通常很薄——引擎的调度、显存、kernel 都与具体模型无关，模型层只需要实现标准的前向接口。SGLang 把这一点做到了极致：加一个新模型只需在模型目录下放一个文件，实现前向并挂到注册表即可。理解这个分层（引擎 ↔ 模型层）是读推理引擎源码的起点；面试被问"如何给引擎加新模型"，本质就是在考察你对这条抽象边界的理解。
+</Note>
 
-To support a new multimodal large language model (MLLM) in SGLang, there are several key components in addition to the
-standard LLM support:
+## 如何支持新的多模态大语言模型
 
-1. **Register your new model as multimodal**:
-   Extend `is_multimodal_model`
-   in [model_config.py](https://github.com/sgl-project/sglang/blob/0ab3f437aba729b348a683ab32b35b214456efc7/python/sglang/srt/configs/model_config.py#L561)
-   to return `True` for your model.
+要在 SGLang 中支持一个新的多模态大语言模型（MLLM），除了标准的 LLM 支持外，还有几个关键组件：
 
-2. **Register a new chat-template**:
-   Only when your default chat-template is unable to accept images as input: Register a new chat template in [conversation.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/parser/conversation.py) and the corresponding matching function.
+1. **把新模型注册为多模态**：扩展 [model_config.py](https://github.com/sgl-project/sglang/blob/0ab3f437aba729b348a683ab32b35b214456efc7/python/sglang/srt/configs/model_config.py#L561) 中的 `is_multimodal_model`，让它在你的模型上返回 `True`。
 
-3. **Multimodal Data Processor**:
-   Define a new `Processor` class that inherits from `BaseMultimodalProcessor` and register this processor as your
-   model’s dedicated processor.
-   See [multimodal_processor.py](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/multimodal/processors)
-   for more details.
+2. **注册新的对话模板**：仅当你的默认对话模板无法接受图像输入时才需要：在 [conversation.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/parser/conversation.py) 中注册新的对话模板及对应的匹配函数。
 
-4. **Handle Multimodal Tokens**:
-   Implement a `pad_input_ids` function for your new model. In this function, multimodal tokens in the prompt should be
-   expanded (if necessary) and padded with multimodal-data-hashes so that SGLang can recognize different multimodal data
-   with `RadixAttention`.
+3. **多模态数据处理**：定义一个新的 `Processor` 类，继承自 `BaseMultimodalProcessor`，并把该 processor 注册为模型专用的 processor。详见 [multimodal_processor.py](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/multimodal/processors)。
 
-5. **Handle Image Feature Extraction**:
-   Implement a `get_image_feature` function for your new model, which extracts image features from raw image data and converts them into the embeddings used by the language model.
+4. **处理多模态 token**：为你的新模型实现 `pad_input_ids` 函数。在该函数中，提示词中的多模态 token 应被展开（如有必要），并填充多模态数据哈希值，以便 SGLang 能通过 `RadixAttention` 识别不同的多模态数据。
 
-6. **Adapt to Vision Attention**:
-   Adapt the multi-headed `Attention` of ViT with SGLang’s `VisionAttention`.
+5. **处理图像特征提取**：为你的新模型实现 `get_image_feature` 函数，从原始图像数据中提取图像特征，并转换为语言模型使用的嵌入。
 
-You can refer to [Qwen2VL](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/qwen2_vl.py) or
-other mllm implementations. These models demonstrate how to correctly handle both multimodal and textual inputs.
+6. **适配视觉注意力**：把 ViT 的多头 `Attention` 适配为 SGLang 的 `VisionAttention`。
 
-## Testing and Debugging
+你可以参考 [Qwen2VL](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/qwen2_vl.py) 或其他 MLLM 实现。这些模型展示了如何正确处理多模态与文本输入。
 
-Please note all your testing and benchmarking results in PR description.
+## 测试与调试
 
-### Interactive Debugging
+请把你所有的测试与基准测试结果都记录在 PR 描述中。
 
-For interactive debugging, compare the outputs of Hugging Face/Transformers and SGLang. The following two commands
-should give the same text output and very similar prefill logits:
+### 交互式调试
 
-- Get the reference output:
+进行交互式调试时，对比 Hugging Face/Transformers 与 SGLang 的输出。以下两条命令应给出相同的文本输出与非常相似的预填充 logits：
+
+- 获取参考输出：
   ```bash Command
   python3 scripts/playground/reference_hf.py --model-path [new model] --model-type {text,vlm}
   ```
-- Get the SGLang output:
+- 获取 SGLang 输出：
   ```bash Command
   python3 -m sglang.bench_one_batch --correct --model [new model]
   ```
 
-### Add the Model to the Test Suite
+### 把模型加入测试套件
 
-To ensure the new model is well maintained, add it to the test suite by including it in the `ALL_OTHER_MODELS` list in
-the [test_generation_models.py](https://github.com/sgl-project/sglang/blob/main/test/registered/models/test_generation_models.py)
-file, test the new model on your local machine and report the results on demonstrative benchmarks (GSM8K, MMLU, MMMU,
-MMMU-Pro, etc.) in your PR. \\
-For VLMs, also include a test in `test_vision_openai_server_&#123;x&#125;.py` (e.g. [test_vision_openai_server_a.py](https://github.com/sgl-project/sglang/blob/main/test/registered/vlm/test_vision_openai_server_a.py)).
+为确保新模型得到良好维护，请把它加入测试套件，即 [test_generation_models.py](https://github.com/sgl-project/sglang/blob/main/test/registered/models/test_generation_models.py) 文件中的 `ALL_OTHER_MODELS` 列表，在本地机器上测试新模型，并在 PR 中报告代表性基准（GSM8K、MMLU、MMMU、MMMU-Pro 等）的结果。\
+对于 VLM，还需要在 `test_vision_openai_server_&#123;x&#125;.py`（例如 [test_vision_openai_server_a.py](https://github.com/sgl-project/sglang/blob/main/test/registered/vlm/test_vision_openai_server_a.py)）中加入一个测试。
 
-This is an example command to run to test a new model on your local machine:
+下面是在本地机器上测试新模型的示例命令：
 
 ```bash Run Test
 ONLY_RUN=Qwen/Qwen2-1.5B python3 -m unittest test_generation_models.TestGenerationModels.test_others
 ```
 
-### Benchmark
+### 基准测试
 
-- **(Required) MMMU**: follow MMMU benchmark [README.md](https://github.com/sgl-project/sglang/blob/main/benchmark/mmmu/README.md) to get SGLang vs. HF Transformer accuracy comparison. The accuracy score from SGLang run should not be much lower than that from HF Transformer run. Similarly, follow https://docs.sglang.io/developer_guide/benchmark_and_profiling.html to get performance comparison: TTFT and throughput must meet or exceed baselines (e.g., HF Transformer).
-- **(Optional) Other evals**: If you ran other evals, please note the results in PR description.
+- **（必做）MMMU**：按照 MMMU 基准测试 [README.md](https://github.com/sgl-project/sglang/blob/main/benchmark/mmmu/README.md) 获取 SGLang 与 HF Transformer 的精度对比。SGLang 运行的精度分数不应明显低于 HF Transformer 运行。同样，请按照 https://docs.sglang.io/developer_guide/benchmark_and_profiling.html 获取性能对比：TTFT 与吞吐量必须达到或超过基线（例如 HF Transformer）。
+- **（可选）其他评测**：如果你运行了其他评测，请在 PR 描述中注明结果。
 
-## Port a Model from vLLM to SGLang
+## 将模型从 vLLM 移植到 SGLang {#port-a-model-from-vllm-to-sglang}
 
-The [vLLM Models Directory](https://github.com/vllm-project/vllm/tree/main/vllm/model_executor/models) is a valuable
-resource, as vLLM covers many models. SGLang reuses vLLM’s interface and some layers, making it easier to port models
-from vLLM to SGLang.
+[vLLM 模型目录](https://github.com/vllm-project/vllm/tree/main/vllm/model_executor/models) 是非常有价值的资源，因为 vLLM 覆盖了大量模型。SGLang 复用了 vLLM 的接口和部分层，因此从 vLLM 移植模型到 SGLang 相对容易。
 
-To port a model from vLLM to SGLang:
+要从 vLLM 移植模型到 SGLang：
 
-- Compare these two files for guidance:
-  - [SGLang Llama Implementation](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/llama.py)
-  - [vLLM Llama Implementation](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/llama.py)
-- The major differences include:
-  - **Replace vLLM’s `Attention` with `RadixAttention`** (ensure you pass `layer_id` to `RadixAttention`).
-  - **Replace vLLM’s `LogitsProcessor` with SGLang’s `LogitsProcessor`.**
-  - **Replace the multi-headed `Attention` of ViT with SGLang’s `VisionAttention`.**
-  - **Replace other vLLM layers** (such as `RMSNorm`, `SiluAndMul`) with SGLang layers.
-  - **Remove `Sample`.**
-  - **Change the `forward()` functions** and add a `forward_batch()` method.
-  - **Add `EntryClass`** at the end.
-  - **Ensure that the new implementation uses only SGLang components** and does not rely on any vLLM components.
+- 对比以下两个文件作为参考：
+  - [SGLang Llama 实现](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/llama.py)
+  - [vLLM Llama 实现](https://github.com/vllm-project/vllm/blob/main/vllm/model_executor/models/llama.py)
+- 主要差异包括：
+  - **把 vLLM 的 `Attention` 替换为 `RadixAttention`**（务必把 `layer_id` 传给 `RadixAttention`）。
+  - **把 vLLM 的 `LogitsProcessor` 替换为 SGLang 的 `LogitsProcessor`。**
+  - **把 ViT 的多头 `Attention` 替换为 SGLang 的 `VisionAttention`。**
+  - **把其他 vLLM 层**（如 `RMSNorm`、`SiluAndMul`）替换为 SGLang 的对应层。
+  - **移除 `Sample`。**
+  - **修改 `forward()` 函数**并新增 `forward_batch()` 方法。
+  - **在文件末尾添加 `EntryClass`。**
+  - **确保新实现只使用 SGLang 组件**，不依赖任何 vLLM 组件。
 
-Note: make sure you add your new model to the supported models list in the supported models documentation.
+<Note>
+💡 AI Infra 学习笔记：移植清单的核心是"把 `Attention` 换成 `RadixAttention`"。RadixAttention 是 SGLang 性能的核心：它把前缀缓存（Radix cache）直接接进注意力层，让多个请求共享相同前缀时能复用已有的 KV 缓存，大幅减少重复预填充的开销。这也是 SGLang 要求每个新模型必须通过 RadixAttention 接入、并显式传入 `layer_id` 的原因。理解"缓存如何进入模型层"，是把握 SGLang 相比朴素实现吞吐优势的关键。
+</Note>
 
-## Registering an External Model Implementation
+注意：请把新模型添加到 supported models 文档中的支持模型列表里。
 
-In addition to the methods above, you can register your new model with the `ModelRegistry` before launching the server.
-This allows you to integrate your model without modifying the source code.
+## 注册外部模型实现
 
-For example:
+除了上述方法，你还可以在启动服务端前用 `ModelRegistry` 注册你的新模型。这样无需修改源码即可集成你的模型。
+
+例如：
 
 ```python Register Model
 from sglang.srt.models.registry import ModelRegistry
@@ -136,16 +117,16 @@ ModelRegistry.models.update(import_new_model_classes())
 launch_server(server_args)
 ```
 
-## Example: Implementing and Serving a Llama Wrapper Model
+## 示例：实现并服务一个 Llama 包装模型
 
-Below is an introductory, step-by-step walkthrough on how to implement a new model end-to-end in SGLang and then run it via the [Offline Engine](../basic_usage/offline_engine_api).
+下面是一份入门级的分步教程，讲解如何在 SGLang 中端到端实现一个新模型，并通过 [Offline Engine](../basic_usage/offline_engine_api) 运行它。
 
-### Implementing Our Model
+### 实现我们的模型
 
-To keep things simple, this new model will be a simple wrapper around [Llama 3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct), and our goal will be just to bias the output logits for each `forward` call by taking the square root of each individual logit.
+为了简单起见，这个新模型将是 [Llama 3.1-8B-Instruct](https://huggingface.co/meta-llama/Llama-3.1-8B-Instruct) 的简单包装器，我们的目标只是在每次 `forward` 调用中，对每个 logit 取平方根，从而对输出 logits 施加偏置。
 
-Let's start by defining our model in a file called `llama_wrapper.py`.
-The first step is to import the necessary libraries from SRT, which is SGLang's internal backend.
+我们先在名为 `llama_wrapper.py` 的文件中定义模型。
+第一步是从 SRT 导入所需库，SRT 是 SGLang 的内部后端。
 
 ```python Example
 # In the file `llama_wrapper.py`
@@ -160,9 +141,9 @@ from sglang.srt.model_executor.forward_batch_info import ForwardBatch, PPProxyTe
 from sglang.srt.models.llama import LlamaForCausalLM
 ```
 
-Next, we declare a new `class` for our model and have it inherit from `LlamaForCausalLM`, which allows our model to access `LlamaForCausalLM`'s predefined modules and layers, such as `LlamaAttention` and `LlamaMLP`.
-Note that almost all model implementations take in `config` and `quant_config` as arguments for their `__init__` method; `config` and `quant_config` are passed in via [`model_loader/loader.py`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_loader/loader.py#L219).
-Because we have inherited from `LlamaForCausalLM`, we can pass our parameters directly to its constructor, which will set the member variables for us.
+接下来，我们为模型声明一个新的 `class`，并让它继承 `LlamaForCausalLM`，这样我们的模型就能访问 `LlamaForCausalLM` 预定义的模块和层，例如 `LlamaAttention` 与 `LlamaMLP`。
+请注意，几乎所有的模型实现都在 `__init__` 方法中接收 `config` 与 `quant_config` 两个参数；`config` 和 `quant_config` 通过 [`model_loader/loader.py`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_loader/loader.py#L219) 传入。
+由于我们继承了 `LlamaForCausalLM`，可以直接把参数传给它的构造函数，由它来设置成员变量。
 
 ```python Class Definition
 class LlamaWrapper(LlamaForCausalLM):
@@ -175,9 +156,9 @@ class LlamaWrapper(LlamaForCausalLM):
         super().__init__(config=config, quant_config=quant_config, prefix=prefix)
 ```
 
-Now, we want to define the `forward` method, which is what will be called at inference time.
-Note that the signature for `forward` is essentially the same for any model; you can take a look at the other models defined in the [`models` directory](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/) for references.
-To see where exactly `forward` is called in the SGLang runtime's internals, take a look at [`forward_decode`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_executor/model_runner.py#L1705) and [`forward_extend`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_executor/model_runner.py#L1724) in the [`ModelRunner` class](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/model_executor/model_runner.py).
+现在，我们定义 `forward` 方法，它将在推理时被调用。
+请注意，任何模型的 `forward` 签名本质上都是相同的；你可以查看 [`models` 目录](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/) 中定义的其他模型作为参考。
+想了解 `forward` 具体在 SGLang 运行时的内部哪里被调用，请看 [`ModelRunner` 类](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/model_executor/model_runner.py) 中的 [`forward_decode`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_executor/model_runner.py#L1705) 与 [`forward_extend`](https://github.com/sgl-project/sglang/blob/bf72b80122fd888bf619d17b96fa3e323ab809fc/python/sglang/srt/model_executor/model_runner.py#L1724)。
 
 ```python Forward Method Signature
     @torch.no_grad()
@@ -192,8 +173,8 @@ To see where exactly `forward` is called in the SGLang runtime's internals, take
     ) -> LogitsProcessorOutput:
 ```
 
-We now call the `__call__` method for `self.model` (which is a member variable that `LlamaForCausalLM` defines in its `__init__` method), which eventually calls `LlamaForCausalLM`'s `forward` method.
-After that, we feed the `hidden_states` into our model's `LogitsProcessor` (again defined in `LlamaForCausalLM`).
+现在我们调用 `self.model`（`LlamaForCausalLM` 在 `__init__` 中定义的成员变量）的 `__call__` 方法，它最终会调用 `LlamaForCausalLM` 的 `forward` 方法。
+之后，我们把 `hidden_states` 送入我们模型的 `LogitsProcessor`（同样定义在 `LlamaForCausalLM` 中）。
 
 ```python Call Model and LogitsProcessor
         hidden_states = self.model(
@@ -212,7 +193,7 @@ After that, we feed the `hidden_states` into our model's `LogitsProcessor` (agai
         )
 ```
 
-After receiving the logits for the next token, we can finally perform our biasing step.
+拿到下一个 token 的 logits 后，我们终于可以执行偏置步骤了。
 
 ```python Logit Biasing
         orig_logits = res.next_token_logits
@@ -225,15 +206,15 @@ After receiving the logits for the next token, we can finally perform our biasin
         return res
 ```
 
-Now, our `LlamaWrapper` model is created and ready to be served!
+现在，我们的 `LlamaWrapper` 模型已创建完成，可以服务了！
 
-### Serving Our Model Via SGLang's Offline Engine
+### 通过 SGLang 的离线引擎服务我们的模型
 
-The next step of this walkthrough involves hosting our new model offline, so that it can be served locally and without an HTTP server.
+本教程的下一步是离线托管我们的新模型，这样它就能在本地、无需 HTTP 服务端的情况下被服务。
 
-First, create a new file called `run.py`.
-Now, we must ensure that SGLang's `ModelRegistry` can find our model.
-To do this, we first download the model's configuration and weights from Huggingface.
+首先创建一个名为 `run.py` 的新文件。
+现在，我们必须确保 SGLang 的 `ModelRegistry` 能找到我们的模型。
+为此，我们先从 Huggingface 下载模型的配置与权重。
 
 ```python Example
 # In the file `run.py`
@@ -253,8 +234,8 @@ llama_dir = snapshot_download(
 )
 ```
 
-Now that we have our model on disk, we want to point it to `LlamaWrapper` by changing the `architectures` field in `./llama_ckpt/config.json` to be `LlamaWrapper`.
-That way, when we pass in the path of our model checkpoint to SGLang, it will know that we want to use "LlamaWrapper" instead of "LlamaForCausalLM" as our model.
+现在模型已在本地，我们希望通过修改 `./llama_ckpt/config.json` 中的 `architectures` 字段为 `LlamaWrapper`，把模型指向 `LlamaWrapper`。
+这样，当我们把模型检查点路径传给 SGLang 时，它就会知道我们想用 "LlamaWrapper" 而非 "LlamaForCausalLM" 作为模型。
 
 ```python Example
 {
@@ -266,8 +247,8 @@ That way, when we pass in the path of our model checkpoint to SGLang, it will kn
 }
 ```
 
-However, if we don't link our `LlamaWrapper` class to the "LlamaWrapper" registry keyword, then SGLang won't be able to find our model.
-Thus, to register our `LlamaWrapper`, we want to follow the steps in the above section titled "Registering an External Model Implementation".
+然而，如果我们不把 `LlamaWrapper` 类与 "LlamaWrapper" 注册关键字关联起来，SGLang 就无法找到我们的模型。
+因此，要注册 `LlamaWrapper`，我们按照上面"注册外部模型实现"一节的步骤操作。
 
 ```python Register LlamaWrapper
 @lru_cache()
@@ -278,8 +259,8 @@ def import_new_model_classes():
 ModelRegistry.models.update(import_new_model_classes())
 ```
 
-Lastly, when we create our `Engine`, we just pass in the path to the local model directory.
-Then, our `LlamaWrapper` is ready to be served; for this walkthrough, we will use SGLang `Engine`'s non-streaming asynchronous generation endpoint.
+最后，创建 `Engine` 时，我们只需传入本地模型目录的路径。
+然后，我们的 `LlamaWrapper` 就可以被服务了；本教程将使用 SGLang `Engine` 的非流式异步生成端点。
 
 ```python Example
 def main():
@@ -310,28 +291,28 @@ if __name__ == "__main__":
     main()
 ```
 
-Now, when we call `python run.py`, we will get the outputs of our newly created model!
+现在，当我们运行 `python run.py` 时，就能得到新创建模型的输出了！
 
-## Serving External Models via the Standard CLI
+## 通过标准 CLI 服务外部模型
 
-The previous sections show how to register a model programmatically via `ModelRegistry` and serve it through the Offline Engine. Similar to vLLM model plugin, there is an alternative that lets you keep using the standard `python -m sglang.launch_server` CLI without modifying any SGLang source code: you can register your model using the `SGLANG_EXTERNAL_MODEL_PACKAGE` environment variable.
+前面几节展示了如何通过 `ModelRegistry` 以编程方式注册模型，并通过离线引擎服务它。与 vLLM 模型插件类似，还有一种替代方案，可以让你继续使用标准的 `python -m sglang.launch_server` CLI 而无需修改任何 SGLang 源码：你可以用 `SGLANG_EXTERNAL_MODEL_PACKAGE` 环境变量注册模型。
 
-### The `EntryClass` Variable
+### `EntryClass` 变量
 
-When SGLang scans a model package, it looks for the variable `EntryClass` at the module level of your Python file. The [model registry](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/registry.py) imports your file, checks for `EntryClass`, and registers the class assigned to it. If you are using a model based on HuggingFace, the name of this class needs to match the `"architectures"` field in your model's `config.json`.
+当 SGLang 扫描模型包时，它会在 Python 文件的模块级寻找 `EntryClass` 变量。[模型注册表](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/models/registry.py) 会导入你的文件，检查 `EntryClass`，并注册赋给它的类。如果你使用的是基于 HuggingFace 的模型，该类的名称需要与模型 `config.json` 中的 `"architectures"` 字段一致。
 
-For example, if you are implementing a Llama wrapper, add this line at the end of your model file:
+例如，如果你实现的是一个 Llama 包装器，请在模型文件末尾添加这一行：
 
 ```python Example
 # This is what "Add EntryClass at the end" means
 EntryClass = LlamaWrapper
 ```
 
-### Example: Text-Only Model
+### 示例：纯文本模型
 
-Using the same Llama wrapper from the previous section, here is how to package and serve it via the CLI.
+使用上一节中的同一个 Llama 包装器，下面介绍如何打包并通过 CLI 服务它。
 
-1. Create your project
+1. 创建你的项目
 
 ```
 sglang_custom_project/
@@ -341,7 +322,7 @@ sglang_custom_project/
      |----llama_wrapper.py
 ```
 
-Write the `setup.py`:
+编写 `setup.py`：
 
 ```python Example
 # sglang_custom_project/setup.py
@@ -354,9 +335,9 @@ setup(
 )
 ```
 
-2. Write your model code
+2. 编写你的模型代码
 
-Inside `llama_wrapper.py`, write your model and include `EntryClass`:
+在 `llama_wrapper.py` 中编写模型并包含 `EntryClass`：
 
 ```python Example
 # sglang_custom_project/custom_llm/llama_wrapper.py
@@ -391,17 +372,17 @@ class LlamaWrapper(LlamaForCausalLM):
 EntryClass = LlamaWrapper
 ```
 
-3. Install your package
+3. 安装你的包
 
-Run this inside your `sglang_custom_project` directory to install your code into the active Python environment:
+在 `sglang_custom_project` 目录内运行以下命令，把你的代码安装到当前 Python 环境：
 
 ```bash Command
 pip install -e .
 ```
 
-4. Update your `config.json`
+4. 更新你的 `config.json`
 
-Update the `config.json` under your HuggingFace model checkpoint directory so the `architectures` field matches your class name:
+更新 HuggingFace 模型检查点目录下的 `config.json`，让 `architectures` 字段与你的类名一致：
 
 ```json Config
 {
@@ -410,9 +391,9 @@ Update the `config.json` under your HuggingFace model checkpoint directory so th
 }
 ```
 
-5. Launch the server
+5. 启动服务端
 
-Set the environment variable before running the CLI:
+在运行 CLI 前设置环境变量：
 
 ```bash Command
 export SGLANG_EXTERNAL_MODEL_PACKAGE=custom_llm
@@ -421,20 +402,20 @@ python -m sglang.launch_server \
     --port 8000
 ```
 
-The `SGLANG_EXTERNAL_MODEL_PACKAGE` should be the parent folder name containing your model-related code. In this example, it should be `custom_llm`.
+`SGLANG_EXTERNAL_MODEL_PACKAGE` 应为包含模型相关代码的父文件夹名。在本例中应为 `custom_llm`。
 
-### Example: Multimodal Model
+### 示例：多模态模型
 
-If you are working with multimodal models, setting `SGLANG_EXTERNAL_MODEL_PACKAGE` alone is not enough. SGLang also needs to recognize your architecture as multimodal to enable the image/video processing pipelines, and it needs a custom processor.
+如果你处理的是多模态模型，仅设置 `SGLANG_EXTERNAL_MODEL_PACKAGE` 是不够的。SGLang 还需要把你的架构识别为多模态，以启用图像/视频处理流水线，并且需要一个自定义 processor。
 
-You can handle this by setting two additional environment variables:
+你可以通过再设置两个环境变量来处理：
 
-- `SGLANG_EXTERNAL_MM_MODEL_ARCH`: Adds your architecture name to SGLang's internal list of multimodal models.
-- `SGLANG_EXTERNAL_MM_PROCESSOR_PACKAGE`: Tells SGLang where to find your custom processor class.
+- `SGLANG_EXTERNAL_MM_MODEL_ARCH`：把你的架构名称加入 SGLang 内部的多模态模型列表。
+- `SGLANG_EXTERNAL_MM_PROCESSOR_PACKAGE`：告诉 SGLang 到哪里找你的自定义 processor 类。
 
-For example, let's build a custom model based on Qwen2-VL-Instruct that takes the square root of the logits.
+例如，让我们构建一个基于 Qwen2-VL-Instruct、对 logits 取平方根的自定义模型。
 
-Create the project:
+创建项目：
 
 ```
 sglang_custom_project_vl/
@@ -444,7 +425,7 @@ sglang_custom_project_vl/
      |----qwenvl_wrapper.py
 ```
 
-Write `setup.py`:
+编写 `setup.py`：
 
 ```python Example
 # sglang_custom_project_vl/setup.py
@@ -457,7 +438,7 @@ setup(
 )
 ```
 
-Write the model in `qwenvl_wrapper.py`:
+在 `qwenvl_wrapper.py` 中编写模型：
 
 ```python Example
 # sglang_custom_project_vl/custom_vlm/qwenvl_wrapper.py
@@ -486,9 +467,9 @@ class CustomQwen2VLProcessor(QwenVLImageProcessor):
 EntryClass = CustomQwen2VL
 ```
 
-**Note:** you don't need a separate `EntryClass` for the custom processor as long as you associate the processor with the specific model class.
+**注意：** 只要把 processor 与具体模型类关联起来，就不需要为自定义 processor 单独设置 `EntryClass`。
 
-Install the package, update `config.json`, and launch:
+安装包、更新 `config.json` 并启动：
 
 ```bash Command
 pip install -e .
@@ -512,11 +493,10 @@ python -m sglang.launch_server \
     --enable-multimodal
 ```
 
-## Documentation
+## 文档
 
-Add to table of supported models in [generative_models.md](./generative_models) or [multimodal_language_models.md](./multimodal_language_models)
+在 [generative_models.md](./generative_models) 或 [multimodal_language_models.md](./multimodal_language_models) 的支持模型表格中，加入新模型。
 
 ---
 
-By following these guidelines, you can add support for new language models and multimodal large language models in
-SGLang and ensure they are thoroughly tested and easily integrated into the system.
+按照这些指南，你就可以在 SGLang 中添加对新的语言模型和多模态大语言模型的支持，并确保它们经过充分测试、易于集成到系统中。

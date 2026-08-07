@@ -1,11 +1,11 @@
 ---
-title: "Multimodal Language Models"
+title: "多模态语言模型"
 metatags:
-  description: "Documentation for Multimodal Language Models"
+  description: "多模态语言模型文档"
 ---
-These models accept multi-modal inputs (e.g., images and text) and generate text output. They augment language models with multimodal encoders.
+这些模型接受多模态输入（如图像和文本）并生成文本输出。它们通过多模态编码器增强语言模型的能力。
 
-## Example launch Command
+## 示例启动命令
 
 ```bash Launch Server
 python3 -m sglang.launch_server \
@@ -14,20 +14,17 @@ python3 -m sglang.launch_server \
   --port 30000 \
 ```
 
-> See the [OpenAI APIs section](../basic_usage/openai_api_vision) for how to send multimodal requests.
+> 如何发送多模态请求，请参阅 [OpenAI APIs 部分](../basic_usage/openai_api_vision)。
 
-## Supported models
+## 支持的模型
 
-Below the supported models are summarized in a table.
+下表汇总了支持的模型。
 
-If you are unsure if a specific architecture is implemented, you can search for it via GitHub. For example, to search for `Qwen2_5_VLForConditionalGeneration`, use the expression:
+如果你不确定某个特定架构是否已实现，可以通过 GitHub 搜索。例如，要搜索 `Qwen2_5_VLForConditionalGeneration`，请在 GitHub 搜索栏中使用以下表达式：
 
 ```text GitHub Search
 repo:sgl-project/sglang path:/^python\/sglang\/srt\/models\// Qwen2_5_VLForConditionalGeneration
 ```
-
-in the GitHub search bar.
-
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -38,183 +35,183 @@ in the GitHub search bar.
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family (Variants)</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Example HuggingFace Identifier</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型系列（变体）</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>示例 HuggingFace 标识符</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen-VL</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Qwen/Qwen3-VL-235B-A22B-Instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Alibaba's vision-language extension of Qwen; for example, Qwen2.5-VL (7B and larger variants) can analyze and converse about image content.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>阿里的 Qwen 视觉语言扩展；例如 Qwen2.5-VL（7B 及更大变体）可分析与讨论图像内容。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DeepSeek-VL2</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>deepseek-ai/deepseek-vl2</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Vision-language variant of DeepSeek (with a dedicated image processor), enabling advanced multimodal reasoning on image and text inputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>DeepSeek 的视觉语言变体（带专用图像处理器），支持对图像与文本输入进行先进的多模态推理。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DeepSeek-OCR / OCR-2</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>deepseek-ai/DeepSeek-OCR-2</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OCR-focused DeepSeek models for document understanding and text extraction.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use <code>--trust-remote-code</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>面向文档理解与文本提取的 OCR 专用 DeepSeek 模型。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用 <code>--trust-remote-code</code>。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Janus-Pro</strong> (1B, 7B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Janus-Pro</strong>（1B、7B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>deepseek-ai/Janus-Pro-7B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>DeepSeek's open-source multimodal model capable of both image understanding and generation. Janus-Pro employs a decoupled architecture for separate visual encoding paths, enhancing performance in both tasks.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>DeepSeek 的开源多模态模型，既能理解图像也能生成图像。Janus-Pro 采用解耦架构，为两种任务分别提供独立的视觉编码路径，从而提升两者的性能。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>MiniCPM-V / MiniCPM-o</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>openbmb/MiniCPM-V-2_6</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>MiniCPM-V (2.6, ~8B) supports image inputs, and MiniCPM-o adds audio/video; these multimodal LLMs are optimized for end-side deployment on mobile/edge devices.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>MiniCPM-V（2.6，约 8B）支持图像输入，MiniCPM-o 额外支持音频/视频；这些多模态 LLM 面向移动/边缘设备的端侧部署优化。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Llama 3.2 Vision</strong> (11B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Llama 3.2 Vision</strong>（11B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>meta-llama/Llama-3.2-11B-Vision-Instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Vision-enabled variant of Llama 3 (11B) that accepts image inputs for visual question answering and other multimodal tasks.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>支持视觉的 Llama 3（11B）变体，可接受图像输入，用于视觉问答等多模态任务。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA</strong> (v1.5 &amp; v1.6)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><em>e.g.</em> <code>liuhaotian/llava-v1.5-13b</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Open vision-chat models that add an image encoder to LLaMA/Vicuna (e.g. LLaMA2 13B) for following multimodal instruction prompts.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA</strong>（v1.5 &amp; v1.6）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><em>例如</em> <code>liuhaotian/llava-v1.5-13b</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>开源视觉对话模型，为 LLaMA/Vicuna（如 LLaMA2 13B）添加图像编码器，以跟随多模态指令提示。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA-NeXT</strong> (8B, 72B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA-NeXT</strong>（8B、72B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>lmms-lab/llava-next-72b</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Improved LLaVA models (with an 8B Llama3 version and a 72B version) offering enhanced visual instruction-following and accuracy on multimodal benchmarks.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>改进的 LLaVA 模型（8B Llama3 版与 72B 版），在视觉指令跟随与多模态基准测试精度上表现更优。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA-OneVision</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>lmms-lab/llava-onevision-qwen2-7b-ov</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Enhanced LLaVA variant integrating Qwen as the backbone; supports multiple images (and even video frames) as inputs via an OpenAI Vision API-compatible format.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>增强的 LLaVA 变体，以 Qwen 为骨干；通过兼容 OpenAI Vision API 的格式支持多图（甚至视频帧）输入。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Gemma 3 (Multimodal)</strong></td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Gemma 3（多模态）</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>google/gemma-3-4b-it</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Gemma 3's larger models (4B, 12B, 27B) accept images (each image encoded as 256 tokens) alongside text in a combined 128K-token context.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Gemma 3 的较大模型（4B、12B、27B）接受图像（每张图像编码为 256 个 token），并与文本一起放入 128K-token 组合上下文。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Kimi-VL</strong> (A3B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Kimi-VL</strong>（A3B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>moonshotai/Kimi-VL-A3B-Instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Kimi-VL is a multimodal model that can understand and generate text from images.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Kimi-VL 是一个能从图像理解并生成文本的多模态模型。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Mistral-Small-3.1-24B</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>mistralai/Mistral-Small-3.1-24B-Instruct-2503</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Mistral 3.1 is a multimodal model that can generate text from text or images input. It also supports tool calling and structured output.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Mistral 3.1 是一个多模态模型，可从文本或图像输入生成文本，还支持工具调用与结构化输出。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Phi-4-multimodal-instruct</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>microsoft/Phi-4-multimodal-instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Phi-4-multimodal-instruct is the multimodal variant of the Phi-4-mini model, enhanced with LoRA for improved multimodal capabilities. It supports text, vision and audio modalities in SGLang.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Phi-4-multimodal-instruct 是 Phi-4-mini 模型的多模态变体，通过 LoRA 增强多模态能力。在 SGLang 中支持文本、视觉与音频三种模态。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>MiMo-VL</strong> (7B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>MiMo-VL</strong>（7B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>XiaomiMiMo/MiMo-VL-7B-RL</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Xiaomi's compact yet powerful vision-language model featuring a native resolution ViT encoder for fine-grained visual details, an MLP projector for cross-modal alignment, and the MiMo-7B language model optimized for complex reasoning tasks.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>小米紧凑而强大的视觉语言模型，采用原生分辨率 ViT 编码器捕捉精细视觉细节，MLP 投影器做跨模态对齐，语言模型为针对复杂推理任务优化的 MiMo-7B。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>GLM-4.5V</strong> (106B) / <strong>GLM-4.1V</strong>(9B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>GLM-4.5V</strong>（106B） / <strong>GLM-4.1V</strong>（9B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>zai-org/GLM-4.5V</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>GLM-4.5V and GLM-4.1V-Thinking: Towards Versatile Multimodal Reasoning with Scalable Reinforcement Learning</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use <code>--chat-template glm-4v</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>GLM-4.5V 与 GLM-4.1V-Thinking：通过可扩展的强化学习实现全能多模态推理。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用 <code>--chat-template glm-4v</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>GLM-OCR</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>zai-org/GLM-OCR</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>GLM-OCR: A fast and accurate general OCR model</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>GLM-OCR：一个快速而准确的通用 OCR 模型。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DotsVLM</strong> (General/OCR)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DotsVLM</strong>（General/OCR）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>rednote-hilab/dots.vlm1.inst</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>RedNote's vision-language model built on a 1.2B vision encoder and DeepSeek V3 LLM, featuring NaViT vision encoder trained from scratch with dynamic resolution support and enhanced OCR capabilities through structured image data training.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>小红书（RedNote）的视觉语言模型，基于 1.2B 视觉编码器与 DeepSeek V3 LLM；NaViT 视觉编码器从零训练，支持动态分辨率，并通过结构化图像数据训练增强 OCR 能力。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DotsVLM-OCR</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>rednote-hilab/dots.ocr</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Specialized OCR variant of DotsVLM optimized for optical character recognition tasks with enhanced text extraction and document understanding capabilities.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Don't use <code>--trust-remote-code</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>DotsVLM 的专用 OCR 变体，针对光学字符识别任务优化，文本提取与文档理解能力更强。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>不要使用 <code>--trust-remote-code</code></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVILA</strong> (8B, 15B, Lite-2B, Lite-8B, Lite-15B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVILA</strong>（8B、15B、Lite-2B、Lite-8B、Lite-15B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Efficient-Large-Model/NVILA-8B</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>chatml</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>NVILA explores the full stack efficiency of multi-modal design, achieving cheaper training, faster deployment and better performance.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>NVILA 探索多模态设计的全栈效率，实现更低的训练成本、更快的部署与更好的性能。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVIDIA Nemotron Nano 2.0 VL</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>NVIDIA Nemotron Nano v2 VL enables multi-image reasoning and video understanding, along with strong document intelligence, visual Q&amp;A and summarization capabilities. It builds on Nemotron Nano V2, a hybrid Mamba-Transformer LLM, in order to achieve higher inference throughput in long document and video scenarios.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use <code>--trust-remote-code</code>. You may need to adjust <code>--max-mamba-cache-size</code> [default is 512] to fit memory constraints.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>NVIDIA Nemotron Nano v2 VL 支持多图推理与视频理解，还具备强大的文档智能、视觉问答与摘要能力。它基于混合 Mamba-Transformer LLM 的 Nemotron Nano V2，在长文档与视频场景下获得更高的推理吞吐。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用 <code>--trust-remote-code</code>。你可能需要调整 <code>--max-mamba-cache-size</code> [默认 512] 以适配内存限制。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Ernie4.5-VL</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>baidu/ERNIE-4.5-VL-28B-A3B-PT</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Baidu's vision-language models(28B,424B). Support image and video comprehension, and also support thinking.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>百度的视觉语言模型（28B、424B）。支持图像与视频理解，也支持思考（thinking）。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>JetVLM</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>JetVLM is an vision-language model designed for high-performance multimodal understanding and generation tasks built upon Jet-Nemotron.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Coming soon</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>JetVLM 是构建于 Jet-Nemotron 之上的视觉语言模型，面向高性能多模态理解与生成任务设计。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>即将推出</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Step3-VL</strong> (10B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Step3-VL</strong>（10B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>stepfun-ai/Step3-VL-10B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>StepFun's lightweight open-source 10B parameter VLM for multimodal intelligence, excelling in visual perception, complex reasoning, and human alignment.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>阶跃星辰（StepFun）的轻量开源 10B 参数 VLM，用于多模态智能，擅长视觉感知、复杂推理与人类对齐。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen3-ASR</strong> (0.6B, 1.7B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen3-ASR</strong>（0.6B、1.7B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Qwen/Qwen3-ASR-1.7B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Alibaba's automatic speech recognition models supporting 52 languages. Served via the <code>/v1/audio/transcriptions</code> endpoint.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>阿里的自动语音识别模型，支持 52 种语言。通过 <code>/v1/audio/transcriptions</code> 端点服务。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen3-Omni</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Qwen/Qwen3-Omni-30B-A3B-Instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Alibaba's omni-modal MoE model. Currently supports the <strong>Thinker</strong> component (multimodal understanding for text, images, audio, and video), while the <strong>Talker</strong> component (audio generation) is not yet supported.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>阿里的全模态 MoE 模型。目前支持 <strong>Thinker</strong> 组件（文本、图像、音频、视频的多模态理解），<strong>Talker</strong> 组件（音频生成）暂不支持。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LFM2-VL</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>LiquidAI/LFM2.5-VL-1.6B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Liquid AI's vision-language model combining a SigLIP2 NaFlex vision encoder (variable resolution, native aspect ratio) with the LFM2 hybrid gated short conv + GQA language model. Supports multi-image inputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Liquid AI 的视觉语言模型，将 SigLIP2 NaFlex 视觉编码器（可变分辨率、原生宽高比）与 LFM2 混合门控短卷积 + GQA 语言模型结合。支持多图输入。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LocateAnything</strong> (3B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LocateAnything</strong>（3B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>nvidia/LocateAnything-3B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>NVIDIA's visual grounding/detection model (MoonViT vision encoder + Qwen2 backbone) that emits &lt;ref&gt;label&lt;/ref&gt;&lt;box&gt;...&lt;/box&gt; outputs with coordinates normalized to [0, 1000]. Covers object detection, phrase grounding, scene-text detection, GUI grounding, and pointing.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use <code>--trust-remote-code</code>. Set <code>skip_special_tokens=false</code> so the &lt;ref&gt;/&lt;box&gt; grounding tokens survive in the output. Constrained &lt;box&gt; decoding is opt-in and client-side: start the server with <code>--enable-custom-logit-processor</code>, then pass <code>custom_logit_processor</code> (a top-level request field) and <code>custom_params</code> (inside <code>sampling_params</code>) together — use <code>LocateAnythingBoxGrammarLogitProcessor.build_sampling_params(config)</code> to build both from the config token ids.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>NVIDIA 的视觉定位/检测模型（MoonViT 视觉编码器 + Qwen2 骨干），输出 &lt;ref&gt;label&lt;/ref&gt;&lt;box&gt;...&lt;/box&gt; 格式，坐标归一化到 [0, 1000]。覆盖目标检测、短语定位、场景文本检测、GUI 定位与指向。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用 <code>--trust-remote-code</code>。设置 <code>skip_special_tokens=false</code>，让 &lt;ref&gt;/&lt;box&gt; 定位 token 保留在输出中。受限 &lt;box&gt; 解码是可选且客户端侧的：用 <code>--enable-custom-logit-processor</code> 启动服务端，然后同时传 <code>custom_logit_processor</code>（顶层请求字段）与 <code>custom_params</code>（在 <code>sampling_params</code> 内）——使用 <code>LocateAnythingBoxGrammarLogitProcessor.build_sampling_params(config)</code> 从 config token id 构建二者。</td>
     </tr>
 </tbody>
 </table>
 
-## Audio Transcription
+## 音频转写
 
-SGLang supports audio-only ASR models via the OpenAI-compatible `/v1/audio/transcriptions` endpoint. Upload an audio file and receive a transcription.
+SGLang 通过兼容 OpenAI 的 `/v1/audio/transcriptions` 端点支持纯音频 ASR 模型。上传音频文件即可获得转写文本。
 
-### Launch Command
+### 启动命令
 
 ```bash Command
 sglang serve \
@@ -224,7 +221,7 @@ sglang serve \
   --host 0.0.0.0 --port 30000
 ```
 
-### Example Request
+### 示例请求
 
 ```bash Command
 curl http://localhost:30000/v1/audio/transcriptions \
@@ -241,28 +238,32 @@ curl http://localhost:30000/v1/audio/transcriptions \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Example Identifier</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>模型系列</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>示例标识符</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Whisper</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>openai/whisper-large-v3</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI's speech recognition model.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI 的语音识别模型。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen3-ASR</strong> (0.6B, 1.7B)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen3-ASR</strong>（0.6B、1.7B）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Qwen/Qwen3-ASR-1.7B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Use <code>--trust-remote-code</code>. Supports 52 languages.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>使用 <code>--trust-remote-code</code>。支持 52 种语言。</td>
     </tr>
   </tbody>
 </table>
 
-## Video Input Support
+## 视频输入支持
 
-SGLang supports video input for Vision-Language Models (VLMs), enabling temporal reasoning tasks such as video question answering, captioning, and holistic scene understanding. Video clips are decoded, key frames are sampled, and the resulting tensors are batched together with the text prompt, allowing multimodal inference to integrate visual and linguistic context.
+SGLang 支持视觉语言模型（VLM）的视频输入，可完成视频问答、视频描述和整体场景理解等时序推理任务。视频片段会被解码、采样关键帧，并将生成的张量与文本提示词一起组成批次，使多模态推理能够融合视觉与语言上下文。
+
+<Note>
+💡 AI Infra 学习笔记：视频输入是显存的"放大镜"——1 秒视频按若干 FPS 采样成多帧，每帧再切成大量 patch 编码成 token，token 数轻松比纯文本多几个数量级，预填充计算量与 KV 缓存占用都会暴涨。SGLang 在视频支持上做了两件事来控制成本：一是按模型的训练设置做帧采样（如 2 FPS、最多 128 帧），二是像 EVS 这样在推理前从视频嵌入中剪掉冗余 token（默认剪掉 70%）。这也是为什么多模态场景里"怎么把视觉 token 数量降下来"常常比"模型本身"更影响性能。
+</Note>
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -272,48 +273,48 @@ SGLang supports video input for Vision-Language Models (VLMs), enabling temporal
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Example Identifier</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Video notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型系列</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>示例标识符</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>视频说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen-VL</strong> (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-Omni)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Qwen-VL</strong>（Qwen2-VL、Qwen2.5-VL、Qwen3-VL、Qwen3-Omni）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Qwen/Qwen3-VL-235B-A22B-Instruct</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The processor gathers <code>video_data</code>, runs Qwen's frame sampler, and merges the resulting features with text tokens before inference.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>processor 会收集 <code>video_data</code>，运行 Qwen 的帧采样器，并在推理前把生成的特征与文本 token 合并。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>GLM-4v</strong> (4.5V, 4.1V, MOE)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>GLM-4v</strong>（4.5V、4.1V、MOE）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>zai-org/GLM-4.5V</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Video clips are read with Decord, converted to tensors, and passed to the model alongside metadata for rotary-position handling.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>视频片段用 Decord 读取，转为张量，并连同用于旋转位置处理的元数据一起传给模型。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVILA</strong> (Full &amp; Lite)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVILA</strong>（Full &amp; Lite）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>Efficient-Large-Model/NVILA-8B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The runtime samples eight frames per clip and attaches them to the multimodal request when <code>video_data</code> is present.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>当存在 <code>video_data</code> 时，运行时对每个片段采样 8 帧并附加到多模态请求。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA video variants</strong> (LLaVA-NeXT-Video, LLaVA-OneVision)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>LLaVA 视频变体</strong>（LLaVA-NeXT-Video、LLaVA-OneVision）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>lmms-lab/LLaVA-NeXT-Video-7B</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The processor routes video prompts to the LlavaVid video-enabled architecture, and the provided example shows how to query it with <code>sgl.video(...)</code> clips.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>processor 会把视频提示路由到 LlavaVid 视频架构，提供的示例展示如何用 <code>sgl.video(...)</code> 片段查询它。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>NVIDIA Nemotron Nano 2.0 VL</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>nvidia/NVIDIA-Nemotron-Nano-12B-v2-VL-BF16</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The processor samples at 2 FPS, at a max of 128 frames, as per model training. The model uses <a href="https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/multimodal/evs/README.md">EVS</a>, a pruning method that removes redundant tokens from video embeddings. By default <code>video_pruning_rate=0.7</code>. Change this by providing: <code>--json-model-override-args '&#123;"video_pruning_rate": 0.0&#125;'</code> to disable EVS, for example.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>processor 按模型训练设置以 2 FPS 采样，最多 128 帧。模型使用 <a href="https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/multimodal/evs/README.md">EVS</a>——一种从视频嵌入中移除冗余 token 的剪枝方法。默认 <code>video_pruning_rate=0.7</code>。例如，通过传 <code>--json-model-override-args '&#123;"video_pruning_rate": 0.0&#125;'</code> 可禁用 EVS。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>JetVLM</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The runtime samples eight frames per clip and attaches them to the multimodal request when <code>video_data</code> is present.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>当存在 <code>video_data</code> 时，运行时对每个片段采样 8 帧并附加到多模态请求。</td>
     </tr>
   </tbody>
 </table>
 
-Use `sgl.video(path, num_frames)` when building prompts to attach clips from your SGLang programs.
+在 SGLang 程序中构建提示词时，使用 `sgl.video(path, num_frames)` 附加视频片段。
 
-Example OpenAI-compatible request that sends a video clip:
+发送视频片段的兼容 OpenAI 的请求示例：
 
 ```python Complete Example
 import requests
@@ -343,30 +344,34 @@ response = requests.post(url, json=data)
 print(response.text)
 ```
 
-## Usage Notes
+## 使用说明
 
-### Performance Optimization
+### 性能优化
 
-For multimodal models, you can use the `--keep-mm-feature-on-device` flag to optimize for latency at the cost of increased GPU memory usage:
+对于多模态模型，你可以使用 `--keep-mm-feature-on-device` 参数，以增加 GPU 内存占用为代价优化延迟：
 
-- **Default behavior**: Multimodal feature tensors are moved to CPU after processing to save GPU memory
-- **With `--keep-mm-feature-on-device`**: Feature tensors remain on GPU, reducing device-to-host copy overhead and improving latency, but consuming more GPU memory
+- **默认行为**：多模态特征张量在处理后被移到 CPU 以节省 GPU 内存
+- **使用 `--keep-mm-feature-on-device`**：特征张量保留在 GPU 上，减少设备到主机的拷贝开销并改善延迟，但会占用更多 GPU 内存
 
-Use this flag when you have sufficient GPU memory and want to minimize latency for multimodal inference.
+当你 GPU 内存充足且希望将多模态推理延迟降到最低时，可以使用此参数。
 
-### Multimodal Inputs Limitation
+### 多模态输入限制
 
-- **Use `--mm-process-config '&#123;"image":&#123;"max_pixels":1048576&#125;,"video":&#123;"fps":3,"max_pixels":602112,"max_frames":60&#125;&#125;'`**: To set `image`, `video`, and `audio` input limits.
+- **使用 `--mm-process-config '&#123;"image":&#123;"max_pixels":1048576&#125;,"video":&#123;"fps":3,"max_pixels":602112,"max_frames":60&#125;&#125;'`**：设置 `image`、`video` 和 `audio` 的输入限制。
 
-This can reduce GPU memory usage, improve inference speed, and help to avoid OOM, but may impact model performance, thus set a proper value based on your specific use case. The config entries are passed as `images_kwargs`, `videos_kwargs`, and `audio_kwargs` to the HuggingFace processor, so each modality's settings are kept separate and do not collide. Refer to the HuggingFace documentation for your model's processor to understand the available parameters.
+这可以减少 GPU 内存占用、提高推理速度并帮助避免 OOM，但可能影响模型性能，因此请根据具体使用场景设置合适的值。配置项会作为 `images_kwargs`、`videos_kwargs` 和 `audio_kwargs` 传给 HuggingFace processor，因此每种模态的设置相互独立、不会冲突。关于模型 processor 的可用参数，请参考 HuggingFace 文档。
 
-### Bidirectional Attention in Multimodal Model Serving
-**Note for serving the Gemma-3 multimodal model**:
+### 多模态模型服务中的双向注意力
+**服务 Gemma-3 多模态模型的注意事项**：
 
-As mentioned in [Welcome Gemma 3: Google's all new multimodal, multilingual, long context open LLM
-](https://huggingface.co/blog/gemma3#multimodality), Gemma-3 employs bidirectional attention between image tokens during the prefill phase. Currently, SGLang only supports bidirectional attention when using the Triton Attention Backend. Note, however, that SGLang's current bidirectional attention implementation is incompatible with both CUDA Graph and Chunked Prefill.
+正如 [Welcome Gemma 3: Google's all new multimodal, multilingual, long context open LLM
+](https://huggingface.co/blog/gemma3#multimodality) 中所提到的，Gemma-3 在预填充阶段对图像 token 之间使用双向注意力。目前，SGLang 仅在使用 Triton Attention 后端时支持双向注意力。但请注意，SGLang 当前的双向注意力实现与 CUDA 图和分块预填充均不兼容。
 
-To enable bidirectional attention, you can use the `TritonAttnBackend` while disabling CUDA Graph and Chunked Prefill. Example launch command:
+<Note>
+💡 AI Infra 学习笔记：这里体现了一个典型的工程取舍：Gemma-3 的图像 token 之间需要双向注意力（让图像内部彼此"看到"，而非严格的下三角掩码），但通用的 FlashAttention/分页注意力实现为了性能默认只支持因果掩码。SGLang 选择只在 Triton 后端支持双向注意力，代价是不能同时开启 CUDA 图与分块预填充——这两者恰恰是吞吐优化的关键。理解"某模型的特殊计算模式会锁死哪些优化开关"，是评估推理引擎对某模型支持成熟度的重要视角。
+</Note>
+
+要启用双向注意力，你可以使用 `TritonAttnBackend`，同时禁用 CUDA 图和分块预填充。示例启动命令：
 ```bash Bidirectional Attention
 python -m sglang.launch_server \
   --model-path google/gemma-3-4b-it \
@@ -378,4 +383,4 @@ python -m sglang.launch_server \
   --chunked-prefill-size -1 # Disable Chunked Prefill
 ```
 
-If higher serving performance is required and a certain degree of accuracy loss is acceptable, you may choose to use other attention backends, and you can also enable features like CUDA Graph and Chunked Prefill for better performance, but note that the model will fall back to using causal attention instead of bidirectional attention.
+如果对服务性能有更高要求，且能接受一定程度的精度损失，你可以选择使用其他注意力后端，也可以启用 CUDA 图和分块预填充等功能以获得更好的性能，但请注意此时模型将回退为使用因果注意力而非双向注意力。
