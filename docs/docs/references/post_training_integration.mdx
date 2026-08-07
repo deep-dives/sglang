@@ -1,34 +1,37 @@
 ---
-title: "Post-Training Integration"
+title: "后训练集成"
 metatags:
-    description: "SGLang post-training: RLHF integration with Miles, slime, AReaL, ROLL, verl, Unsloth, LLaMA Factory."
+    description: "SGLang 后训练：与 Miles、slime、AReaL、ROLL、verl、Unsloth、LLaMA Factory 的 RLHF 集成。"
 ---
-SGLang has become the de facto inference backend for modern LLM training frameworks, powering state-of-the-art models across the industry. From GLM-4.6 to Qwen3, leading models leverage SGLang's high-performance inference during reinforcement learning and post-training workflows.
+SGLang 已成为现代 LLM 训练框架事实上的推理后端，为业界顶尖模型提供算力支撑。从 GLM-4.6 到 Qwen3，领先模型都在强化学习和后训练流程中借助 SGLang 的高性能推理。
 
-What makes SGLang essential for post-training?
+为什么后训练离不开 SGLang？
 
-- Open-To-Use Refit Functionality: diverse method for colocate or disaggregate
-- Easy To Postpone Generation: enable partial rollout and dedicated rollout control
-- Fine-Grained Engine Sleep And Wake Up: facilitate maxium-powered rollout and training
-- Training Serving Alignment: ensure the performance consistency in training and serving
-- Load Balancing Router: cache-aware load-balancing for high-throughput rollout
-- Deterministic Inference: ensure zero kl divergence between rollout and training
+- 开箱即用的 Refit 功能：支持共置或分离部署等多种方式
+- 便捷的生成暂停：支持部分 rollout 和专门的 rollout 控制
+- 细粒度的引擎休眠与唤醒：为 rollout 和训练提供充足算力
+- 训练推理一致性：保证训练和推理服务性能一致
+- 负载均衡路由器：感知缓存的负载均衡，支撑高吞吐 rollout
+- 确定性推理：确保 rollout 与训练之间零 KL 散度
 
-These capabilities, combined with native integration support across major frameworks, have established SGLang as the infrastructure backbone for modern LLM/VLMs post-training. We also share our latest work in this slide, [Optimizing Large-Scale RL with SGLang](https://gamma.app/docs/Optimizing-RL-with-SGLang-y0kqgj877k34779).
+<Note>
+💡 AI Infra 学习笔记：强化学习（RL）训练流程是“训练-采样”交替循环——策略模型每更新一步，就要用当前权重大规模生成 rollout 数据（推理），再拿这些数据去更新模型（训练）。推理必须足够快、足够稳定，否则整个 RL 循环都会被拖慢。SGLang 在其中的关键能力包括：rollout 与训练共用权重（refit）、细粒度启停引擎（训练时让出算力）、以及确定性推理（保证 rollout 数据与训练环境数值一致，避免 KL 漂移）。理解了这一点，就能看懂为什么“训练框架”的文档里会出现“推理后端”的身影。
+</Note>
 
-## Adoption
+这些能力，加上对主流框架的原生集成支持，让 SGLang 成为现代 LLM/VLM 后训练的基础设施骨干。我们也在幻灯片 [Optimizing Large-Scale RL with SGLang](https://gamma.app/docs/Optimizing-RL-with-SGLang-y0kqgj877k34779) 中分享了最新工作。
 
-- [**Miles**](https://github.com/radixark/miles): Enterprise-scale RL framework for large MoE models with SGLang-native rollout, speculative training, and production-grade stability
-- [**slime**](https://github.com/THUDM/slime): Post-training framework combining Megatron and SGLang, used to train GLM-4.6
-- [**AReaL**](https://github.com/inclusionAI/AReaL): Fully asynchronous RL system achieving 2.77x speedup with SGLang backend for continuous rollout generation
-- [**ROLL**](https://github.com/alibaba/ROLL): ROLL is an efficient and user-friendly RL library designed for Large Language Models utilizing Large Scale GPU resources
-- [**verl**](https://github.com/volcengine/verl): Full-stack RLHF framework supporting PPO, GRPO, and ReMax with modular SGLang integration
-- [**Unsloth**](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide): 2x faster fine-tuning with optimized kernels, deploys seamlessly with SGLang inference
-- [**LLaMA Factory**](https://github.com/hiyouga/LLaMA-Factory): Unified framework for training 100+ LLMs with LoRA, QLoRA, and full fine-tuning methods
-- [**Tunix**](https://github.com/google/tunix): Google's JAX-native library for LLM post-training with SFT, DPO, PPO, and GRPO support
-- [**RL2**](https://github.com/ChenmienTan/RL2): Ray Less Reinforcement Learning, a concise library of post-training for large language models
+## 生态采用
 
+- [**Miles**](https://github.com/radixark/miles)：面向大型 MoE 模型的企业级 RL 框架，原生对接 SGLang rollout，支持投机训练和生产级稳定性
+- [**slime**](https://github.com/THUDM/slime)：结合 Megatron 和 SGLang 的后训练框架，用于训练 GLM-4.6
+- [**AReaL**](https://github.com/inclusionAI/AReaL)：全异步 RL 系统，以 SGLang 为后端做持续 rollout 生成，获得 2.77 倍加速
+- [**ROLL**](https://github.com/alibaba/ROLL)：一个高效易用的 LLM 强化学习库，面向大规模 GPU 资源
+- [**verl**](https://github.com/volcengine/verl)：全栈 RLHF 框架，支持 PPO、GRPO 和 ReMax，模块化集成 SGLang
+- [**Unsloth**](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide)：用优化后的 kernel 把微调加速 2 倍，可与 SGLang 推理无缝对接部署
+- [**LLaMA Factory**](https://github.com/hiyouga/LLaMA-Factory)：统一框架，用 LoRA、QLoRA 和全参微调等方法训练 100+ LLM
+- [**Tunix**](https://github.com/google/tunix)：Google 的 JAX 原生 LLM 后训练库，支持 SFT、DPO、PPO 和 GRPO
+- [**RL2**](https://github.com/ChenmienTan/RL2)：Ray Less 强化学习库，一个精简的 LLM 后训练库
 
-## Collaboration
+## 合作
 
-Due to the privacy of the design parternes, we cannot list the companies that adopt SGLang for post-training. However, we are happy to share the details with you if you are interested and trust the choice among 10+ top companies and frontier labs across US and China. If you are interested in integrating SGLang with your training framework or need technical support, we're here to help! Reach out to us at **rl_team@lmsys.org** for partnerships, integration guidance, and custom feature development.
+由于设计伙伴的隐私要求，我们无法列出采用 SGLang 做后训练的公司名单。不过，如果你感兴趣并信任这个选择——目前有 10+ 家中美顶尖公司和前沿实验室——我们很乐意与你分享细节。如果你想把自己的训练框架与 SGLang 集成，或需要技术支持，欢迎联系我们！合作伙伴、集成指导以及定制功能开发，请通过 **rl_team@lmsys.org** 联系。

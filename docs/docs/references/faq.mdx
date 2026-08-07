@@ -1,42 +1,50 @@
 ---
-title: "Troubleshooting and Frequently Asked Questions"
+title: "故障排查与常见问题"
 metatags:
-    description: "SGLang troubleshooting: CUDA OOM, illegal memory access, server hangs, non-deterministic outputs."
+    description: "SGLang 故障排查：CUDA 显存不足、非法内存访问、服务器挂起、输出不确定。"
 ---
-## Troubleshooting
+## 故障排查
 
-This page lists common errors and tips for resolving them.
+本页列出常见错误及对应的解决方法。
 
-### CUDA Out of Memory
-If you encounter out-of-memory (OOM) errors, you can adjust the following parameters:
+### CUDA 显存不足（OOM）
 
-- If OOM occurs during prefill, try reducing `--chunked-prefill-size` to `4096` or `2048`. This saves memory but slows down the prefill speed for long prompts.
-- If OOM occurs during decoding, try lowering `--max-running-requests`.
-- You can also decrease `--mem-fraction-static` to a smaller value, such as 0.8 or 0.7. This decreases the memory usage of the KV cache memory pool and helps prevent OOM errors during both prefill and decoding. However, it limits maximum concurrency and reduces peak throughput.
-- Another common case for OOM is requesting input logprobs for a long prompt as it requires significant memory. To address this, set `logprob_start_len` in your sampling parameters to include only the necessary parts. If you do need input logprobs for a long prompt, try reducing `--mem-fraction-static`.
+如果遇到显存不足（OOM）错误，可以通过调整以下参数来缓解：
 
-### CUDA Error: Illegal Memory Access Encountered
-This error may result from kernel errors or out-of-memory issues:
-- If it is a kernel error, resolving it may be challenging. Please file an issue on GitHub.
-- If it is an out-of-memory issue, it may sometimes be reported as this error instead of "Out of Memory." Refer to the section above for guidance on avoiding OOM issues.
+- 如果预填充阶段出现 OOM，尝试把 `--chunked-prefill-size` 调小到 `4096` 或 `2048`。这样能省显存，但长提示词的预填充速度会变慢。
+- 如果解码阶段出现 OOM，尝试调低 `--max-running-requests`。
+- 也可以把 `--mem-fraction-static` 调小，比如 0.8 或 0.7。这会降低 KV 缓存内存池的占用，有助于避免预填充和解码阶段的 OOM，但代价是最大并发受限、峰值吞吐下降。
+- 另一种常见的 OOM 是给长提示词请求输入 logprobs——这会占用大量显存。解决办法是在采样参数里设置 `logprob_start_len`，只保留必要的部分。如果确实需要长提示词的输入 logprobs，试试调小 `--mem-fraction-static`。
 
-### The server hangs
-- If the server hangs during initialization or running, it can be memory issues (out of memory), network issues (nccl errors), or other bugs in sglang.
-    - If it is out of memory, you might see that `avail mem` is very low during the initialization or right after initialization. In this case,
-      you can try to decrease `--mem-fraction-static`, decrease `--cuda-graph-max-bs-decode`, or decrease `--chunked-prefill-size`.
-- Other bugs, please file an issue on GitHub.
+<Note>
+💡 AI Infra 学习笔记：KV 缓存是推理引擎中最大的显存开销来源。SGLang 用 `--mem-fraction-static` 控制 KV 缓存内存池占可用显存的比例：预留太小会限制并发（吞吐下降），预留太大又容易 OOM。`--chunked-prefill-size` 则把长提示词的预填充拆成小块，牺牲部分预填充速度来换取更平稳的显存占用。这些参数本质上都是在吞吐、延迟和显存三者之间做权衡。
+</Note>
 
+### CUDA 错误：非法内存访问
 
-## Frequently Asked Questions
+这个错误可能来自 kernel 错误或显存不足：
 
-### The results are not deterministic, even with a temperature of 0
+- 如果是 kernel 错误，可能比较难解决，请在 GitHub 上提交 issue。
+- 如果是显存不足，有时它不会报 “Out of Memory”，而是报成这个错误。请参考上文关于避免 OOM 的说明。
 
-You may notice that when you send the same request twice, the results from the engine will be slightly different, even when the temperature is set to 0.
+### 服务器挂起
 
-From our initial investigation, this indeterminism arises from two factors: dynamic batching and prefix caching. Roughly speaking, dynamic batching accounts for about 95% of the indeterminism, while prefix caching accounts for the remaining portion. The server runs dynamic batching under the hood. Different batch sizes can cause PyTorch/CuBLAS to dispatch to different CUDA kernels, which can lead to slight numerical differences. This difference accumulates across many layers, resulting in nondeterministic output when the batch size changes. Similarly, when prefix caching is enabled, it can also dispatch to different kernels. Even when the computations are mathematically equivalent, small numerical differences from different kernel implementations lead to the final nondeterministic outputs.
+- 如果服务器在初始化或运行期间挂起，可能是内存问题（显存不足）、网络问题（NCCL 错误），或 SGLang 自身的其它 bug。
+    - 如果是显存不足，你可能会在初始化期间或刚初始化完时看到 `avail mem` 非常低。这种情况下，可以尝试调小 `--mem-fraction-static`、调小 `--cuda-graph-max-bs-decode`，或调小 `--chunked-prefill-size`。
+- 其它 bug 请在 GitHub 上提交 issue。
 
-To achieve more deterministic outputs in the current code, you can add `--disable-radix-cache` and send only one request at a time. The results will be mostly deterministic under this setting.
+## 常见问题
 
-**Update**:
-Recently, we also introduced a deterministic mode, you can enable it with `--enable-deterministic-inference`.
-Please find more details in this blog post: https://lmsys.org/blog/2025-09-22-sglang-deterministic/
+### 即使把 temperature 设为 0，结果仍然不确定
+
+你可能会发现：即使把 temperature 设为 0，重复发送同一个请求，引擎返回的结果也会略有不同。
+
+根据我们的初步调查，这种不确定来自两个因素：动态批处理和前缀缓存。粗略来说，动态批处理大约占 95%，前缀缓存占剩余部分。服务器底层一直在做动态批处理。批大小不同时，PyTorch/CuBLAS 会派发到不同的 CUDA kernel，带来细微的数值差异；这些差异跨很多层累积，批大小一变，输出就不再确定。类似地，启用前缀缓存后也可能派发到不同 kernel。即使计算在数学上等价，不同 kernel 实现带来的微小数值差异，最终也会导致不确定的输出。
+
+<Note>
+💡 AI Infra 学习笔记：temperature=0 时输出仍不确定，是推理引擎动态批处理的固有现象，不是 bug——同一时刻批内请求数不同，底层 dispatch 到不同的 kernel，浮点累加顺序随之改变，数值就会漂移。这正是“确定性推理”（deterministic inference）会成为推理引擎一等特性的原因：在 RL 训练与 serving 对齐、可复现实验等场景里它非常关键。
+</Note>
+
+在当前代码里想要更确定的输出，可以加上 `--disable-radix-cache`，并一次只发送一个请求。在这种设置下结果基本是确定的。
+
+**更新**：最近我们还引入了确定性模式，可以用 `--enable-deterministic-inference` 启用。更多细节见这篇博客：https://lmsys.org/blog/2025-09-22-sglang-deterministic/

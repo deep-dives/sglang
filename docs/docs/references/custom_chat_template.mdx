@@ -1,14 +1,17 @@
 ---
-title: "Custom Chat Template"
+title: "自定义对话模板"
 metatags:
-    description: "SGLang custom chat templates: JSON and Jinja formats for OpenAI-compatible API server. Override tokenizer defaults."
+    description: "SGLang 自定义对话模板：OpenAI 兼容 API 服务器的 JSON 和 Jinja 格式，覆盖分词器默认模板。"
 ---
-**NOTE**: There are two chat template systems in SGLang project. This document is about setting a custom chat template for the OpenAI-compatible API server (defined at [conversation.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/parser/conversation.py)). It is NOT related to the chat template used in the SGLang language frontend (defined at [chat_template.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/lang/chat_template.py)).
+**注意**：SGLang 项目里有两套对话模板系统。本文介绍的是为 OpenAI 兼容的 API 服务器设置自定义对话模板（定义在 [conversation.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/parser/conversation.py)），与 SGLang 语言前端所用的对话模板无关（后者定义在 [chat_template.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/lang/chat_template.py)）。
 
-By default, the server uses the chat template specified in the model tokenizer from Hugging Face.
-It should just work for most official models such as Llama-2/Llama-3.
+默认情况下，服务器使用 Hugging Face 模型分词器中自带的对话模板。对 Llama-2/Llama-3 这类主流官方模型，通常开箱即用。
 
-If needed, you can also override the chat template when launching the server:
+<Note>
+💡 AI Infra 学习笔记：对话模板（chat template）决定了一轮对话如何被拼接成模型输入序列——包括系统提示词、user/assistant 角色标记、分隔符和结束符（如 `<|im_end|>`）。同一个模型换用不同模板，输出格式和终止行为会完全不同；模板里的 `stop_str` 也直接决定生成何时停止。服务端默认从分词器自动套用模板，遇到没有内置模板的模型时，就需要用 JSON 或 Jinja 格式自定义。
+</Note>
+
+如果需要，你也可以在启动服务器时覆盖对话模板：
 
 ```bash Command
 python -m sglang.launch_server \
@@ -17,11 +20,11 @@ python -m sglang.launch_server \
   --chat-template llama-2
 ```
 
-If the chat template you are looking for is missing, you are welcome to contribute it or load it from a file.
+如果缺少你需要的对话模板，欢迎为它贡献一个，或直接从文件加载。
 
-## JSON Format
+## JSON 格式
 
-You can load the JSON format, which is defined by `conversation.py`.
+你可以加载 JSON 格式的模板，它由 `conversation.py` 定义。
 
 ```json Config
 {
@@ -42,9 +45,13 @@ python -m sglang.launch_server \
   --chat-template ./my_model_template.json
 ```
 
-## Jinja Format
+## Jinja 格式
 
-You can also use the [Jinja template format](https://huggingface.co/docs/transformers/main/en/chat_templating) as defined by Hugging Face Transformers.
+你也可以使用 Hugging Face Transformers 定义的 [Jinja 模板格式](https://huggingface.co/docs/transformers/main/en/chat_templating)。
+
+<Note>
+💡 AI Infra 学习笔记：JSON 格式简洁、固定字段少，适合快速接入；Jinja 格式则是 Hugging Face 生态的事实标准，用模板语言表达拼接逻辑，能处理带条件分支、多轮消息、工具调用等更复杂的场景。二者在启动参数上只差一个文件后缀，`--chat-template` 会根据后缀自动区分。
+</Note>
 
 ```bash Command
 python -m sglang.launch_server \

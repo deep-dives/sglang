@@ -1,17 +1,23 @@
 ---
-title: "Production Request Tracing"
+title: "生产请求追踪"
 metatags:
-    description: "SGLang OpenTelemetry tracing: Jaeger visualization, trace context propagation, PD disaggregation support."
+    description: "SGLang OpenTelemetry 追踪：Jaeger 可视化、追踪上下文传播、PD 分离支持。"
 ---
-SGLang exports request trace data based on the OpenTelemetry Collector. You can enable tracing by adding the `--enable-trace` and configure the OpenTelemetry Collector endpoint using `--otlp-traces-endpoint` when launching the server.
+SGLang 基于 OpenTelemetry Collector 导出请求追踪数据。启动服务器时加上 `--enable-trace` 即可启用追踪，并用 `--otlp-traces-endpoint` 配置 OpenTelemetry Collector 的端点。
 
-You can find example screenshots of the visualization in https://github.com/sgl-project/sglang/issues/8965.
+可视化效果的示例截图见 https://github.com/sgl-project/sglang/issues/8965。
 
-## Setup Guide
-This section explains how to configure the request tracing and export the trace data.
-1. Install the required packages and tools
-    * install Docker and Docker Compose
-    * install the dependencies
+<Note>
+💡 AI Infra 学习笔记：请求级链路追踪（request tracing）把一次推理请求拆成一个个可观测的时间片（slice）——分词、调度、预填充、解码、采样、网络传输等，逐段记录耗时。推理引擎是高度并发的系统，一次请求会在多个线程、多个进程之间流转，光看整体延迟很难定位瓶颈；有了链路追踪，就能精确回答“时间到底花在了哪一步”。它是排查长尾延迟、跨节点（如 PD 分离）问题的核心基础设施。
+</Note>
+
+## 配置指南
+
+本节介绍如何配置请求追踪并导出追踪数据。
+
+1. 安装所需的包和工具
+    * 安装 Docker 和 Docker Compose
+    * 安装依赖
     ```bash Command
     # enter the SGLang root directory
     pip install -e "python[tracing]"
@@ -20,12 +26,12 @@ This section explains how to configure the request tracing and export the trace 
     pip install opentelemetry-sdk opentelemetry-api opentelemetry-exporter-otlp opentelemetry-exporter-otlp-proto-grpc
     ```
 
-2. Launch OpenTelemetry collector and Jaeger
+2. 启动 OpenTelemetry Collector 和 Jaeger
     ```bash Command
     docker compose -f examples/monitoring/tracing_compose.yaml up -d
     ```
 
-3. Start your SGLang server with tracing enabled
+3. 以开启追踪的方式启动 SGLang 服务器
     ```bash Command
     # set env variables
     export SGLANG_OTLP_EXPORTER_SCHEDULE_DELAY_MILLIS=500
@@ -36,72 +42,78 @@ This section explains how to configure the request tracing and export the trace 
     python -m sglang_router.launch_router --enable-trace --otlp-traces-endpoint 0.0.0.0:4317 <other option>
     ```
 
-    Replace `0.0.0.0:4317` with the actual endpoint of the OpenTelemetry collector. If you launched the openTelemetry collector with tracing_compose.yaml, the default receiving port is 4317.
+    把 `0.0.0.0:4317` 换成 OpenTelemetry Collector 的实际端点。如果你用 tracing_compose.yaml 启动了 OpenTelemetry Collector，默认接收端口就是 4317。
 
-    To use the HTTP/protobuf span exporter, set the following environment variable and point to an HTTP endpoint, for example, `http://0.0.0.0:4318/v1/traces`.
+    要使用 HTTP/protobuf 方式的 span 导出器，请设置以下环境变量，并指向一个 HTTP 端点，例如 `http://0.0.0.0:4318/v1/traces`。
     ```bash Command
     export OTEL_EXPORTER_OTLP_TRACES_PROTOCOL=http/protobuf
     ```
 
+4. 发送一些请求
 
-4. Raise some requests
-5. Observe whether trace data is being exported
-    * Access port 16686 of Jaeger using a web browser to visualize the request traces.
-    * The OpenTelemetry Collector also exports trace data in JSON format to /tmp/otel_trace.json. In a follow-up patch, we will provide a tool to convert this data into a Perfetto-compatible format, enabling visualization of requests in the Perfetto UI.
+5. 观察追踪数据是否成功导出
+    * 用浏览器访问 Jaeger 的 16686 端口，可视化查看请求追踪。
+    * OpenTelemetry Collector 还会把追踪数据以 JSON 格式导出到 /tmp/otel_trace.json。在后续的补丁中，我们会提供一个工具，把这些数据转换为 Perfetto 兼容格式，以便在 Perfetto UI 中可视化请求。
 
-6. Dynamically adjust trace level
-    The trace level accepts configurable values from `0` to `3`. The meanings of different trace level values are as follows:
+6. 动态调整追踪级别
+    追踪级别可配置为 `0` 到 `3`，各取值的含义如下：
     ```
     0: disable tracing
     1: Trace important slices
     2: Trace all slices except nested ones
     3: Trace all slices (default)
     ```
-    **At startup** — set `SGLANG_TRACE_LEVEL` before launching the server:
+    **启动时** —— 在启动服务器前设置 `SGLANG_TRACE_LEVEL`：
     ```bash Command
     SGLANG_TRACE_LEVEL=2 python -m sglang.launch_server --enable-trace --otlp-traces-endpoint 0.0.0.0:4317 <other options>
     ```
 
-    **At runtime** — dynamically adjust via HTTP API without restarting:
+    **运行时** —— 无需重启，通过 HTTP API 动态调整：
     ```bash Command
     curl http://0.0.0.0:30000/set_trace_level?level=2
     ```
-    Replace `0.0.0.0:30000` with your actual server address, and replace `level=2` with the level you want to set.
+    把 `0.0.0.0:30000` 换成你实际的服务器地址，并把 `level=2` 换成你想要设置的级别。
 
-    **Note**: You must set the parameter `--enable-trace`; otherwise, the trace capability will not be enabled regardless of any dynamic adjustments to the trace level.
+    **注意**：必须先设置 `--enable-trace` 参数，否则无论怎么动态调整追踪级别，追踪能力都不会生效。
 
-## How to add Tracing for slices you're interested in?(API introduction)
-We have already inserted instrumentation points in the tokenizer and scheduler main threads. If you wish to trace additional request execution segments or perform finer-grained tracing, please use the APIs from the tracing package as described below.
+<Note>
+💡 AI Infra 学习笔记：追踪分级（trace level）本质是“采样粒度与开销”的权衡——级别越高，记录的 slice 越多，定位越细，但采集、序列化、网络传输的开销也越大。因此 SGLang 支持运行时动态降级：先全量抓问题，再调回低级别长期运行。这也是可观测性系统设计的通用思路：观测本身也是成本，要按需开合。
+</Note>
 
-**All of the following implementations are done in python/sglang/srt/observability/req_time_stats.py. If you want to add another slice, please do it here.**
+## 如何为你关心的 slice 添加追踪？（API 介绍）
 
-1. Initialization
+我们已经在分词器和调度器的主线程中插入了埋点。如果你想追踪更多的请求执行片段，或做更细粒度的追踪，请使用下面介绍的 tracing 包提供的 API。
 
-    Every process involved in tracing during the initialization phase should execute:
+**下面所有实现都在 python/sglang/srt/observability/req_time_stats.py 中完成。想新增 slice，就在这里加。**
+
+1. 初始化
+
+    初始化阶段，每个参与追踪的进程都应执行：
     ```python Example
     process_tracing_init(otlp_traces_endpoint, server_name)
     ```
-    The otlp_traces_endpoint is obtained from the arguments, and you can set server_name freely, but it should remain consistent across all processes.
+    otlp_traces_endpoint 从启动参数中获取，server_name 可以随意设置，但要在所有进程间保持一致。
 
-    Every thread involved in tracing during the initialization phase should execute:
+    初始化阶段，每个参与追踪的线程都应执行：
     ```python Example
     trace_set_thread_info("thread label", tp_rank, dp_rank)
     ```
-    The "thread label" can be regarded as the name of the thread, used to distinguish different threads in the visualization view.
+    “thread label” 可以看作线程的名字，用来在可视化视图中区分不同线程。
 
-2. Create a trace context for a request
-    Each request needs to call `TraceReqContext()` to initialize a request context, which is used to generate slice spans and record request stage info. You can either store it within the request object or maintain it as a global variable.
+2. 为请求创建追踪上下文
 
-3. Mark the beginning and end of a request
+    每个请求都需要调用 `TraceReqContext()` 初始化请求上下文，用来生成 slice 的 span 并记录请求阶段信息。你可以把它存在请求对象里，也可以维护成全局变量。
+
+3. 标记请求的开始与结束
     ```
     trace_ctx.trace_req_start().
     trace_ctx.trace_req_finish()
     ```
-    trace_req_start() and trace_req_finish() must be called within the same process, for example, in the tokenizer.
+    trace_req_start() 和 trace_req_finish() 必须在同一个进程内调用，例如在分词器中。
 
-4. Add tracing for a slice
+4. 为 slice 添加追踪
 
-    * Add slice tracing normally:
+    * 常规地为 slice 添加追踪：
         ```python Example
         trace_ctx.trace_slice_start(RequestStage.TOKENIZER.stage_name)
         trace_ctx.trace_slice_end(RequestStage.TOKENIZER.stage_name)
@@ -110,23 +122,23 @@ We have already inserted instrumentation points in the tokenizer and scheduler m
         trace_ctx.trace_slice(slice: TraceSliceContext)
         ```
 
-    - The end of the last slice in a thread must be marked with thread_finish_flag=True, or explicitly call trace_ctx.abort(); otherwise, the thread's span will not be properly generated.
+    - 线程中最后一个 slice 结束时，必须用 thread_finish_flag=True 标记，或显式调用 trace_ctx.abort()；否则该线程的 span 无法正确生成。
         ```python Example
         trace_ctx.slice_end(RequestStage.D.stage_name, thread_finish_flag = True)
         trace_ctx.abort()
         ```
 
-5. When the request execution flow transfers to another thread, the thread context needs to be explicitly rebuilt.
-    - receiver: Execute the following code after receiving the request via ZMQ
+5. 当请求执行流转到另一个线程时，需要显式重建线程上下文
+    - receiver（接收方）：通过 ZMQ 收到请求后，执行以下代码：
         ```python Example
         trace_ctx.rebuild_thread_context()
         ```
 
-## How to Extend the Tracing Framework to Support Complex Tracing Scenarios
+## 如何扩展追踪框架以支持更复杂的追踪场景
 
-The currently provided tracing package still has potential for further development. If you wish to build more advanced features upon it, you must first understand its existing design principles.
+当前提供的 tracing 包还有进一步发展的空间。如果你想在此基础上构建更高级的功能，需要先理解它现有的设计原则。
 
-The core of the tracing framework's implementation lies in the design of the span structure and the trace context. To aggregate scattered slices and enable concurrent tracking of multiple requests, we have designed a three-level trace context structure or span structure: `TraceReqContext`, `TraceThreadContext` and `TraceSliceContext`. Their relationship is as follows:
+追踪框架实现的核心在于 span 结构和追踪上下文的设计。为了把分散的 slice 聚合起来，并支持并发追踪多个请求，我们设计了三级追踪上下文（或者说 span）结构：`TraceReqContext`、`TraceThreadContext` 和 `TraceSliceContext`。它们的关系如下：
 ```
 TraceReqContext (req_id="req-123")
 ├── TraceThreadContext(thread_label="scheduler", tp_rank=0)
@@ -136,6 +148,6 @@ TraceReqContext (req_id="req-123")
       └── TraceSliceContext(slice_name="prefill")
 ```
 
-Each traced request maintains a global `TraceReqContext` and creates a corresponding request span. For every thread that processes the request, a `TraceThreadContext` is recorded and a thread span is created. The `TraceThreadContext` is nested within the `TraceReqContext`, and each currently traced code slice—potentially nested—is stored in its associated `TraceThreadContext`.
+每个被追踪的请求维护一个全局的 `TraceReqContext`，并创建对应的请求 span。处理该请求的每个线程都会记录一个 `TraceThreadContext` 并创建线程 span。`TraceThreadContext` 嵌套在 `TraceReqContext` 之下；每个当前被追踪的代码 slice（可能是嵌套的）都存在它所属的 `TraceThreadContext` 里。
 
-In addition to the above hierarchy, each slice also records its previous slice via Span.add_link(), which can be used to trace the execution flow.
+除了上述层级之外，每个 slice 还会通过 Span.add_link() 记录它的前一个 slice，用来追踪执行流转。

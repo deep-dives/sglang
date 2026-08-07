@@ -1,11 +1,15 @@
 ---
-title: "Multi-Node Deployment"
+title: "多节点部署"
 metatags:
-    description: "SGLang multi-node: Llama 405B on 2 nodes, DeepSeek V3/R1, SLURM cluster deployment examples."
+    description: "SGLang 多节点部署：Llama 405B 双节点、DeepSeek V3/R1、SLURM 集群部署示例。"
 ---
 ## Llama 3.1 405B
 
-**Run 405B (fp16) on Two Nodes**
+**在两个节点上运行 405B（fp16）**
+
+<Note>
+💡 AI Infra 学习笔记：为什么大模型需要多节点部署？最直接的原因是显存放不下——405B fp16 光权重就约 810GB，远超单机 8×H100 的 640GB 显存。这时要用模型并行：把权重切分到多卡/多节点上（张量并行 TP 按层内切分、流水线并行 PP 按层切分），靠 NCCL 跨卡/跨节点通信协同计算。与之相对，数据并行（DP）是每张卡都放完整模型、各处理不同请求，适合模型单卡能装下、主要追求吞吐量的场景。
+</Note>
 
 ```bash Command
 # replace 172.16.4.52:20000 with your own node ip address and port of the first node
@@ -25,7 +29,7 @@ python3 -m sglang.launch_server \
   --node-rank 1
 ```
 
-Note that LLama 405B (fp8) can also be launched on a single node.
+注意，Llama 405B（fp8）也可以在单节点上启动。
 
 ```bash Command
 python -m sglang.launch_server --model-path meta-llama/Meta-Llama-3.1-405B-Instruct-FP8 --tp 8
@@ -33,11 +37,15 @@ python -m sglang.launch_server --model-path meta-llama/Meta-Llama-3.1-405B-Instr
 
 ## DeepSeek V3/R1
 
-Please refer to [DeepSeek documents for reference](/cookbook/autoregressive/DeepSeek/DeepSeek-V3#4-2-5-multi-node-deployment).
+请参考 [DeepSeek 文档](/cookbook/autoregressive/DeepSeek/DeepSeek-V3#4-2-5-multi-node-deployment)。
 
-## Multi-Node Inference on SLURM
+## 在 SLURM 上做多节点推理
 
-This example showcases how to serve SGLang server across multiple nodes by SLURM. Submit the following job to the SLURM cluster.
+这个示例演示如何通过 SLURM 在多个节点上部署 SGLang 服务器。把下面的作业提交给 SLURM 集群即可。
+
+<Note>
+💡 AI Infra 学习笔记：TP16 + 双节点意味着 16 张卡组成一个张量并行组、每节点 8 卡。`--dist-init-addr` 指定 NCCL 的初始化地址，`--node-rank` 区分节点；跨节点通信经以太网或 RDMA 进行，其带宽与延迟直接决定 TP 的扩展效率——这也是集群调度（SLURM/K8s）里需要「单作业独占多个节点」的原因。
+</Note>
 
 ```bash Command
 #!/bin/bash -l
@@ -98,6 +106,6 @@ echo "[INFO] $HEAD_NODE:30000 is ready to accept connections"
 wait
 ```
 
-Then, you can test the server by sending requests following other [documents](../../basic_usage/openai_api_completions).
+然后你可以参考其它[文档](../../basic_usage/openai_api_completions)，通过发送请求来测试服务器。
 
-Thanks for [aflah02](https://github.com/aflah02) for providing the example, based on his [blog post](https://aflah02.substack.com/p/multi-node-llm-inference-with-sglang).
+感谢 [aflah02](https://github.com/aflah02) 提供该示例，相关内容基于他的[博客文章](https://aflah02.substack.com/p/multi-node-llm-inference-with-sglang)。

@@ -1,19 +1,23 @@
 ---
-title: "Choices Methods in SGLang"
+title: "SGLang 中的 Choices 方法"
 metatags:
-    description: "SGLang choices methods: token_length_normalized, greedy_token_selection, unconditional_likelihood_normalized."
+    description: "SGLang choices 方法：token_length_normalized、greedy_token_selection、unconditional_likelihood_normalized。"
 ---
-This doc describes the choices methods supported by SGLang.
+本文介绍 SGLang 支持的 choices 方法。
 
-The optional `choices_method` arg determines how options supplied to SGLang's `choices` primitive are selected. Only the `RuntimeEndpoint` backend supports the `choices_method` arg. Other backends, such as `OpenAI`, have bespoke selection implementations due to API limitations.
+<Note>
+💡 AI Infra 学习笔记：`choices` 让模型在给定候选项中选一个，常用于分类、打分类任务。难点在于模型对较长 token 有系统性偏好，直接比较 logprob 会偏向长选项，因此需要不同的归一化策略来消除 token 数量带来的偏差——理解这类细节，是评估 LLM 分类/工具调用可靠性时的高频考点。
+</Note>
 
-## Methods
+可选的 `choices_method` 参数决定如何从提供给 SGLang `choices` 原语的候选项中挑选结果。只有 `RuntimeEndpoint` 后端支持 `choices_method` 参数；其它后端（如 `OpenAI`）受 API 限制，各自实现了不同的选择逻辑。
 
-### Token Length Normalized
+## 方法
 
-Token length normalized is the default SGLang choices method. It selects the option with the highest average logprob across all of its tokens.
+### 按 Token 长度归一化
 
-Usage example (alternatively, simply omit the `choices_method` arg):
+按 Token 长度归一化是 SGLang 默认的 choices 方法。它计算每个候选项所有 token 的平均 logprob，选择最高者。
+
+用法示例（也可以直接省略 `choices_method` 参数）：
 ```python Example
 @sgl.function
 def example(s):
@@ -28,13 +32,13 @@ def example(s):
 ```
 
 
-This can perform poorly if an option contains many tokens, where its later tokens are predicted with high confidence based on its earlier tokens. For instance, even strong models will fail the above example if the specified options are `["Paris", "Antidisestablishmentarianism"]`.
+如果某个候选项包含很多 token，且后面的 token 可以基于前面的 token 被高置信度地预测出来，这种方法的效果就会变差。例如，如果把候选项设为 `["Paris", "Antidisestablishmentarianism"]`，即使是强大的模型也会在以上示例中失败。
 
-### Greedy Token Selection
+### 贪心 Token 选择
 
-Greedy token selection simply selects the option with the highest logprob for its initial token. For overlapping options where one option is a subset of a longer option, the logprobs of the shorter option are extended using its average logprob for comparison against the longer option.
+贪心 Token 选择只比较每个候选项首个 token 的 logprob，选最高的。当候选项之间存在包含关系（一个选项是更长选项的子串）时，短选项会用它自身的平均 logprob 补齐 logprobs，再与长选项比较。
 
-Usage example:
+用法示例：
 ```python Example
 @sgl.function
 def example(s):
@@ -48,7 +52,7 @@ def example(s):
     )
 ```
 
-This can perform poorly if an option misleads the model down a bad path based on an attractive initial token. For instance, greedy selection will result in an incorrect response for this example:
+如果某个候选项凭借有吸引力的首个 token 把模型引向错误方向，这种方法就会表现不佳。例如，贪心选择在下面这个示例中会得到错误答案：
 ```python Example
 @sgl.function
 def us_president_example(s):
@@ -62,11 +66,11 @@ def us_president_example(s):
     )
 ```
 
-### Unconditional Likelihood Normalized
+### 无条件似然归一化
 
-Unconditional likelihood normalized selects the option with the highest average token logprob once normalized by the unconditional token logprobs, as described in [this EleutherAI blogpost](https://blog.eleuther.ai/multiple-choice-normalization/). This method incurs an additional LLM call to obtain the unconditional likelihoods.
+无条件似然归一化会用无条件 token logprobs 对平均 token logprob 做归一化，再选择最高的候选项，具体参见 [EleutherAI 的这篇博客](https://blog.eleuther.ai/multiple-choice-normalization/)。该方法需要额外调用一次 LLM 来获取无条件似然。
 
-Usage example:
+用法示例：
 ```python Example
 @sgl.function
 def example(s):

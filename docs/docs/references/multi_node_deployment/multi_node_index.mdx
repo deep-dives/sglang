@@ -1,11 +1,15 @@
 ---
-title: "Multi-Node Deployment"
+title: "多节点部署"
 metatags:
-    description: "SGLang multi-node deployment index: K8s, LWS, RBG, PD disaggregation guides."
+    description: "SGLang 多节点部署索引：K8s、LWS、RBG、PD 分离部署指南。"
 ---
-- [Multi Node](./multi_node)
-- [Deploy On K8S](./deploy_on_k8s)
-- [Lws Pd Deploy](./lws_pd/lws_pd_deploy)
-- [Deepseekv32 Pd](./rbg_pd/deepseekv32_pd)
-- [Deploying DeepSeek with PD Disaggregation on 96 H100 GPUs](https://lmsys.org/blog/2025-05-05-large-scale-ep/)
-- [Deploying Kimi K2 with PD Disaggregation on 128 H200 GPUs](https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/)
+- [多节点](./multi_node)
+- [在 K8s 上部署](./deploy_on_k8s)
+- [基于 LWS 的 PD 分离部署](./lws_pd/lws_pd_deploy)
+- [DeepSeek V3.2 PD 分离部署](./rbg_pd/deepseekv32_pd)
+- [在 96 块 H100 上用 PD 分离部署 DeepSeek](https://lmsys.org/blog/2025-05-05-large-scale-ep/)
+- [在 128 块 H200 上用 PD 分离部署 Kimi K2](https://lmsys.org/blog/2025-07-20-k2-large-scale-ep/)
+
+<Note>
+💡 AI Infra 学习笔记：什么时候需要多节点部署？当模型权重、KV 缓存超过单机显存，或单机吞吐满足不了需求时，就要把推理扩展到多机。本目录下的页面覆盖了多节点 TP 部署、K8s/LWS/RBG 编排，以及 PD 分离（prefill-decode disaggregation）——这是 DeepSeek 等超大规模模型部署的标配形态。
+</Note>

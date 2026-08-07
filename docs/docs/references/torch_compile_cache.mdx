@@ -1,16 +1,18 @@
 ---
-title: "Enabling cache for torch.compile"
+title: "为 torch.compile 启用缓存"
 metatags:
-    description: "SGLang torch.compile cache: TORCHINDUCTOR_CACHE_DIR for faster deployment across multiple machines."
+    description: "SGLang torch.compile 缓存：用 TORCHINDUCTOR_CACHE_DIR 在多台机器上加速部署。"
 ---
-SGLang uses `max-autotune-no-cudagraphs` mode of torch.compile. The auto-tuning can be slow.
-If you want to deploy a model on many different machines, you can ship the torch.compile cache to these machines and skip the compilation steps.
+SGLang 使用 torch.compile 的 `max-autotune-no-cudagraphs` 模式。自动调优可能很慢。如果你想在大量机器上部署同一个模型，可以把 torch.compile 的缓存带到这些机器，跳过编译步骤。
 
-This is based on https://pytorch.org/tutorials/recipes/torch_compile_caching_tutorial.html
+<Note>
+💡 AI Infra 学习笔记：torch.compile 的 `max-autotune` 模式会对算子做大量自动调优（autotune），首次编译可能花上几十分钟甚至更久，是生产环境反复部署服务的痛点。`TORCHINDUCTOR_CACHE_DIR` 把编译产物（含 autotune 结果）落到磁盘，之后同一模型换机器部署时直接复用，跳过编译。代价是缓存目录较大，且与 torch 版本、CUDA 版本强相关——升级环境后通常需要重新生成。
+</Note>
 
+这基于 https://pytorch.org/tutorials/recipes/torch_compile_caching_tutorial.html
 
-1. Generate the cache by setting TORCHINDUCTOR_CACHE_DIR and running the model once.
+1. 设置 TORCHINDUCTOR_CACHE_DIR 并运行一次模型来生成缓存。
 ```text Output
 TORCHINDUCTOR_CACHE_DIR=/root/inductor_root_cache python3 -m sglang.launch_server --model meta-llama/Llama-3.1-8B-Instruct --enable-torch-compile
 ```
-2. Copy the cache folder to other machines and launch the server with `TORCHINDUCTOR_CACHE_DIR`.
+2. 把缓存目录复制到其它机器，并用 `TORCHINDUCTOR_CACHE_DIR` 启动服务器。

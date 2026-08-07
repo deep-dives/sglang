@@ -1,21 +1,25 @@
-# Nightly Precision Regression Testing
+# 每日精度回归测试
 
-## Overview
+## 概览
 
-The nightly precision regression framework detects silent numerical regressions in the SGLang serving engine by comparing **per-layer hidden states** between consecutive runs. It runs as a nightly CI job on 8×H200 GPUs and can also be invoked locally for development and debugging.
+每日精度回归框架通过比较相邻两次运行的**逐层隐藏状态**，检测 SGLang 推理引擎中静默发生的数值回归。它作为每日 CI 任务运行在 8×H200 GPU 上，也可以本地运行，用于开发和调试。
 
-The framework operates on a **rolling-baseline** model:
+框架采用**滚动基线（rolling-baseline）**模式：
 
-1. **Baseline creation or comparison:** Launch the server, send a fixed prompt, dump per-layer hidden states to disk. If a previous baseline exists, compare the new tensors against it using the SGLang tensor comparator. If the comparison passes, the new tensors become the updated baseline.
-2. On the first run (or when the capture shape changes), the dumped tensors are saved as a new baseline with no comparison.
+1. **创建基线或进行比较：** 启动服务器，发送固定提示词，把逐层隐藏状态落盘。如果已存在基线，就用 SGLang 的张量比较器把新张量与基线对比；对比通过后，新张量成为更新后的基线。
+2. 首次运行（或捕获形状变化）时，落盘张量直接存为新基线，不做比较。
 
-Baselines are stored locally on disk and synced to a **HuggingFace dataset** so they survive across CI runners and can be shared across machines. The HF dataset store is **required** — the test errors if `SGLANG_PRECISION_HF_REPO` is unset.
+基线在本地磁盘存储，并同步到 **HuggingFace 数据集**，这样跨 CI 执行机也能保留，且可在机器间共享。HF 数据集存储是**必需的**——如果未设置 `SGLANG_PRECISION_HF_REPO`，测试会直接报错。
 
 ---
 
-## How It Works
+<Note>
+💡 AI Infra 学习笔记：推理引擎的“数值回归”指代码改动（换 kernel、改算子实现、调整融合策略）后，模型输出在数值上悄悄变了——不报错、不崩溃，但结果可能劣化，在训练和生产中都很难发现。逐层隐藏状态（per-layer hidden states）比只看最终输出敏感得多：某一层的微小偏差会随层数传播放大，逐层对比能精确定位是第几层、哪次改动引入的偏差。滚动基线的好处是每次都只跟前一次比，漂移是渐进可见的。
+</Note>
 
-### Step-by-step flow
+## 工作原理
+
+### 逐步流程
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -45,80 +49,84 @@ Baselines are stored locally on disk and synced to a **HuggingFace dataset** so 
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### Key components
+### 关键组件
 
-| Component | File | Purpose |
+| 组件 | 文件 | 用途 |
 |-----------|------|---------|
-| Test entry point | `test/registered/debug_utils/test_nightly_precision_regression.py` | Orchestrates server launch, dump, compare, and reporting |
-| HF baseline store | `python/sglang/test/precision_baseline_store.py` | Push / fetch / prune baselines on a HuggingFace dataset |
-| Tensor comparator | `python/sglang/srt/debug_utils/comparator/` | Compares two directories of `.pt` tensors, emits JSONL report |
-| Dumper infrastructure | `python/sglang/srt/debug_utils/dumper.py` | Captures per-layer hidden states at runtime |
-| CI workflow | `.github/workflows/nightly-test-nvidia.yml` | Schedules the nightly job on 8×H200 |
+| 测试入口 | `test/registered/debug_utils/test_nightly_precision_regression.py` | 编排服务器启动、落盘、比较和上报 |
+| HF 基线存储 | `python/sglang/test/precision_baseline_store.py` | 在 HuggingFace 数据集上推送/拉取/清理基线 |
+| 张量比较器 | `python/sglang/srt/debug_utils/comparator/` | 比较两个目录下的 `.pt` 张量，输出 JSONL 报告 |
+| 落盘基础设施 | `python/sglang/srt/debug_utils/dumper.py` | 运行时捕获逐层隐藏状态 |
+| CI 工作流 | `.github/workflows/nightly-test-nvidia.yml` | 在 8×H200 上调度每日任务 |
 
 ---
 
-## What Gets Dumped and Compared
+## 落盘并比较什么
 
-### Strided layer capture
+### 跨步分层捕获
 
-Not every layer is dumped — the framework uses a **strided capture** to reduce I/O and storage overhead. By default, it captures:
+并非每一层都会被落盘——框架使用**跨步捕获（strided capture）**来降低 I/O 和存储开销。默认情况下捕获：
 
-- Layer 0 (always)
-- The last layer (always)
-- Every 8th layer in between (configurable via `LAYER_CAPTURE_STRIDE`)
+- 第 0 层（始终）
+- 最后一层（始终）
+- 中间每隔 8 层捕获一层（可通过 `LAYER_CAPTURE_STRIDE` 配置）
 
-The layer count is resolved automatically from the model's HuggingFace `config.json` (`num_hidden_layers` or `num_layers`). If resolution fails, all layers are captured as a safe fallback.
+层数会自动从模型的 HuggingFace `config.json`（`num_hidden_layers` 或 `num_layers`）解析。解析失败时，作为安全回退，会捕获所有层。
 
-The dumper filter is built dynamically as a regex matching only the selected layer indices, e.g.:
+落盘过滤器会动态构建为一个正则表达式，只匹配选中的层索引，例如：
 
 ```
 match(r'^non_intrusive__model\.layers\.(0|7|15|23)\.inputs\.1$', name)
 ```
 
-### Decode-path verification
+### 解码路径校验
 
-The test generates **2 tokens** with `ignore_eos=True` to ensure the model's decode path is exercised. After the dump, `_assert_decode_captured()` verifies that tensors from the decode step were actually captured (not just prefill). If only prefill tensors are found, the test fails immediately — this catches misconfigurations where `--max-total-tokens` is too low for the decode loop to run.
+测试用 `ignore_eos=True` 生成 **2 个 token**，确保模型的解码路径被执行。落盘后，`_assert_decode_captured()` 会校验是否真的捕获了解码步骤的张量（而不只是预填充）。如果只发现预填充张量，测试会立即失败——这能抓出 `--max-total-tokens` 设置过低、导致解码循环根本没跑起来的配置错误。
 
-### Comparator
+### 比较器
 
-The comparator computes **relative differences** (`rel_diff`) for each tensor and checks them against a configurable threshold (default `1e-3`). For tensor-parallel models, the `--override-dims` flag tells the comparator how to reduce across TP ranks before comparing:
+比较器为每个张量计算**相对差异**（`rel_diff`），并与可配置的阈值（默认 `1e-3`）比较。对于张量并行模型，`--override-dims` 参数告诉比较器在比较前如何跨 TP rank 归约：
 
 ```
 --override-dims ^non_intrusive__model\.layers\.\d+\.inputs\.1$:bs h[tp:partial]
 ```
 
-This sums partial TP contributions along the hidden dimension before computing the diff, so the comparison is semantically correct even with TP > 1.
+它会在计算差异前，沿隐藏维度对各个 TP 分片做求和归约，这样即使 TP > 1，比较在语义上也是正确的。
 
-If the comparator returns exit code 0 but compared **zero layers** (baseline/target name mismatch), the test fails with a diagnostic message rather than silently passing.
+如果比较器返回退出码 0，但比较的层数为 **0**（基线/目标文件名不匹配），测试会带着诊断信息失败，而不是静默通过。
 
-### Capture signature
+### 捕获签名
 
-A `capture_signature` (SHA-1 hash of schema version, max_tokens, ignore_eos, TP size, and dumper filter) is computed per run. The HF store uses this signature during fetch to ensure only baselines with an identical capture shape are considered. If the signature changes (e.g. you add layers to the capture set or change TP), the framework establishes a fresh baseline instead of erroring on incompatible tensors.
+每次运行都会计算一个 `capture_signature`（对 schema 版本、max_tokens、ignore_eos、TP 大小和落盘过滤器的 SHA-1 哈希）。HF 存储在拉取时使用该签名，确保只会考虑捕获形状完全一致的基线。如果签名变了（例如你往捕获集合里加了层，或改了 TP），框架会建立全新基线，而不是对着不兼容的张量报错。
 
 ---
 
-## Environment Variables
+<Note>
+💡 AI Infra 学习笔记：capture_signature 本质是“捕获配置的指纹”——它把 schema 版本、max_tokens、TP 大小等编码成哈希，只有配置完全一致时基线才可比。这解决了一个工程难点：TP 不同或捕获层数不同时，张量形状不同，直接比较毫无意义；用签名自动把“配置变了”和“真的回归了”区分开，避免误报。
+</Note>
 
-| Variable | Default | Description |
+## 环境变量
+
+| 变量 | 默认值 | 说明 |
 |----------|---------|-------------|
-| `SGLANG_PRECISION_MODELS` | `zai-org/GLM-5.1-FP8` | Comma-separated HuggingFace model IDs to test |
-| `SGLANG_PRECISION_BASELINE_DIR` | `/tmp/sglang_precision_baselines` | Local directory for baseline tensors |
-| `SGLANG_PRECISION_DIFF_THRESHOLD` | `1e-3` | Per-tensor relative diff threshold |
-| `SGLANG_PRECISION_FORCE_UPDATE` | `0` | Set to `1` to skip comparison and unconditionally refresh baseline |
-| `SGLANG_PRECISION_COMMIT` | _(auto-detected from git)_ | Override the sglang commit SHA tagged on push |
-| `SGLANG_PRECISION_HF_REPO` | _(required)_ | HuggingFace dataset repo for cross-runner baseline storage |
-| `SGLANG_PRECISION_HF_REVISION` | `main` | Branch/revision of the HF dataset |
-| `HF_TOKEN` | _(required in CI)_ | HuggingFace token with write access to the dataset |
+| `SGLANG_PRECISION_MODELS` | `zai-org/GLM-5.1-FP8` | 逗号分隔的待测试 HuggingFace 模型 ID |
+| `SGLANG_PRECISION_BASELINE_DIR` | `/tmp/sglang_precision_baselines` | 基线张量的本地目录 |
+| `SGLANG_PRECISION_DIFF_THRESHOLD` | `1e-3` | 每个张量的相对差异阈值 |
+| `SGLANG_PRECISION_FORCE_UPDATE` | `0` | 设为 `1` 可跳过比较、无条件刷新基线 |
+| `SGLANG_PRECISION_COMMIT` | _（从 git 自动检测）_ | 覆盖推送时标记的 sglang commit SHA |
+| `SGLANG_PRECISION_HF_REPO` | _（必需）_ | 用于跨执行机存储基线的 HuggingFace 数据集仓库 |
+| `SGLANG_PRECISION_HF_REVISION` | `main` | HF 数据集的分支/版本 |
+| `HF_TOKEN` | _（CI 中必需）_ | 对数据集有写权限的 HuggingFace token |
 
 ---
 
-## CI Integration
+## CI 集成
 
-### Workflow job
+### 工作流任务
 
-The nightly job `nightly-test-precision-8-gpu-h200` is defined in `.github/workflows/nightly-test-nvidia.yml` and runs on an 8-GPU H200 runner. It is included in the nightly suite via `test/run_suite.py`.
+每日任务 `nightly-test-precision-8-gpu-h200` 定义在 `.github/workflows/nightly-test-nvidia.yml`，运行在 8 GPU H200 runner 上，通过 `test/run_suite.py` 纳入每日测试套件。
 
-Key CI configuration:
+关键 CI 配置：
 
 ```yaml
 - name: Run precision regression test
@@ -134,23 +142,23 @@ Key CI configuration:
     python3 run_suite.py --hw cuda --suite nightly-precision-8-gpu-h200 --nightly --continue-on-error --timeout-per-file 3600
 ```
 
-### Required GitHub secrets/variables
+### 必需的 GitHub secrets/variables
 
-| Name | Type | Purpose |
+| 名称 | 类型 | 用途 |
 |------|------|---------|
-| `SGLANG_PRECISION_HF_REPO` | Repository variable | HF dataset repo ID (e.g. `org/sglang-precision-baselines`) — **required**, the test errors if unset |
-| `SGLANG_PRECISION_HF_REVISION` | Repository variable (optional) | Dataset branch (defaults to `main`) |
-| `HF_TOKEN_PRECISION_STORE` | Repository secret | HF token with write access to the dataset |
+| `SGLANG_PRECISION_HF_REPO` | 仓库变量 | HF 数据集仓库 ID（例如 `org/sglang-precision-baselines`）——**必需**，未设置时测试报错 |
+| `SGLANG_PRECISION_HF_REVISION` | 仓库变量（可选） | 数据集分支（默认 `main`） |
+| `HF_TOKEN_PRECISION_STORE` | 仓库 secret | 对数据集有写权限的 HF token |
 
-### GitHub Step Summary
+### GitHub 任务摘要
 
-When running in CI, the test writes a Markdown table to the GitHub Actions job summary showing each model's status (`PASSED`, `FAILED`, `BASELINE_ESTABLISHED`, or `ERROR`).
+在 CI 中运行时，测试会把一个 Markdown 表格写入 GitHub Actions 的任务摘要，显示每个模型的状态（`PASSED`、`FAILED`、`BASELINE_ESTABLISHED` 或 `ERROR`）。
 
 ---
 
-## HF Dataset Storage Layout
+## HF 数据集存储结构
 
-Baselines are organized in the HF dataset as:
+基线在 HF 数据集中按如下结构组织：
 
 ```
 <model_sanitized>/<YYYY>/<MM>/<DD>/run-<sha7>/
@@ -162,25 +170,25 @@ Baselines are organized in the HF dataset as:
     └── ...
 ```
 
-A top-level `manifest.jsonl` tracks all runs with one JSON object per line. Each manifest row carries a `capture_signature` field so that fetch selects only baselines with a matching capture shape.
+顶层 `manifest.jsonl` 记录所有运行，每行一个 JSON 对象。每行都带 `capture_signature` 字段，这样拉取时只会选择捕获形状匹配的基线。
 
-The `prune_old_runs()` function (callable manually) retains daily runs for 30 days and keeps one run per week beyond that window.
+`prune_old_runs()` 函数（可手动调用）会保留 30 天内的每日运行，超过该窗口后每周只保留一次运行。
 
 ---
 
-## How to Add a New Model
+## 如何添加新模型
 
-### Option A: Add to the default model list (CI)
+### 方案 A：加入默认模型列表（CI）
 
-Edit the default in `test/registered/debug_utils/test_nightly_precision_regression.py`:
+修改 `test/registered/debug_utils/test_nightly_precision_regression.py` 里的默认值：
 
 ```python
 DEFAULT_MODELS_FOR_NIGHTLY_PRECISION = "zai-org/GLM-5.1-FP8,your-org/your-model"
 ```
 
-Or set the `SGLANG_PRECISION_MODELS` environment variable in the CI workflow to override the default.
+或者在 CI 工作流中设置 `SGLANG_PRECISION_MODELS` 环境变量来覆盖默认值。
 
-### Option B: Run locally for a specific model
+### 方案 B：为特定模型本地运行
 
 ```bash
 export SGLANG_PRECISION_MODELS="your-org/your-model"
@@ -193,9 +201,9 @@ cd test
 python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v
 ```
 
-### Step-by-step: adding a model to the nightly CI
+### 分步指南：把模型加入每日 CI
 
-1. **Verify the model works with the dumper.** Run locally first to ensure hidden states are captured correctly:
+1. **确认模型能配合落盘器正常工作。** 先在本地运行，确保隐藏状态能被正确捕获：
 
    ```bash
    export SGLANG_PRECISION_MODELS="your-org/your-model"
@@ -208,50 +216,50 @@ python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v
    python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v -k test_precision
    ```
 
-2. **Run a comparison pass** (remove `FORCE_UPDATE`):
+2. **做一次比较运行**（去掉 `FORCE_UPDATE`）：
 
    ```bash
    unset SGLANG_PRECISION_FORCE_UPDATE
    python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v -k test_precision
    ```
 
-   This should report `PASSED` if the engine is numerically stable for the model.
+   如果引擎对该模型的数值是稳定的，这一步应报告 `PASSED`。
 
-3. **Set the tensor-parallelism size.** If the model requires TP > 1, the test harness defaults to `tp_size=8` for all models. To customize, modify the `ModelLaunchSettings` construction in the test or pass extra server arguments:
+3. **设置张量并行大小。** 如果模型需要 TP > 1——测试框架对所有模型默认 `tp_size=8`。要自定义，请修改测试中的 `ModelLaunchSettings` 构造，或传入额外的服务器参数：
 
    ```python
    # In setUpClass or via env-driven logic
    cls.models = [ModelLaunchSettings("your-org/your-model", tp_size=4)]
    ```
 
-4. **Adjust the diff threshold if needed.** FP8 or quantized models may exhibit larger numerical differences. Set `SGLANG_PRECISION_DIFF_THRESHOLD` to an appropriate value (e.g., `1e-2` for FP8).
+4. **按需调整差异阈值。** FP8 或量化模型可能表现出更大的数值差异。把 `SGLANG_PRECISION_DIFF_THRESHOLD` 设为合适的值（例如 FP8 用 `1e-2`）。
 
-5. **Add to the default model list** or configure `SGLANG_PRECISION_MODELS` in the CI workflow.
+5. **加入默认模型列表**，或在 CI 工作流中配置 `SGLANG_PRECISION_MODELS`。
 
-### Considerations for model-specific adjustments
+### 按模型调整的注意事项
 
-| Concern | How to handle |
+| 关注点 | 处理方式 |
 |---------|--------------|
-| TP size != 8 | Override `tp_size` in `ModelLaunchSettings` or add model-specific logic |
-| Quantized models (FP8, GPTQ) | Loosen `SGLANG_PRECISION_DIFF_THRESHOLD` (e.g., `1e-2`) |
-| Model needs extra server args | Pass them via `ModelLaunchSettings(model, extra_args=["--quantization", "fp8"])` |
-| Model needs different prompt | Modify `PROMPT` constant or make it model-configurable |
-| MoE models with TP partial sums | Already handled by `--override-dims` (`bs h[tp:partial]`) |
-| Fewer/more capture layers | Adjust `LAYER_CAPTURE_STRIDE` (default 8); set lower for smaller models |
-| Decode not captured | Ensure `--max-total-tokens` is well above the scheduler's decode reservation (default 512); the test uses 4096 |
+| TP 大小不等于 8 | 在 `ModelLaunchSettings` 中覆盖 `tp_size`，或添加模型专属逻辑 |
+| 量化模型（FP8、GPTQ） | 放宽 `SGLANG_PRECISION_DIFF_THRESHOLD`（例如 `1e-2`） |
+| 模型需要额外服务器参数 | 通过 `ModelLaunchSettings(model, extra_args=["--quantization", "fp8"])` 传入 |
+| 模型需要不同的提示词 | 修改 `PROMPT` 常量，或把它做成模型可配置 |
+| 需要 TP 部分归约的 MoE 模型 | 已由 `--override-dims`（`bs h[tp:partial]`）处理 |
+| 捕获层数偏少/偏多 | 调整 `LAYER_CAPTURE_STRIDE`（默认 8）；模型较小时设得更小 |
+| 解码未被捕获 | 确保 `--max-total-tokens` 明显高于调度器的解码预留（默认 512）；测试用 4096 |
 
 ---
 
-## Running Locally
+## 本地运行
 
-### Prerequisites
+### 前置条件
 
-- SGLang installed in development mode
-- GPUs matching the model's requirements
-- `huggingface_hub` installed
-- A **HuggingFace dataset** for baseline storage and a write-capable `HF_TOKEN`. The HF store is **mandatory** — `SGLANG_PRECISION_HF_REPO` must be set or the test will error at startup. This is because the nightly CI runners are ephemeral (no persistent local disk), so baselines must survive across runs via the HF dataset. There is currently no local-only fallback.
+- SGLang 以开发模式安装
+- 满足模型要求的 GPU
+- 已安装 `huggingface_hub`
+- 用于存储基线的 **HuggingFace 数据集**和具备写权限的 `HF_TOKEN`。HF 存储是**强制要求**——必须设置 `SGLANG_PRECISION_HF_REPO`，否则测试启动时会报错。这是因为每日 CI 执行机是临时的（没有持久本地磁盘），基线必须通过 HF 数据集跨运行保留。目前没有仅本地的回退方案。
 
-### Quick local test
+### 快速本地测试
 
 ```bash
 # All three are required — the test errors if SGLANG_PRECISION_HF_REPO is unset.
@@ -268,7 +276,7 @@ python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v
 python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v
 ```
 
-### Force-refresh a baseline
+### 强制刷新基线
 
 ```bash
 export SGLANG_PRECISION_FORCE_UPDATE="1"
@@ -277,18 +285,18 @@ python3 -m pytest registered/debug_utils/test_nightly_precision_regression.py -v
 
 ---
 
-## Interpreting Results
+## 解读结果
 
-### Status codes
+### 状态码
 
-| Status | Meaning |
+| 状态 | 含义 |
 |--------|---------|
-| `BASELINE_ESTABLISHED` | No prior baseline with a matching signature existed; today's tensors saved as the new baseline |
-| `PASSED` | All per-layer hidden states are within the diff threshold; baseline updated |
-| `FAILED` | One or more layers exceeded the diff threshold, or 0 layers were compared (baseline/target mismatch); diagnostic data pushed to HF |
-| `ERROR` | Server launch, inference, or comparison encountered an unexpected error |
+| `BASELINE_ESTABLISHED` | 之前不存在签名匹配的基线，今天的张量被保存为新基线 |
+| `PASSED` | 所有逐层隐藏状态都在差异阈值内，基线已更新 |
+| `FAILED` | 一层或多层超出差异阈值，或比较层数为 0（基线/目标不匹配）；诊断数据已推送到 HF |
+| `ERROR` | 服务器启动、推理或比较遇到意外错误 |
 
-### Output example
+### 输出示例
 
 ```
 ============================================================
@@ -301,72 +309,72 @@ Qwen/Qwen2.5-0.5B-Instruct                    FAILED                   tensor=la
 ============================================================
 ```
 
-### When a failure is detected
+### 检测到失败时
 
-1. The comparator output is saved to `/tmp/nightly_precision_<model>_*.log`
-2. The failing tensors and comparator report are pushed to the HF dataset with `pass_label="failed"` for offline diagnosis
-3. The GitHub Step Summary includes the failure details
-4. The CI job exits with a non-zero status
+1. 比较器输出保存到 `/tmp/nightly_precision_<model>_*.log`
+2. 失败张量和比较器报告以 `pass_label="failed"` 推送到 HF 数据集，供离线诊断
+3. GitHub 任务摘要包含失败详情
+4. CI 任务以非零状态退出
 
 ---
 
-## Baseline Management
+## 基线管理
 
-### Local baselines
+### 本地基线
 
-Baselines are stored at:
+基线存储在：
 ```
 $SGLANG_PRECISION_BASELINE_DIR/<model_sanitized>/nightly_precision/*.pt
 ```
 
-A `baseline_meta.json` next to the tensors records the timestamp and commit that produced the baseline.
+张量旁边的 `baseline_meta.json` 记录生成该基线的时间戳和 commit。
 
-### HF dataset baselines
+### HF 数据集基线
 
-- **Fetch:** At test start, if no local baseline exists, the latest signature-matched baseline is downloaded from the HF dataset.
-- **Push:** After each run, tensors and metadata are uploaded to the dataset.
-- **Prune:** Use `prune_old_runs()` to garbage-collect old baselines (keeps 30 days of daily runs, one per week after that).
+- **拉取：** 测试开始时，如果本地没有基线，就从 HF 数据集下载最新的签名匹配基线。
+- **推送：** 每次运行后，把张量和元数据上传到数据集。
+- **清理：** 用 `prune_old_runs()` 清理旧基线（保留 30 天的每日运行，之后每周保留一个）。
 
-### Refreshing a stale baseline
+### 刷新过期基线
 
-If an intentional numerical change (e.g., kernel optimization, model refactor) causes a comparison failure:
+如果有意的数值变化（例如 kernel 优化、模型重构）导致比较失败：
 
-1. Verify the change is intentional
-2. Set `SGLANG_PRECISION_FORCE_UPDATE=1` and run the test once to establish a new baseline
-3. Commit any necessary threshold adjustments
+1. 确认这个变化是有意的
+2. 设置 `SGLANG_PRECISION_FORCE_UPDATE=1` 并运行一次测试，建立新基线
+3. 提交必要的阈值调整
 
-If you change the capture configuration (stride, TP size, etc.), the `capture_signature` will differ and the framework automatically establishes a fresh baseline — no manual intervention needed.
-
----
-
-## Known Limitations
-
-### Baseline drift
-
-The framework uses a **rolling baseline**: every successful comparison updates the baseline to the current run's tensors. This means the reference shifts forward each day. While individual day-to-day diffs stay within the configured threshold, tiny numerical differences can **accumulate over time**, causing the baseline to silently drift away from the original golden values.
-
-**Implications:**
-- The framework detects **regressions** (a sudden, large numerical change between consecutive runs), not **absolute accuracy** relative to a fixed reference.
-- Over weeks or months, the cumulative drift may become significant enough to mask a real regression that happened gradually, or to cause a false-positive failure when the drift eventually crosses the threshold.
-
-**Mitigation strategies (not yet implemented):**
-- Periodically re-establish a fresh anchor baseline from a known-good reference commit.
-- Track the cumulative drift in the manifest metadata and alert when it exceeds a long-term budget.
-- Compare against a fixed "epoch" baseline in addition to the rolling one.
-
-### No local-only mode
-
-The test requires a HuggingFace dataset (`SGLANG_PRECISION_HF_REPO`) and a write-capable `HF_TOKEN`. There is no local-only fallback. This is by design — CI runners have no persistent local disk, so the HF dataset is the only way to carry baselines across runs. If you need to run the test locally, you must set up a HF dataset (even a private one) and provide the corresponding token.
+如果你修改了捕获配置（stride、TP 大小等），`capture_signature` 会随之改变，框架会自动建立全新基线——无需人工干预。
 
 ---
 
-## File Reference
+## 已知限制
 
-| File | Role |
+### 基线漂移
+
+框架使用**滚动基线**：每次比较成功，都会把基线更新为本次运行的张量。这意味着参照标准每天都在前移。虽然单日的差异都保持在配置阈值内，但微小的数值差异会**随时间累积**，导致基线悄悄偏离最初的基准值。
+
+**影响：**
+- 框架检测的是**回归**（相邻两次运行之间突然出现的大幅数值变化），而不是相对固定参照的**绝对精度**。
+- 数周或数月后，累积漂移可能大到足以掩盖一次逐渐发生的真实回归，或在漂移最终越过阈值时造成误报失败。
+
+**缓解策略（尚未实现）：**
+- 定期从已知良好的参考 commit 重新建立锚点基线。
+- 在 manifest 元数据中追踪累积漂移，超过长期预算时告警。
+- 除了滚动基线，再与固定的“epoch”基线比较。
+
+### 无纯本地模式
+
+测试需要 HuggingFace 数据集（`SGLANG_PRECISION_HF_REPO`）和具备写权限的 `HF_TOKEN`，没有纯本地回退。这是有意设计——CI 执行机没有持久本地磁盘，HF 数据集是跨运行携带基线的唯一途径。如果你需要在本地运行测试，必须先建一个 HF 数据集（私有的也行），并提供对应的 token。
+
+---
+
+## 文件参考
+
+| 文件 | 作用 |
 |------|------|
-| `test/registered/debug_utils/test_nightly_precision_regression.py` | Main test — server lifecycle, dump, compare, report |
-| `python/sglang/test/precision_baseline_store.py` | HF dataset store — push, fetch, prune baselines |
-| `python/sglang/srt/debug_utils/comparator/` | Tensor comparison engine |
-| `python/sglang/srt/debug_utils/dumper.py` | Runtime hidden-state capture |
-| `.github/workflows/nightly-test-nvidia.yml` | CI workflow definition |
-| `test/run_suite.py` | Test suite registration (includes `nightly-precision-8-gpu-h200`) |
+| `test/registered/debug_utils/test_nightly_precision_regression.py` | 主测试——服务器生命周期、落盘、比较、上报 |
+| `python/sglang/test/precision_baseline_store.py` | HF 数据集存储——推送、拉取、清理基线 |
+| `python/sglang/srt/debug_utils/comparator/` | 张量比较引擎 |
+| `python/sglang/srt/debug_utils/dumper.py` | 运行时隐藏状态捕获 |
+| `.github/workflows/nightly-test-nvidia.yml` | CI 工作流定义 |
+| `test/run_suite.py` | 测试套件注册（包含 `nightly-precision-8-gpu-h200`） |

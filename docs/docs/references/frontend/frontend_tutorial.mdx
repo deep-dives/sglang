@@ -1,13 +1,17 @@
 ---
-title: "SGLang Frontend Language"
+title: "SGLang 前端语言"
 metatags:
-    description: "SGLang frontend tutorial: multi-turn dialog, fork parallelism, regex constraints, batching, streaming."
+    description: "SGLang 前端教程：多轮对话、fork 并行、正则约束、批处理、流式输出。"
 ---
-SGLang frontend language can be used to define simple and easy prompts in a convenient, structured way.
+SGLang 前端语言可以用一种便捷、结构化的方式定义简单易用的提示词。
 
-## Launch A Server
+<Note>
+💡 AI Infra 学习笔记：SGLang 前端语言是 SGLang 提供的「编程式提示词」接口——用 `@function` 装饰一个 Python 函数，函数内通过 `s += system(...)`、`s += user(...)`、`s += assistant(gen(...))` 这样的流式状态累积逐步构建提示词，采样参数、解码约束（正则、choices 等）都写在代码里。它把「提示词模板 + 采样配置」变成可复用、可组合的 Python 对象，这也是现代 LLM 应用框架的通用编程模型。
+</Note>
 
-Launch the server in your terminal and wait for it to initialize.
+## 启动服务器
+
+在终端里启动服务器，等待它初始化完成。
 
 ```python Example
 from sglang import assistant_begin, assistant_end
@@ -27,15 +31,15 @@ wait_for_server(f"http://localhost:{port}", process=server_process)
 print(f"Server started on http://localhost:{port}")
 ```
 
-Set the default backend. Note: Besides the local server, you may use also `OpenAI` or other API endpoints.
+设置默认后端。注意：除了本地服务器，你也可以使用 `OpenAI` 或其它 API 端点。
 
 ```python Example
 set_default_backend(RuntimeEndpoint(f"http://localhost:{port}"))
 ```
 
-## Basic Usage
+## 基本用法
 
-The most simple way of using SGLang frontend language is a simple question answer dialog between a user and an assistant.
+SGLang 前端语言最简单的用法，就是用户与助手之间的一问一答。
 
 ```python Example
 @function
@@ -50,9 +54,9 @@ state = basic_qa("List 3 countries and their capitals.")
 print_highlight(state["answer"])
 ```
 
-## Multi-turn Dialog
+## 多轮对话
 
-SGLang frontend language can also be used to define multi-turn dialogs.
+SGLang 前端语言也可以用来定义多轮对话。
 
 ```python Example
 @function
@@ -70,9 +74,9 @@ print_highlight(state["first_answer"])
 print_highlight(state["second_answer"])
 ```
 
-## Control flow
+## 控制流
 
-You may use any Python code within the function to define more complex control flows.
+你可以在函数里写任意 Python 代码，来定义更复杂的控制流。
 
 ```python Example
 @function
@@ -96,9 +100,13 @@ print_highlight(state["tool"])
 print_highlight(state["expression"])
 ```
 
-## Parallelism
+## 并行
 
-Use `fork` to launch parallel prompts. Because `sgl.gen` is non-blocking, the for loop below issues two generation calls in parallel.
+用 `fork` 启动并行的提示词。由于 `sgl.gen` 是非阻塞的，下面的 for 循环会并行发起两次生成调用。
+
+<Note>
+💡 AI Infra 学习笔记：`fork` 把一次调用展开成多个独立的生成分支，之后再合并回主流程。因为 `sgl.gen` 是非阻塞的，这些分支会被编排进同一批请求交给推理引擎，由调度器统一做连续批处理——把并行度交给引擎，而不是在客户端自己拼多线程、多发请求。
+</Note>
 
 ```python Example
 @function
@@ -126,9 +134,9 @@ state = tip_suggestion()
 print_highlight(state["summary"])
 ```
 
-## Constrained Decoding
+## 受约束解码
 
-Use `regex` to specify a regular expression as a decoding constraint. This is only supported for local models.
+用 `regex` 指定一个正则表达式作为解码约束。仅本地模型支持该功能。
 
 ```python Example
 @function
@@ -147,7 +155,7 @@ state = regular_expression_gen()
 print_highlight(state["answer"])
 ```
 
-Use `regex` to define a `JSON` decoding schema.
+用 `regex` 定义一个 `JSON` 解码结构。
 
 ```python Example
 character_regex = (
@@ -180,9 +188,9 @@ state = character_gen("Harry Potter")
 print_highlight(state["json_output"])
 ```
 
-## Batching
+## 批处理
 
-Use `run_batch` to run a batch of prompts.
+用 `run_batch` 一次运行一批提示词。
 
 ```python Example
 @function
@@ -204,9 +212,9 @@ for i, state in enumerate(states):
     print_highlight(f"Answer {i+1}: {states[i]['answer']}")
 ```
 
-## Streaming
+## 流式输出
 
-Use `stream` to stream the output to the user.
+用 `stream` 把输出流式返回给用户。
 
 ```python Example
 @function
@@ -223,9 +231,9 @@ for out in state.text_iter():
     print(out, end="", flush=True)
 ```
 
-## Complex Prompts
+## 复杂提示词
 
-You may use `&#123;system|user|assistant&#125;_&#123;begin|end&#125;` to define complex prompts.
+你可以用 `&#123;system|user|assistant&#125;_&#123;begin|end&#125;` 来定义复杂的提示词。
 
 ```python Example
 @function
@@ -249,10 +257,10 @@ print_highlight(state["answer"])
 terminate_process(server_process)
 ```
 
-## Multi-modal Generation
+## 多模态生成
 
-You may use SGLang frontend language to define multi-modal prompts.
-See [here](../../supported-models/multimodal_language_models) for supported models.
+你可以用 SGLang 前端语言定义多模态提示词。
+支持哪些模型请看[这里](../../supported-models/multimodal_language_models)。
 
 ```python Example
 server_process, port = launch_server_cmd(
@@ -267,7 +275,7 @@ print(f"Server started on http://localhost:{port}")
 set_default_backend(RuntimeEndpoint(f"http://localhost:{port}"))
 ```
 
-Ask a question about an image.
+针对一张图片提问。
 
 ```python Example
 @function

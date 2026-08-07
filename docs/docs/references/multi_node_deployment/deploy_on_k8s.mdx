@@ -1,35 +1,39 @@
 ---
-title: "Deploy On Kubernetes"
+title: "在 Kubernetes 上部署"
 metatags:
-    description: "SGLang on Kubernetes with LWS: DeepSeek-R1 multi-node deployment, RoCE RDMA setup, NCCL debugging."
+    description: "使用 LWS 在 Kubernetes 上部署 SGLang：DeepSeek-R1 多节点部署、RoCE RDMA 配置、NCCL 调试。"
 ---
-This document is for deploying a RoCE network-based SGLang two-node inference service on a Kubernetes (K8S) cluster.
+本文介绍如何在 Kubernetes（K8S）集群上，基于 RoCE 网络部署一个两节点的 SGLang 推理服务。
 
-[LeaderWorkerSet (LWS)](https://github.com/kubernetes-sigs/lws) is a Kubernetes API that aims to address common deployment patterns of AI/ML inference workloads. A major use case is for multi-host/multi-node distributed inference.
+[LeaderWorkerSet（LWS）](https://github.com/kubernetes-sigs/lws) 是一个 Kubernetes API，用于解决 AI/ML 推理工作负载常见的部署模式问题。它最主要的应用场景就是多主机/多节点的分布式推理。
 
-SGLang can also be deployed with LWS on Kubernetes for distributed model serving.
+SGLang 也可以借助 LWS 部署在 Kubernetes 上，实现分布式模型服务。
 
-Please see this guide for more details on deploying SGLang on Kubernetes using LWS.
+<Note>
+💡 AI Infra 学习笔记：LeaderWorkerSet（LWS）是 Kubernetes 社区为「1 个 leader + N 个 worker」这类分布式推理负载设计的 API：leader 负责对外入口与探活，worker 与 leader 同组共享生命周期。它天然适合 SGLang 多节点 TP 推理——`LWS_LEADER_ADDRESS`、`LWS_WORKER_INDEX` 等环境变量由控制器自动注入，省去手工指定节点地址。
+</Note>
 
-Here we take the deployment of DeepSeek-R1 as an example.
+关于用 LWS 在 Kubernetes 上部署 SGLang 的更多细节，请参考本指南。
 
-## Prerequisites
+这里以 DeepSeek-R1 的部署为例。
 
-1. At least two Kubernetes nodes, each with two H20 systems and eight GPUs, are required.
+## 前置条件
 
-2. Make sure your K8S cluster has LWS correctly installed. If it hasn't been set up yet, please follow the [installation instructions](https://lws.sigs.k8s.io/docs/installation/). **Note:** For LWS versions ≤0.5.x, you must use the Downward API to obtain `LWS_WORKER_INDEX`, as native support for this feature was introduced in v0.6.0.
+1. 至少需要两个 Kubernetes 节点，每个节点配备两套 H20 系统和八块 GPU。
 
-## Basic example
+2. 请确保你的 K8S 集群已正确安装 LWS。如果还没装，请按照[安装说明](https://lws.sigs.k8s.io/docs/installation/)操作。**注意：** 对于 LWS 版本 ≤0.5.x，你需要用 Downward API 获取 `LWS_WORKER_INDEX`，因为该特性的原生支持从 v0.6.0 才引入。
 
-For the basic example documentation, refer to [Deploy Distributed Inference Service with SGLang and LWS on GPUs](https://github.com/kubernetes-sigs/lws/tree/main/docs/examples/sglang).
+## 基础示例
 
-However, that document only covers the basic NCCL socket mode.
+基础示例文档请参考[在 GPU 上用 SGLang 与 LWS 部署分布式推理服务](https://github.com/kubernetes-sigs/lws/tree/main/docs/examples/sglang)。
 
-In this section, we’ll make some simple modifications to adapt the setup to the RDMA scenario.
+不过，那份文档只覆盖了基础的 NCCL socket 模式。
 
-## RDMA RoCE case
+本节中，我们会做一些简单修改，让这套配置适配 RDMA 场景。
 
-* Check your env:
+## RDMA RoCE 场景
+
+* 检查你的环境：
 
 ```bash Command
 [root@node1 ~]# ibstatus
@@ -70,7 +74,7 @@ Infiniband device 'mlx5_bond_3' port 1 status:
         link_layer:      Ethernet
 ```
 
-* Prepare the `lws.yaml` file for deploying on k8s.
+* 准备用于在 k8s 上部署的 `lws.yaml` 文件。
 
 ```yaml Config
 apiVersion: leaderworkerset.x-k8s.io/v1
@@ -220,7 +224,7 @@ spec:
 
 ```
 
-* Then use  `kubectl apply -f lws.yaml` you will get this output.
+* 然后执行 `kubectl apply -f lws.yaml`，你会看到如下输出。
 
 ```text Output
 NAME           READY   STATUS    RESTARTS       AGE
@@ -228,11 +232,11 @@ sglang-0       0/1     Running   0              9s
 sglang-0-1     1/1     Running   0              9s
 ```
 
-Wait for the sglang leader (`sglang-0`) status to change to 1/1, which indicates it is `Ready`.
+等待 sglang 主节点（`sglang-0`）的状态变为 1/1，这表示它已经 `Ready`。
 
-You can use the command `kubectl logs -f sglang-0` to view the logs of the leader node.
+你可以用命令 `kubectl logs -f sglang-0` 查看主节点的日志。
 
-Once successful, you should see output like this:
+成功启动后，你应该会看到类似下面的输出：
 
 ```text Output
 [2025-02-17 05:27:24 TP1] Capture cuda graph end. Time elapsed: 84.89 s
@@ -254,21 +258,25 @@ Once successful, you should see output like this:
 [2025-02-17 05:27:32] The server is fired up and ready to roll!
 ```
 
-If it doesn’t start up successfully, please follow these steps to check for any remaining issues. Thanks!
+如果启动不成功，请按以下步骤排查剩余问题。谢谢！
 
-### Debug
+### 调试
 
-* Set `NCCL_DEBUG=TRACE` to check if it is a NCCL communication problem.
+* 设置 `NCCL_DEBUG=TRACE`，排查是否是 NCCL 通信问题。
 
-This should resolve most NCCL-related issues.
+这应该能解决大部分 NCCL 相关问题。
 
-***Notice: If you find that NCCL_DEBUG=TRACE is not effective in the container environment, but the process is stuck or you encounter hard-to-diagnose issues, try switching to a different container image. Some images may not handle standard error output properly.***
+***注意：如果你发现容器环境下 `NCCL_DEBUG=TRACE` 不生效，而进程卡住或遇到难以诊断的问题，请尝试更换容器镜像。有些镜像可能没有正确处理标准错误输出。***
 
-#### RoCE scenario
+#### RoCE 场景
 
-* Please make sure that RDMA devices are available in the cluster environment.
-* Please make sure that the nodes in the cluster have Mellanox NICs with RoCE. In this example, we use Mellanox ConnectX 5 model NICs, and the proper OFED driver has been installed. If not, please refer to the document [Install OFED Driver](https://docs.nvidia.com/networking/display/mlnxofedv24102180lts/installing+the+driver) to install the driver.
-* Check your env:
+<Note>
+💡 AI Infra 学习笔记：多节点 TP 推理的瓶颈通常是节点间通信。RoCE（RDMA over Converged Ethernet）是 NVIDIA GPU 集群常用的低延迟网络方案：配合 Mellanox 网卡与 OFED 驱动，让 NCCL 通信从 TCP socket 切换到 RDMA，可显著降低跨节点通信延迟。部署里大量出现的 `NCCL_IB_*`、`NVSHMEM_*` 环境变量，就是在控制 RDMA 的 HCA 选择、GID 与流量分类。
+</Note>
+
+* 请确保集群环境中可用的 RDMA 设备。
+* 请确保集群节点配备了支持 RoCE 的 Mellanox 网卡。本例使用的是 Mellanox ConnectX 5 系列网卡，并已安装相应的 OFED 驱动。如果还没装，请参考[安装 OFED 驱动](https://docs.nvidia.com/networking/display/mlnxofedv24102180lts/installing+the+driver)文档进行安装。
+* 检查你的环境：
 
   ```shell Command
   $ lspci -nn | grep Eth | grep Mellanox
@@ -282,14 +290,14 @@ This should resolve most NCCL-related issues.
   0001:a2:00.1 Ethernet controller [0200]: Mellanox Technologies MT43244 BlueField-3 integrated ConnectX-7 network controller [15b3:a2dc] (rev 01)
   ```
 
-* Check the OFED driver:
+* 检查 OFED 驱动：
 
   ```shell Command
   ofed_info -s
   OFED-internal-23.07-0.5.0:
   ```
 
-* Show RDMA link status and check IB devices:
+* 查看 RDMA 链路状态，检查 IB 设备：
 
   ```shell Command
   $ rdma link show
@@ -305,7 +313,7 @@ This should resolve most NCCL-related issues.
   11/1: mlx5_bond_3/1: state ACTIVE physical_state LINK_UP netdev reth6
   ```
 
-* Test RoCE network speed on the host:
+* 在宿主机上测试 RoCE 网络速度：
 
   ```shell Command
   yum install qperf
@@ -315,26 +323,26 @@ This should resolve most NCCL-related issues.
   qperf -t 60 -cm1 <server_ip>   rc_rdma_write_bw
   ```
 
-* Check RDMA accessible in your container:
+* 检查容器内能否访问 RDMA：
 
   ```shell Command
   # ibv_devices
   # ibv_devinfo
   ```
 
-## Keys to success
+## 成功的关键
 
-* In the YAML configuration above, pay attention to the NCCL environment variable. For older versions of NCCL, you should check the NCCL_IB_GID_INDEX environment setting.
-* NCCL_SOCKET_IFNAME is also crucial, but in a containerized environment, this typically isn’t an issue.
-* In some cases, it’s necessary to configure GLOO_SOCKET_IFNAME correctly.
-* NCCL_DEBUG is essential for troubleshooting, but I've found that sometimes it doesn't show error logs within containers. This could be related to the Docker image you're using. You may want to try switching images if needed.
-* Avoid using Docker images based on Ubuntu 18.04, as they tend to have compatibility issues.
+* 在上面的 YAML 配置中，注意 NCCL 环境变量。对于旧版本的 NCCL，你需要检查 NCCL_IB_GID_INDEX 这个环境设置。
+* NCCL_SOCKET_IFNAME 同样很关键，不过在容器化环境下通常不会出问题。
+* 某些情况下还需要正确配置 GLOO_SOCKET_IFNAME。
+* NCCL_DEBUG 对排查问题至关重要，但我发现有时它在容器内不会输出错误日志，这可能与所用 Docker 镜像有关。必要时可以试试更换镜像。
+* 避免使用基于 Ubuntu 18.04 的 Docker 镜像，它们通常存在兼容性问题。
 
-## Remaining issues
+## 遗留问题
 
-* In Kubernetes, Docker, or Containerd environments, we use hostNetwork to prevent performance degradation.
-* We utilize privileged mode, which  isn’t secure. Additionally, in containerized environments, full GPU isolation cannot be achieved.
+* 在 Kubernetes、Docker 或 Containerd 环境中，我们使用 hostNetwork 以避免性能下降。
+* 我们使用了 privileged 模式，这并不安全。另外，在容器化环境中无法实现完全的 GPU 隔离。
 
-## TODO
+## 待办
 
-* Integrated with [k8s-rdma-shared-dev-plugin](https://github.com/Mellanox/k8s-rdma-shared-dev-plugin).
+* 与 [k8s-rdma-shared-dev-plugin](https://github.com/Mellanox/k8s-rdma-shared-dev-plugin) 集成。

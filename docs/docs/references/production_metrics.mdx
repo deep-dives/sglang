@@ -1,13 +1,13 @@
 ---
-title: "Production Metrics"
+title: "生产指标"
 metatags:
-    description: "SGLang Prometheus metrics: TTFT, TPOT, throughput, cache hit rate. Grafana dashboard setup guide."
+    description: "SGLang Prometheus 指标：TTFT、TPOT、吞吐量、缓存命中率。Grafana 监控面板搭建指南。"
 ---
-SGLang exposes the following metrics via Prometheus. You can enable it by adding `--enable-metrics` when you launch the server.
+在启动服务器时加上 `--enable-metrics`，SGLang 就会通过 Prometheus 暴露以下指标。
 
-An example of the monitoring dashboard is available in [examples/monitoring/grafana.json](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json).
+监控面板的示例见 [examples/monitoring/grafana.json](https://github.com/sgl-project/sglang/blob/main/examples/monitoring/grafana/dashboards/json/sglang-dashboard.json)。
 
-Here is an example of the metrics:
+下面是指标的一个示例：
 
 ```text Output
 $ curl http://localhost:30000/metrics
@@ -134,18 +134,22 @@ sglang:spec_num_steps{model_name="meta-llama/Llama-3.1-8B-Instruct"} 3.0
 sglang:spec_num_draft_tokens{model_name="meta-llama/Llama-3.1-8B-Instruct"} 4.0
 ```
 
-## Setup Guide
+<Note>
+💡 AI Infra 学习笔记：生产环境监控推理服务，核心看这几类信号——延迟类（TTFT 首 token 时间、TPOT 每个输出 token 的时间、端到端请求延迟）、吞吐类（生成 token/s）、容量类（运行中请求数、队列长度、token 占用率）和缓存命中率（前缀缓存命中越高，预填充开销越小）。TTFT 决定用户体验的“首字速度”，TPOT 决定生成速度，队列长度则能暴露系统是否过载。面试中常考“如何判断服务是否达到瓶颈”，答案通常就藏在这些指标的组合里。
+</Note>
 
-This section describes how to set up the monitoring stack (Prometheus + Grafana) provided in the `examples/monitoring` directory.
+## 配置指南
 
-### Prerequisites
+本节介绍如何搭建 `examples/monitoring` 目录里自带的监控栈（Prometheus + Grafana）。
 
-- Docker and Docker Compose installed
-- SGLang server running with metrics enabled
+### 前置条件
 
-### Usage
+- 已安装 Docker 和 Docker Compose
+- SGLang 服务器已开启指标
 
-1.  **Start your SGLang server with metrics enabled:**
+### 使用步骤
+
+1.  **用开启指标的方式启动你的 SGLang 服务器：**
 
     ```bash Command
     python -m sglang.launch_server \
@@ -154,44 +158,44 @@ This section describes how to set up the monitoring stack (Prometheus + Grafana)
       --enable-metrics \
       --enable-mfu-metrics
     ```
-    Replace `<your_model_path>` with the actual path to your model (e.g., `meta-llama/Meta-Llama-3.1-8B-Instruct`). Ensure the server is accessible from the monitoring stack (you might need `--host 0.0.0.0` if running in Docker). By default, the metrics endpoint will be available at `http://<sglang_server_host>:30000/metrics`.
+    把 `<your_model_path>` 换成你模型的实际路径（例如 `meta-llama/Meta-Llama-3.1-8B-Instruct`）。确保监控栈能访问到服务器（如果跑在 Docker 里，可能需要 `--host 0.0.0.0`）。默认情况下，指标端点位于 `http://<sglang_server_host>:30000/metrics`。
 
-2.  **Navigate to the monitoring example directory:**
+2.  **进入监控示例目录：**
     ```bash Command
     cd examples/monitoring
     ```
 
-3.  **Start the monitoring stack:**
+3.  **启动监控栈：**
     ```bash Command
     docker compose up -d
     ```
-    This command will start Prometheus and Grafana in the background.
+    这条命令会在后台启动 Prometheus 和 Grafana。
 
-4.  **Access the monitoring interfaces:**
-    *   **Grafana:** Open your web browser and go to [http://localhost:3000](http://localhost:3000).
-    *   **Prometheus:** Open your web browser and go to [http://localhost:9090](http://localhost:9090).
+4.  **访问监控界面：**
+    *   **Grafana：** 打开浏览器访问 [http://localhost:3000](http://localhost:3000)。
+    *   **Prometheus：** 打开浏览器访问 [http://localhost:9090](http://localhost:9090)。
 
-5.  **Log in to Grafana:**
-    *   Default Username: `admin`
-    *   Default Password: `admin`
-    You will be prompted to change the password upon your first login.
+5.  **登录 Grafana：**
+    *   默认用户名：`admin`
+    *   默认密码：`admin`
+    首次登录时会提示你修改密码。
 
-6.  **View the Dashboard:**
-    The SGLang dashboard is pre-configured and should be available automatically. Navigate to `Dashboards` -> `Browse` -> `SGLang Monitoring` folder -> `SGLang Dashboard`.
+6.  **查看面板：**
+    SGLang 面板已预先配置好，通常会自动出现。依次进入 `Dashboards` -> `Browse` -> `SGLang Monitoring` 文件夹 -> `SGLang Dashboard`。
 
-### Troubleshooting
+### 故障排查
 
-*   **Port Conflicts:** If you encounter errors like "port is already allocated," check if other services (including previous instances of Prometheus/Grafana) are using ports `9090` or `3000`. Use `docker ps` to find running containers and `docker stop <container_id>` to stop them, or use `lsof -i :<port>` to find other processes using the ports. You might need to adjust the ports in the `docker-compose.yaml` file if they permanently conflict with other essential services on your system.
+*   **端口冲突：** 如果遇到类似 “port is already allocated” 的错误，先检查是否有其它服务（包括之前启动的 Prometheus/Grafana 实例）占用了 `9090` 或 `3000` 端口。用 `docker ps` 查看运行中的容器，用 `docker stop <container_id>` 停止它们，或用 `lsof -i :<port>` 找出占用端口的其它进程。如果这些端口与你系统上的必要服务长期冲突，可能需要在 `docker-compose.yaml` 里调整端口。
 
-To modify Grafana's port to the other one(like 3090) in your Docker Compose file, you need to explicitly specify the port mapping under the grafana service.
+要在 Docker Compose 文件里把 Grafana 端口改成其它值（比如 3090），需要显式指定 grafana 服务下的端口映射。
 
-    Option 1: Add GF_SERVER_HTTP_PORT to the environment section:
+    方案一：在 environment 段加上 GF_SERVER_HTTP_PORT：
     ```
       environment:
     - GF_AUTH_ANONYMOUS_ENABLED=true
     - GF_SERVER_HTTP_PORT=3090  # <-- Add this line
     ```
-    Option 2: Use port mapping:
+    方案二：使用端口映射：
     ```
     grafana:
       image: grafana/grafana:latest
@@ -199,33 +203,33 @@ To modify Grafana's port to the other one(like 3090) in your Docker Compose file
       ports:
       - "3090:3000"  # <-- Host:Container port mapping
     ```
-*   **Connection Issues:**
-    *   Ensure both Prometheus and Grafana containers are running (`docker ps`).
-    *   Verify the Prometheus data source configuration in Grafana (usually auto-configured via `grafana/datasources/datasource.yaml`). Go to `Connections` -> `Data sources` -> `Prometheus`. The URL should point to the Prometheus service (e.g., `http://prometheus:9090`).
-    *   Confirm that your SGLang server is running and the metrics endpoint (`http://<sglang_server_host>:30000/metrics`) is accessible *from the Prometheus container*. If SGLang is running on your host machine and Prometheus is in Docker, use `host.docker.internal` (on Docker Desktop) or your machine's network IP instead of `localhost` in the `prometheus.yaml` scrape configuration.
-*   **No Data on Dashboard:**
-    *   Generate some traffic to your SGLang server to produce metrics. For example, run a benchmark:
+*   **连接问题：**
+    *   确认 Prometheus 和 Grafana 容器都在运行（`docker ps`）。
+    *   检查 Grafana 中的 Prometheus 数据源配置（通常通过 `grafana/datasources/datasource.yaml` 自动配置）。进入 `Connections` -> `Data sources` -> `Prometheus`，URL 应指向 Prometheus 服务（例如 `http://prometheus:9090`）。
+    *   确认 SGLang 服务器正在运行，且 *Prometheus 容器内部*能访问到指标端点（`http://<sglang_server_host>:30000/metrics`）。如果 SGLang 跑在宿主机上而 Prometheus 在 Docker 里，在 `prometheus.yaml` 的抓取配置中应使用 `host.docker.internal`（Docker Desktop）或你机器的网络 IP，而不是 `localhost`。
+*   **面板上没有数据：**
+    *   给你的 SGLang 服务器制造一些流量来产生指标。例如运行一次基准测试：
         ```bash Command
         python3 -m sglang.bench_serving --backend sglang --dataset-name random --num-prompts 100 --random-input 128 --random-output 128
         ```
-    *   Check the Prometheus UI (`http://localhost:9090`) under `Status` -> `Targets` to see if the SGLang endpoint is being scraped successfully.
-    *   Verify the `model_name` and `instance` labels in your Prometheus metrics match the variables used in the Grafana dashboard. You might need to adjust the Grafana dashboard variables or the labels in your Prometheus configuration.
+    *   在 Prometheus 界面（`http://localhost:9090`）的 `Status` -> `Targets` 下查看 SGLang 端点是否被抓取成功。
+    *   确认 Prometheus 指标中的 `model_name` 和 `instance` 标签与 Grafana 面板里用到的变量一致。可能需要在 Grafana 面板中调整变量，或在 Prometheus 配置里调整标签。
 
-### Configuration Files
+### 配置文件
 
-The monitoring setup is defined by the following files within the `examples/monitoring` directory:
+监控配置由 `examples/monitoring` 目录下的以下文件定义：
 
-*   `docker-compose.yaml`: Defines the Prometheus and Grafana services.
-*   `prometheus.yaml`: Prometheus configuration, including scrape targets.
-*   `grafana/datasources/datasource.yaml`: Configures the Prometheus data source for Grafana.
-*   `grafana/dashboards/config/dashboard.yaml`: Tells Grafana to load dashboards from the specified path.
-*   `grafana/dashboards/json/sglang-dashboard.json`: The actual Grafana dashboard definition in JSON format.
+*   `docker-compose.yaml`：定义 Prometheus 和 Grafana 服务。
+*   `prometheus.yaml`：Prometheus 配置，包括抓取目标。
+*   `grafana/datasources/datasource.yaml`：为 Grafana 配置 Prometheus 数据源。
+*   `grafana/dashboards/config/dashboard.yaml`：告诉 Grafana 从指定路径加载面板。
+*   `grafana/dashboards/json/sglang-dashboard.json`：实际的 Grafana 面板定义（JSON 格式）。
 
-You can customize the setup by modifying these files. For instance, you might need to update the `static_configs` target in `prometheus.yaml` if your SGLang server runs on a different host or port.
+你可以通过修改这些文件来自定义配置。例如，如果 SGLang 服务器运行在不同主机或端口，可能需要更新 `prometheus.yaml` 中的 `static_configs` 目标。
 
-#### Check if the metrics are being collected
+#### 检查指标是否已被采集
 
-Run:
+运行：
 ```text Output
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -236,41 +240,42 @@ python3 -m sglang.bench_serving \
   --random-range-ratio 0.5
 ```
 
-to generate some requests.
+来产生一些请求。
 
-Then you should be able to see the metrics in the Grafana dashboard.
+之后你应该就能在 Grafana 面板上看到这些指标了。
 
-## Estimated Performance Metrics (MFU-related)
+<Note>
+💡 AI Infra 学习笔记：MFU（Model FLOPs Utilization，模型算力利用率）衡量 GPU 算力被实际用掉的比例，是判断推理引擎“把硬件榨干多少”的核心指标。SGLang 用预估计数器近似 MFU——用预估 FLOPs 除以理论峰值，加上读写字节数还能估算内存带宽利用。它不是硬件计数器，但足够用来做趋势分析和横向对比，排查“GPU 算力吃不满”（可能卡在内存带宽或调度开销）这类典型问题。
+</Note>
 
-SGLang exports the following estimated per-GPU counters that can be used to derive
-Model FLOPs Utilization (MFU)-related signals:
+## 预估性能指标（MFU 相关）
 
-- `sglang:estimated_flops_per_gpu_total`: Estimated floating-point operations.
-- `sglang:estimated_read_bytes_per_gpu_total`: Estimated bytes read from memory.
-- `sglang:estimated_write_bytes_per_gpu_total`: Estimated bytes written to memory.
+SGLang 导出以下按 GPU 计的预估计数器，可用于推导模型算力利用率（Model FLOPs Utilization，MFU）相关的信号：
 
-These metrics are available when both `--enable-metrics` and
-`--enable-mfu-metrics` are enabled.
+- `sglang:estimated_flops_per_gpu_total`：预估的浮点运算量。
+- `sglang:estimated_read_bytes_per_gpu_total`：预估的内存读取字节数。
+- `sglang:estimated_write_bytes_per_gpu_total`：预估的内存写入字节数。
 
-These are cumulative counters. Use Prometheus `rate(...)` to get per-second values.
+同时启用 `--enable-metrics` 和 `--enable-mfu-metrics` 时，这些指标才会可用。
 
-### PromQL examples
+这些是累计计数器，用 Prometheus 的 `rate(...)` 函数可以得到每秒的值。
 
-Average TFLOPS per GPU:
+### PromQL 示例
+
+每张 GPU 的平均 TFLOPS：
 
 ```promql
 rate(sglang:estimated_flops_per_gpu_total[1m]) / 1e12
 ```
 
-Average estimated memory bandwidth in GB/s:
+平均预估内存带宽（GB/s）：
 
 ```promql
 (rate(sglang:estimated_read_bytes_per_gpu_total[1m]) +
  rate(sglang:estimated_write_bytes_per_gpu_total[1m])) / 1e9
 ```
 
-### Notes
+### 说明
 
-- These metrics are estimates intended for observability and trend analysis.
-- Estimated memory bytes reflect modeled traffic and are not a direct hardware
-  counter from GPU profilers.
+- 这些指标是估算值，用于可观测性和趋势分析。
+- 预估的内存字节反映的是建模流量，并非 GPU profiler 直接给出的硬件计数器。

@@ -1,24 +1,32 @@
 ---
-title: "DeepSeekV32-Exp RBG Based PD Deploy"
+title: "基于 RBG 的 DeepSeek V3.2 Exp PD 分离部署"
 metatags:
-    description: "SGLang DeepSeek V3.2 RBG deployment: RoleBasedGroup PD disaggregation on Kubernetes."
+    description: "SGLang DeepSeek V3.2 RBG 部署：在 Kubernetes 上用 RoleBasedGroup 做 PD 分离部署。"
 ---
-## 0. Prerequisites
+## 0. 前置条件
 
 1. k8s >=1.26
-2. lws installed on k8s.
-3. rbg installed on k8s.
+2. k8s 上已安装 lws。
+3. k8s 上已安装 rbg。
 
-For RBG installation, please refer to: https://github.com/sgl-project/rbg
+RBG 的安装请参考：https://github.com/sgl-project/rbg
 
-## 1. Image Preparation
+<Note>
+💡 AI Infra 学习笔记：PD 分离（prefill-decode disaggregation）把预填充与解码拆成两组独立部署的实例。对 DeepSeek 这类大规模 MoE 模型，prefill 是计算密集（处理长提示词、大 batch），decode 是访存/通信密集且要求低延迟，两者混跑会互相拖累。拆开后可以各自独立扩缩容与调优——这是 DeepSeek 等超大模型生产部署的标准形态。
+</Note>
+
+## 1. 镜像准备
 
 `lmsysorg/sglang:latest`
 
 
-### 2. All In One manifest file
+### 2. All In One 清单文件
 
-*Note: The NodeSelector section, model location section, and taint toleration section can be adjusted according to your actual deployment environment*
+<Note>
+💡 AI Infra 学习笔记：RBG（RoleBasedGroup）在 LWS 之上再加一层「角色」抽象：一个 RBG 内可定义 prefill、decode、router 等多种角色的工作负载，并声明角色间依赖（router 依赖 prefill/decode 就绪）。router 角色负责把请求按阶段分发到 prefill 或 decode 实例——PD 分离部署里，这层路由/负载均衡是不可或缺的基础设施。
+</Note>
+
+*注意：NodeSelector 部分、模型位置部分和污点容忍部分可以根据你的实际部署环境调整*
 
 rbg-dsv32.yml
 
@@ -545,7 +553,7 @@ deepseek-rbg-32exp-router-service     NodePort    172.16.242.169   <none>       
 deepseek-rbg-32exp-prefill            ClusterIP   None             <none>        <none>           97m
 ```
 
-At this point, select a nodePort:30800 to access:
+此时，选择一个 nodePort:30800 来访问：
 
 ```bash Command
 [root@ecs-001]# curl -X POST "http://{nodePort}:30800/v1/chat/completions" \
@@ -563,8 +571,8 @@ At this point, select a nodePort:30800 to access:
 {"id":"ccccdd","object":"chat.completion","created":1750252498,"model":"qwen2","choices":[{"index":0,"message":{"role":"assistant","content":"&lt;think&gt;\n嗯，用户问了一个很基础的自我介绍问题"你是谁？"。这可能是第一次互动时的常规开场白，也可能是想确认我的身份和功能范围。\n\n用户没有提供任何背景信息，语气简洁中性。这种场景下新用户的可能性较高，需要给出清晰友好的自我介绍，同时突出实用价值来降低陌生感。\n\n考虑到中文用户，应该用简体中文回复。重点要说明三点：身份归属（深度求索）、功能定位（AI助手）、服务范围（学习/工作/生活）。结尾用开放性问题引导对话很关键——既能了解需求，又能避免让用户面对空白输入框时不知所措。\n\n用波浪线结尾可以软化语气，那个笑脸表情😊刚好能中和AI的机械感。不过要控制表情符号数量，避免显得轻浮。\n&lt;/think&gt;\n你好呀！我是你的AI助手，由深度求索公司（DeepSeek）开发的语言模型，名字叫 **DeepSeek-V32**。你可以把我当成一个知识丰富、随叫随到的小帮手～😊\n\n我的任务就是陪你聊天、解答问题、","reasoning_content":null,"tool_calls":null},"logprobs":null,"finish_reason":"length","matched_stop":null}],"usage":{"prompt_tokens":14,"total_tokens":235,"completion_tokens":221,"prompt_tokens_details":null}}
 
 ```
-## FAQ
+## 常见问题
 
-1. The current deployment startup parameters may not be fully compatible with all RDMA scenarios. Different RDMA NCCL-related environment configurations may be needed in different network environments.
+1. 当前部署的启动参数可能无法完全兼容所有 RDMA 场景。不同网络环境下，可能需要不同的 RDMA NCCL 相关环境配置。
 
-2. Please ensure that the sglang code in the image has incorporated the changes from [PR #10912](https://github.com/sgl-project/sglang/pull/10912).
+2. 请确保镜像中的 sglang 代码已合入 [PR #10912](https://github.com/sgl-project/sglang/pull/10912) 的改动。
