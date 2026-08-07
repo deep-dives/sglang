@@ -1,16 +1,20 @@
 ---
 title: "TPU"
-description: "SGLang supports high-performance TPU inference through the SGLang-JAX backend, which is specifically optimized for Google Cloud TPUs. The JAX-based implementation delivers exceptional throughput and low latency for Large Language Model (LLM) serving workloads on TPU hardware."
+description: "SGLang 通过 SGLang-JAX 后端在 TPU 上提供高性能推理，该后端针对 Google Cloud TPU 做了专门优化。基于 JAX 的实现可在 TPU 硬件上为大型语言模型（LLM）服务负载提供出色的吞吐量和低延迟。"
 ---
-SGLang supports high-performance TPU inference through the SGLang-JAX backend, which is specifically optimized for Google Cloud TPUs. The JAX-based implementation delivers exceptional throughput and low latency for Large Language Model (LLM) serving workloads on TPU hardware.
+SGLang 通过 SGLang-JAX 后端提供高性能 TPU 推理，该后端针对 Google Cloud TPU 做了专门优化。基于 JAX 的实现可在 TPU 硬件上为大型语言模型（LLM）服务负载提供出色的吞吐量和低延迟。
 
-For TPU-specific issues or feature requests, please visit the [sglang-jax GitHub issues page](https://github.com/sgl-project/sglang-jax/issues).
+如需报告 TPU 相关问题或功能请求，请访问 [sglang-jax GitHub issues 页面](https://github.com/sgl-project/sglang-jax/issues)。
 
-**NOTE:** SGLang TPU support is implemented via the SGLang-JAX backend, a dedicated JAX-based inference engine maintained as a separate repository at [https://github.com/sgl-project/sglang-jax](https://github.com/sgl-project/sglang-jax).
+**注意：** SGLang 的 TPU 支持是通过 SGLang-JAX 后端实现的，这是一个独立的、专门基于 JAX 的推理引擎，作为独立仓库维护在 [https://github.com/sgl-project/sglang-jax](https://github.com/sgl-project/sglang-jax)。
 
-## System Requirements
+<Note>
+💡 AI Infra 学习笔记：TPU 与 GPU 的架构差异很大——GPU 面向通用并行计算，kernel 通常用 CUDA 手写；TPU 是 Google 的专用矩阵乘法加速器（脉动阵列），主要依靠 XLA/JAX 这类编译器把计算图编译成高效的底层指令，极少手写 kernel。因此 SGLang 的 TPU 支持不是把 CUDA 代码移植过来，而是另起一套独立的 SGLang-JAX 引擎。理解了这一点，就能明白为什么推理引擎在不同硬件上往往是"不同实现"，而不是"同一套代码换编译目标"。
+</Note>
 
-### Supported TPU Hardware
+## 系统要求
+
+### 支持的 TPU 硬件
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -20,9 +24,9 @@ For TPU-specific issues or feature requests, please visit the [sglang-jax GitHub
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>TPU Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>HBM Memory</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Availability</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>TPU 类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>HBM 内存</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>可用性</th>
     </tr>
   </thead>
   <tbody>
@@ -33,22 +37,22 @@ For TPU-specific issues or feature requests, please visit the [sglang-jax GitHub
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>TPU v7</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>96 GB per core</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每核心 96 GB</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Google Cloud</td>
     </tr>
   </tbody>
 </table>
 
-### Software Requirements
+### 软件要求
 
-- **Python:** 3.12 or higher
-- **JAX:** Latest version with TPU support
-- **Environment:** Google Cloud TPU VM or compatible TPU runtime
-- **Optional:** SkyPilot for simplified cloud deployment
+- **Python：** 3.12 及以上
+- **JAX：** 支持 TPU 的最新版本
+- **环境：** Google Cloud TPU VM 或兼容的 TPU 运行时
+- **可选：** 用 SkyPilot 简化云部署
 
-## Feature Support Matrix
+## 功能支持矩阵
 
-SGLang-JAX provides comprehensive TPU-optimized features for production LLM serving:
+SGLang-JAX 为生产环境的 LLM 服务提供了全面的 TPU 优化特性：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -60,71 +64,71 @@ SGLang-JAX provides comprehensive TPU-optimized features for production LLM serv
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Feature</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Support Status</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>特性</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>支持状态</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>High-Throughput Continuous Batching</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>高吞吐连续批处理</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Dynamic request batching for maximum TPU utilization</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>动态请求批处理，最大化 TPU 利用率</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Radix Tree KV Cache</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Radix Tree KV 缓存</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Memory-efficient prefix sharing between requests</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>请求间高效的内存前缀共享</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>FlashAttention Backend</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>FlashAttention 后端</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>TPU-optimized attention kernel for long sequences</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>面向长序列的 TPU 优化注意力 kernel</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Tensor Parallelism</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>张量并行</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Distribute models across multiple TPU cores</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>把模型分布到多个 TPU 核心上</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Paged Attention</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>分页注意力</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Flexible KV cache management with paging</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>通过分页实现灵活的 KV 缓存管理</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Speculative Decoding (EAGLE/EAGLE3)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>投机解码（EAGLE/EAGLE3）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>20-40% throughput improvement for compatible models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>兼容模型吞吐量提升 20-40%</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Chunked Prefill</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>分块预填充</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Mixed prefill-decode batching</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>预填充与解码混合批处理</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI-Compatible API</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>兼容 OpenAI 的 API</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Drop-in replacement for OpenAI API</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>可作为 OpenAI API 的直接替代</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Data Parallel Attention</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>数据并行注意力</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>🚧</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>In development - Attention computation with data parallelism</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>开发中——数据并行下的注意力计算</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Quantization</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>量化</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>🚧</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>In development - Model quantization for reduced memory usage</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>开发中——模型量化以降低内存占用</td>
     </tr>
 <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Multi-LoRA</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>多 LoRA</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>🚧</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>In development - Serve multiple LoRA adapters simultaneously</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>开发中——同时服务多个 LoRA 适配器</td>
     </tr>
 </tbody>
 </table>
 
-### Attention Backend Comparison
+### Attention 后端对比
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -136,11 +140,11 @@ SGLang-JAX provides comprehensive TPU-optimized features for production LLM serv
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Backend**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**Paged Attention**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Spec Decoding**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**后端**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**分页注意力**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**投机解码**</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**MLA**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Sliding Window**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**滑动窗口**</th>
     </tr>
   </thead>
   <tbody>
@@ -161,11 +165,11 @@ SGLang-JAX provides comprehensive TPU-optimized features for production LLM serv
   </tbody>
 </table>
 
-**NOTE:** FlashAttention backend is recommended for production workloads due to superior memory efficiency and performance.
+**注意：** 生产环境负载推荐使用 FlashAttention 后端，因为它的内存效率和性能更优。
 
-## Optimized Model List
+## 优化模型列表
 
-The following models have been tested and optimized for TPU deployment:
+以下模型已针对 TPU 部署完成测试与优化：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -174,59 +178,59 @@ The following models have been tested and optimized for TPU deployment:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Performance Status</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型家族</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>性能状态</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/Qwen">Qwen 3</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>⭐ Recommended for production</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>⭐ 推荐用于生产环境</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/Qwen">Qwen 3 MoE</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>⭐ Best performance</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>⭐ 性能最佳</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/Qwen">Qwen 2</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/Qwen">Qwen 2 MoE</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/Qwen">Qwen 1.5</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/meta-llama">Llama/LLaMA</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/xai-org">Grok-2</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><a href="https://huggingface.co/google">Gemma 2</a></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Verified on TPU</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>已在 TPU 上验证</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Bailing MoE</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Needs improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>有待改进</td>
     </tr>
   </tbody>
 </table>
 
-## Installation
+## 安装
 
-### Method 1: Using PyPI (Recommended)
+### 方法一：使用 PyPI（推荐）
 
 ```bash Command
 pip install sglang-jax
 ```
 
-### Method 2: From Source
+### 方法二：从源码安装
 
 ```bash Command
 git clone https://github.com/sgl-project/sglang-jax
@@ -235,19 +239,19 @@ uv venv --python 3.12 && source .venv/bin/activate
 uv pip install -e "python[all]"
 ```
 
-### Method 3: Using Docker
+### 方法三：使用 Docker
 
-**NOTE:** Docker support for TPU is currently under development. Please use PyPI or source installation methods.
+**注意：** TPU 的 Docker 支持目前仍在开发中。请使用 PyPI 或源码安装方式。
 
-### Method 4: Cloud TPU with SkyPilot
+### 方法四：用 SkyPilot 使用云 TPU
 
-[SkyPilot](https://github.com/skypilot-org/skypilot) provides simplified deployment on Google Cloud TPU:
+[SkyPilot](https://github.com/skypilot-org/skypilot) 可以在 Google Cloud TPU 上提供简化的部署：
 
-1. Install SkyPilot and configure GCP access (see [SkyPilot documentation](https://skypilot.readthedocs.io/))
+1. 安装 SkyPilot 并配置 GCP 访问权限（参见 [SkyPilot 文档](https://skypilot.readthedocs.io/)）
 
-2. Create a SkyPilot configuration file:
+2. 创建一个 SkyPilot 配置文件：
 
-<Accordion title={<>SkyPilot YAML: <code>sglang-jax.sky.yaml</code></>}>
+<Accordion title={<>SkyPilot YAML：<code>sglang-jax.sky.yaml</code></>}>
 
 ```yaml Config
 # sglang-jax.sky.yaml
@@ -267,7 +271,7 @@ run: |
 
 </Accordion>
 
-3. Launch your TPU cluster:
+3. 启动你的 TPU 集群：
 
 ```bash Command
 # Standard deployment
@@ -277,9 +281,9 @@ sky launch -c sglang-jax sglang-jax.sky.yaml --infra=gcp
 sky launch -c sglang-jax sglang-jax.sky.yaml --infra=gcp --use-spot
 ```
 
-## Launch of the Serving Engine
+## 启动推理服务
 
-### Basic Example: Qwen-7B
+### 基础示例：Qwen-7B
 
 ```bash Command
 JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache python3 -u -m sgl_jax.launch_server \
@@ -300,18 +304,18 @@ JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache python3 -u -m sgl_jax.launch_server \
     --port 30000
 ```
 
-**Key Parameters Explained:**
+**关键参数说明：**
 
-1. `JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache` - Enables JIT compilation caching to accelerate server startup on subsequent runs
-2. `--tp-size=4` - Tensor parallelism size; match this to your TPU core count (typically 1, 4, or 8)
-3. `--device=tpu` - Specifies TPU device (this is the default for sglang-jax)
-4. `--dtype=bfloat16` - Uses bfloat16 precision, which TPUs are optimized for
-5. `--mem-fraction-static=0.8` - Allocates 80% of TPU HBM for static memory (adjustable from 0.2 to 0.9)
-6. `--max-prefill-tokens=8192` - Maximum number of tokens processed in the prefill phase
+1. `JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache` - 启用 JIT 编译缓存，加速后续的服务端启动
+2. `--tp-size=4` - 张量并行规模；与你的 TPU 核心数匹配（通常为 1、4 或 8）
+3. `--device=tpu` - 指定 TPU 设备（这是 sglang-jax 的默认值）
+4. `--dtype=bfloat16` - 使用 bfloat16 精度，TPU 为此做了优化
+5. `--mem-fraction-static=0.8` - 为静态内存分配 80% 的 TPU HBM（可在 0.2 到 0.9 之间调整）
+6. `--max-prefill-tokens=8192` - 预填充阶段处理的最大 token 数
 
-### High-Performance Configuration: Qwen3-8B
+### 高性能配置：Qwen3-8B
 
-For production workloads with optimal throughput:
+面向追求最优吞吐量的生产负载：
 
 ```bash Command
 python3 -u -m sgl_jax.launch_server \
@@ -327,9 +331,9 @@ python3 -u -m sgl_jax.launch_server \
     --attention-backend=fa
 ```
 
-### Advanced: Speculative Decoding (EAGLE3)
+### 进阶：投机解码（EAGLE3）
 
-Speculative decoding can improve throughput by 20-40% for compatible models:
+对于兼容模型，投机解码可以把吞吐量提升 20-40%：
 
 ```bash Command
 python3 -u -m sgl_jax.launch_server \
@@ -352,12 +356,11 @@ python3 -u -m sgl_jax.launch_server \
     --speculative-num-draft-tokens=4
 ```
 
-**NOTE:** Speculative decoding is currently supported for Qwen3 and LLaMA model families. See the [Speculative Decoding documentation](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md) for detailed configuration guidance.
+**注意：** 投机解码目前支持 Qwen3 和 LLaMA 模型家族。详细的配置指南请参阅[投机解码文档](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md)。
 
+### 多节点分布式部署
 
-### Multi-Node Distributed Serving
-
-For large models requiring multiple TPU VMs:
+对于需要多台 TPU VM 的大模型：
 
 ```bash Command
 # Node 0 (coordinator)
@@ -379,11 +382,11 @@ python3 -m sgl_jax.launch_server \
     [other parameters...]
 ```
 
-## Benchmarking with Requests
+## 用请求做基准测试
 
-### Throughput Testing
+### 吞吐量测试
 
-Basic throughput benchmark:
+基础吞吐量基准测试：
 
 ```bash Command
 python3 -m sgl_jax.bench_serving \
@@ -397,9 +400,9 @@ python3 -m sgl_jax.bench_serving \
     --warmup-requests=0
 ```
 
-### Latency Testing
+### 延迟测试
 
-Measure single-batch latency:
+测量单批延迟：
 
 ```bash Command
 python3 -m sgl_jax.bench_one_batch_server \
@@ -410,9 +413,9 @@ python3 -m sgl_jax.bench_one_batch_server \
     --output-len=32
 ```
 
-### Comprehensive Benchmark Script
+### 综合基准测试脚本
 
-For systematic performance evaluation across different configurations:
+用于在不同配置下做系统性性能评估：
 
 ```bash Command
 #!/bin/bash
@@ -446,184 +449,188 @@ for input_seq_len in "${input_seq_lens[@]}"; do
 done
 ```
 
-For detailed help on all benchmark parameters:
+查看所有基准测试参数的详细帮助：
 
 ```bash Command
 python3 -m sgl_jax.bench_serving --help
 ```
 
-See the [Benchmark and Profiling Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md) for advanced benchmarking techniques and profiling with JAX Profiler.
+更高级的基准测试技巧以及用 JAX Profiler 做性能剖析，请参阅[基准测试与性能剖析指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md)。
 
-## Performance Optimization
+## 性能优化
 
-### Memory Optimization
+### 内存优化
 
-**Reduce memory usage:**
-- Lower `--mem-fraction-static` (from 0.8 → 0.5 → 0.3)
-- Decrease `--max-prefill-tokens` (from 16384 → 8192 → 4096)
-- Reduce `--max-running-requests`
+**降低内存占用：**
+- 降低 `--mem-fraction-static`（从 0.8 → 0.5 → 0.3）
+- 减小 `--max-prefill-tokens`（从 16384 → 8192 → 4096）
+- 减小 `--max-running-requests`
 
-**Handle OOM errors:**
-- Start with conservative memory settings (`--mem-fraction-static=0.5`)
-- Gradually increase until you find the optimal balance
-- Increase `--page-size` for better memory locality (1 → 16 → 64 → 128)
+**处理 OOM 错误：**
+- 从保守的内存设置开始（`--mem-fraction-static=0.5`）
+- 逐步调大，直到找到最优平衡点
+- 增大 `--page-size` 以获得更好的内存局部性（1 → 16 → 64 → 128）
 
-### Throughput Optimization
+### 吞吐量优化
 
-To maximize tokens per second:
+为了最大化每秒 token 数：
 
-- Use FlashAttention backend: `--attention-backend=fa`
-- Enable speculative decoding (EAGLE3) for Qwen3 models (20-40% improvement)
-- Increase `--max-running-requests` to 256+
-- Set `--mem-fraction-static` to 0.8+ (if memory allows)
-- Use larger page sizes (64-128)
-- Enable chunked prefill: `--chunked-prefill-size=2048`
+- 使用 FlashAttention 后端：`--attention-backend=fa`
+- 为 Qwen3 模型启用投机解码（EAGLE3）（提升 20-40%）
+- 把 `--max-running-requests` 提高到 256+
+- 把 `--mem-fraction-static` 设为 0.8 以上（如果内存允许）
+- 使用更大的页大小（64-128）
+- 启用分块预填充：`--chunked-prefill-size=2048`
 
-### Latency Optimization
+### 延迟优化
 
-To minimize time-to-first-token (TTFT) and inter-token latency:
+为了最小化首 token 时间（TTFT）和 token 间延迟：
 
-- Reduce `--page-size` to 1-4
-- Lower `--max-running-requests` (16-32) for smaller batches
-- Reduce `--chunked-prefill-size`
-- Use conservative memory settings to avoid GC pauses
+- 把 `--page-size` 减小到 1-4
+- 降低 `--max-running-requests`（16-32）以使用更小的批
+- 减小 `--chunked-prefill-size`
+- 使用保守的内存设置以避免 GC 停顿
 
-### TPU-Specific Optimizations
+<Note>
+💡 AI Infra 学习笔记：TPU 的 HBM 容量比同代 GPU 小很多（TPU v6e 每芯片 32 GB），所以推理引擎在 TPU 上格外强调内存管理——`--mem-fraction-static` 控制静态 KV 缓存与 JIT 运行时内存的分配比例，`--page-size` 则影响分页注意力（Paged Attention）的块粒度。这些参数通常是吞吐量与延迟之间的权衡：大页提升内存局部性和吞吐，小页降低碎片与首 token 延迟。
+</Note>
 
-1. **JIT Compilation Cache:**
+### TPU 特有优化
+
+1. **JIT 编译缓存：**
    ```bash Command
    export JAX_COMPILATION_CACHE_DIR=/tmp/jit_cache
    ```
-   Always set this environment variable to cache compiled kernels and accelerate server startup.
+   始终设置这个环境变量，以缓存已编译的 kernel 并加快服务端启动。
 
-2. **Data Type Optimization:**
-   Use `--dtype=bfloat16` for TPU native optimization. TPUs are specifically designed for bfloat16 computations.
+2. **数据类型优化：**
+   使用 `--dtype=bfloat16` 以获得 TPU 原生优化。TPU 就是专门为 bfloat16 计算设计的。
 
-3. **Tensor Parallelism:**
-   Match `--tp-size` to your TPU core configuration (1, 4, or 8) for optimal model distribution.
+3. **张量并行：**
+   让 `--tp-size` 与你的 TPU 核心配置（1、4 或 8）匹配，以获得最佳的模型分布。
 
-4. **Attention Backend:**
-   Always use `--attention-backend=fa` (FlashAttention) for production workloads.
+4. **Attention 后端：**
+   生产环境负载始终使用 `--attention-backend=fa`（FlashAttention）。
 
-## Troubleshooting
+## 故障排查
 
-### OOM (Out of Memory) Errors
+### OOM（内存不足）错误
 
-If you encounter out-of-memory errors:
+如果遇到内存不足错误：
 
-1. Reduce `--mem-fraction-static` from 0.8 to 0.5 or lower
-2. Decrease `--max-prefill-tokens` from 8192 to 4096 or 2048
-3. Lower `--max-running-requests` to reduce concurrent batch size
-4. Increase `--page-size` for better memory layout efficiency
+1. 把 `--mem-fraction-static` 从 0.8 降到 0.5 或更低
+2. 把 `--max-prefill-tokens` 从 8192 降到 4096 或 2048
+3. 降低 `--max-running-requests` 以减小并发批大小
+4. 增大 `--page-size` 以获得更好的内存布局效率
 
-### Compilation Long-Time
+### 编译耗时过长
 
-If the server takes too long to start:
+如果服务端启动耗时过长：
 
-1. Ensure `JAX_COMPILATION_CACHE_DIR` is properly set
-2. Understand that the first run requires JIT compilation (this is normal)
-3. Subsequent runs will be significantly faster with cached compilations
-4. Consider using `--skip-server-warmup` to defer compilation until first request
+1. 确保正确设置了 `JAX_COMPILATION_CACHE_DIR`
+2. 要知道首次运行需要 JIT 编译（这很正常）
+3. 有编译缓存后，后续运行会明显更快
+4. 可以考虑使用 `--skip-server-warmup` 把编译推迟到第一个请求到来时
 
-### Low Throughput
+### 吞吐量偏低
 
-If you're not achieving expected throughput:
+如果没有达到预期的吞吐量：
 
-1. Verify `--tp-size` matches your TPU core configuration
-2. Check that `--attention-backend=fa` is enabled
-3. Increase `--max-running-requests` to enable larger batch formation
-4. Consider enabling speculative decoding for compatible models
-5. Ensure memory settings allow for sufficient batch sizes
+1. 确认 `--tp-size` 与你的 TPU 核心配置匹配
+2. 检查是否启用了 `--attention-backend=fa`
+3. 提高 `--max-running-requests` 以形成更大的批
+4. 考虑为兼容模型启用投机解码
+5. 确保内存设置允许足够的批大小
 
-### Connection Issues
+### 连接问题
 
-If clients cannot connect to the server:
+如果客户端无法连接服务端：
 
-1. Ensure `--host=0.0.0.0` for external access (not just `127.0.0.1`)
-2. Verify firewall rules allow traffic on the specified port (default: 30000)
-3. Check that the server process is running: `curl http://localhost:30000/health`
+1. 确保使用 `--host=0.0.0.0` 以便外部访问（而不只是 `127.0.0.1`）
+2. 确认防火墙规则允许指定端口（默认：30000）上的流量
+3. 检查服务进程是否在运行：`curl http://localhost:30000/health`
 
-## Advanced Features
+## 高级特性
 
-### Speculative Decoding
+### 投机解码
 
-SGLang-JAX supports EAGLE and EAGLE3 speculative decoding algorithms for Qwen3 and LLaMA model families. Speculative decoding can improve throughput by 20-40% without affecting output quality.
+SGLang-JAX 支持针对 Qwen3 和 LLaMA 模型家族的 EAGLE 与 EAGLE3 投机解码算法。投机解码可以在不影响输出质量的情况下把吞吐量提升 20-40%。
 
-See the [Speculative Decoding documentation](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md) for detailed configuration and supported model combinations.
+详细的配置和受支持的模型组合请参阅[投机解码文档](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md)。
 
-### Chunked Prefill
+### 分块预填充
 
-Enable mixed prefill-decode batching for better TPU utilization:
+启用预填充与解码混合批处理，以更好地利用 TPU：
 
 ```bash Command
 --chunked-prefill-size=2048 --enable-mixed-chunk
 ```
 
-This allows the scheduler to mix prefill operations with decode operations in the same batch, improving overall throughput.
+这让调度器可以在同一批中混合预填充和解码操作，从而提升整体吞吐量。
 
-### Custom Attention Backends
+### 自定义 Attention 后端
 
-SGLang-JAX supports a plugin-based attention backend system. You can implement custom attention kernels optimized for specific use cases.
+SGLang-JAX 支持基于插件的 Attention 后端系统。你可以为特定用例实现自定义的注意力 kernel。
 
-See the [Attention Backend documentation](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/attention_backend.md) for implementation details.
+实现细节请参阅[Attention 后端文档](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/attention_backend.md)。
 
-### Environment Verification
+### 环境验证
 
-Verify your TPU setup before deploying:
+在部署前验证你的 TPU 环境：
 
 ```bash Command
 python -c "from sgl_jax import check_env; check_env.check_env()"
 ```
 
-This command checks:
-- Installed package versions
-- TPU device availability and specifications
-- System resources and configuration
-- Compatibility of settings
+该命令会检查：
+- 已安装的软件包版本
+- TPU 设备的可用性与规格
+- 系统资源与配置
+- 设置项的兼容性
 
-## Contributing
+## 参与贡献
 
-We welcome contributions to improve TPU support in SGLang-JAX!
+我们欢迎你为改进 SGLang-JAX 的 TPU 支持做出贡献！
 
-### Areas for Contribution
+### 可贡献的方向
 
-**Check the [Development Roadmap](https://github.com/sgl-project/sglang-jax/issues/190)** to see planned features and find opportunities to contribute new functionality.
+**查看[开发路线图](https://github.com/sgl-project/sglang-jax/issues/190)了解规划中的特性，并寻找贡献新功能的机会。**
 
-Current contribution areas include:
+当前可贡献的方向包括：
 
-- Performance optimizations for specific TPU generations
-- Support for additional model architectures
-- Documentation improvements and examples
-- Bug reports and fixes
-- Benchmark results and performance analysis
+- 针对特定 TPU 代际的性能优化
+- 对更多模型架构的支持
+- 文档改进与示例
+- bug 报告与修复
+- 基准测试结果与性能分析
 
-### How to Contribute
+### 如何贡献
 
-1. Visit the [sglang-jax repository](https://github.com/sgl-project/sglang-jax)
-2. Read the [Contribution Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/contribution_guide.md)
-3. Join the [SGL-JAX Slack community](https://sgl-fru7574.slack.com/archives/C09EBE5HT5X) for discussions
-4. Report issues at [sglang-jax/issues](https://github.com/sgl-project/sglang-jax/issues)
+1. 访问 [sglang-jax 仓库](https://github.com/sgl-project/sglang-jax)
+2. 阅读[贡献指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/contribution_guide.md)
+3. 加入 [SGL-JAX Slack 社区](https://sgl-fru7574.slack.com/archives/C09EBE5HT5X)参与讨论
+4. 在 [sglang-jax/issues](https://github.com/sgl-project/sglang-jax/issues) 报告问题
 
-### Testing on TPU
+### 在 TPU 上测试
 
-For contributors who need TPU access for testing:
+给需要在测试中使用 TPU 的贡献者：
 
-- Refer to the [TPU Resources Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/tpu_resources_guide.md) for information on accessing TPU hardware
-- Use SkyPilot with spot instances for cost-effective testing
-- Follow the [Benchmark and Profiling Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md) for performance validation
+- 访问 TPU 硬件的信息请参阅 [TPU 资源指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/tpu_resources_guide.md)
+- 使用 SkyPilot 搭配 spot 实例进行高性价比的测试
+- 性能验证请遵循[基准测试与性能剖析指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md)
 
-## References
+## 参考资料
 
-### Documentation
+### 文档
 
-- [SGLang-JAX Repository](https://github.com/sgl-project/sglang-jax)
-- [SGLang-JAX Installation Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/get_started/install.md)
-- [Qwen Models Quick Start](https://github.com/sgl-project/sglang-jax/blob/main/docs/basic_usage/qwen.md)
-- [Benchmark and Profiling Guide](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md)
-- [Speculative Decoding](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md)
+- [SGLang-JAX 仓库](https://github.com/sgl-project/sglang-jax)
+- [SGLang-JAX 安装指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/get_started/install.md)
+- [Qwen 模型快速上手](https://github.com/sgl-project/sglang-jax/blob/main/docs/basic_usage/qwen.md)
+- [基准测试与性能剖析指南](https://github.com/sgl-project/sglang-jax/blob/main/docs/developer_guide/benchmark_and_profiling.md)
+- [投机解码](https://github.com/sgl-project/sglang-jax/blob/main/docs/features/speculative_decoding.md)
 
-### External Resources
+### 外部资源
 
-- [JAX Documentation](https://jax.readthedocs.io/)
-- [Google Cloud TPU Documentation](https://cloud.google.com/tpu/docs)
-- [SkyPilot Documentation](https://skypilot.readthedocs.io/)
+- [JAX 文档](https://jax.readthedocs.io/)
+- [Google Cloud TPU 文档](https://cloud.google.com/tpu/docs)
+- [SkyPilot 文档](https://skypilot.readthedocs.io/)

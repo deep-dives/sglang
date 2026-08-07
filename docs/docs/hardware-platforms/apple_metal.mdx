@@ -1,29 +1,30 @@
 ---
-title: "Apple Silicon with Metal"
+title: "Apple Silicon 与 Metal"
 metatags:
-    description: "Run SGLang on Apple Silicon using the Metal backend."
+    description: "使用 Metal 后端在 Apple Silicon 上运行 SGLang。"
 ---
 
-This document describes how run SGLang on Apple Silicon using [Metal (MLX)](https://opensource.apple.com/projects/mlx/). If you encounter issues or have questions, please [open an issue](https://github.com/sgl-project/sglang/issues).
+本文介绍如何借助 [Metal (MLX)](https://opensource.apple.com/projects/mlx/) 在 Apple Silicon 上运行 SGLang。如果遇到问题或有疑问，请[提 issue](https://github.com/sgl-project/sglang/issues)。
 
-## Prerequisites
+<Note>
+💡 AI Infra 学习笔记：Apple Silicon 走的是完全不同的软件栈——Metal 是苹果的 GPU 框架，MLX 是苹果的机器学习框架，两者都基于统一内存（CPU/GPU 共享内存）。CUDA 生态的 kernel 和 CUDA 图在这里全部不适用，所以 SGLang 需要独立的 MLX 后端，启动时也要加 `--disable-cuda-graph`。
+</Note>
 
-Building the native Metal kernels in `sgl-kernel` requires the Apple
-toolchain (`clang++`, the Metal framework headers, and `xcrun`). These ship
-with the **Xcode Command Line Tools**, which cannot be installed via `pip`:
+## 前置条件
+
+在 `sgl-kernel` 中编译原生 Metal kernel 需要苹果工具链（`clang++`、Metal 框架头文件和 `xcrun`）。它们随 **Xcode Command Line Tools** 一起提供，无法通过 `pip` 安装：
 
 ```bash
 xcode-select --install
 ```
 
-If you have the full Xcode app installed, the Command Line Tools are already
-available. You can verify with `xcode-select -p && xcrun --find metal`.
+如果安装了完整的 Xcode 应用，Command Line Tools 就已经可用了。可以用 `xcode-select -p && xcrun --find metal` 验证。
 
-## Install SGLang
+## 安装 SGLang
 
-You can install SGLang using one of the methods below.
+你可以通过以下任一方式安装 SGLang。
 
-### Install from Source
+### 从源码安装
 
 ```bash
 # Use the default branch
@@ -43,9 +44,9 @@ rm -f python/pyproject.toml && mv python/pyproject_other.toml python/pyproject.t
 uv pip install -e "python[all_mps]"
 ```
 
-## Launch of the Serving Engine
+## 启动推理服务
 
-Launch the server with:
+用以下命令启动服务端：
 
 ```bash
 SGLANG_USE_MLX=1 python -m sglang.launch_server \
@@ -54,48 +55,48 @@ SGLANG_USE_MLX=1 python -m sglang.launch_server \
   --host 0.0.0.0
 ```
 
-**Key Parameters Explained:**
+**关键参数说明：**
 
-1. `SGLANG_USE_MLX=1` - Enables the use of MLX as the SGLang runtime backend (if disabled, SGLang will fall back to `torch.mps`, which has less support)
-2. `--disable-cuda-graph` - Disables usage of CUDA graph, which is not relevant for Apple Metal.
-3. `--disable-overlap-schedule` - Disables overlap scheduling (enabled/not present by default) achieved using MLX's `async_eval()`
-4. `SGLANG_MLX_USE_CUSTOM_ROPE=1` - Enables the optional custom Metal RoPE kernel. It is disabled by default, so the MLX backend uses the standard RoPE path unless you opt in for A/B testing.
-5. `SGLANG_MLX_FUSE_SWIGLU=1` - Enables the use of fused Swish-Gated Linear Unit kernel (disabled by default)
-6. `SGLANG_MLX_CLEAR_CACHE_STEPS=256` - Sets the number of decode steps before clearing the MLX cache (256 by default)
+1. `SGLANG_USE_MLX=1` - 启用 MLX 作为 SGLang 运行时后端（如果不设置，SGLang 会回退到支持较少的 `torch.mps`）
+2. `--disable-cuda-graph` - 禁用 CUDA 图，它不适用于 Apple Metal。
+3. `--disable-overlap-schedule` - 禁用 overlap 调度（默认开启，通过 MLX 的 `async_eval()` 实现）
+4. `SGLANG_MLX_USE_CUSTOM_ROPE=1` - 启用可选的定制 Metal RoPE kernel。默认关闭，因此除非你为了 A/B 测试而主动开启，否则 MLX 后端使用标准 RoPE 路径。
+5. `SGLANG_MLX_FUSE_SWIGLU=1` - 启用融合的 Swish-Gated Linear Unit kernel（默认关闭）
+6. `SGLANG_MLX_CLEAR_CACHE_STEPS=256` - 设置清除 MLX 缓存前的解码步数（默认 256）
 
-## Quantization
+## 量化
 
-The MLX backend supports two quantization paths on Apple Silicon:
+MLX 后端在 Apple Silicon 上支持两条量化路径：
 
-1. **Pre-quantized HF repos.** Any `mlx-community/<model>-4bit` (or `-8bit`) repo loads directly through `mlx_lm.load(...)` — no extra flag needed.
+1. **预量化 HF 仓库。** 任何 `mlx-community/<model>-4bit`（或 `-8bit`）仓库都可以直接通过 `mlx_lm.load(...)` 加载——无需额外参数。
    ```bash
    SGLANG_USE_MLX=1 python -m sglang.launch_server \
      --model-path mlx-community/Qwen3-0.6B-4bit \
      --disable-cuda-graph
    ```
-2. **On-the-fly quantization.** For any fp16 model, pass `--quantization mlx_q4` or `--quantization mlx_q8` to have sglang quantize the weights at load time via `mlx_lm.utils.quantize_model` (group size 64, the mlx-community default). The quantized weights stay in process memory; the on-disk model is untouched.
+2. **在线量化。** 对于任何 fp16 模型，传入 `--quantization mlx_q4` 或 `--quantization mlx_q8`，让 sglang 在加载时通过 `mlx_lm.utils.quantize_model` 量化权重（group size 64，即 mlx-community 的默认值）。量化后的权重只保留在进程内存中，磁盘上的模型不受影响。
    ```bash
    SGLANG_USE_MLX=1 python -m sglang.launch_server \
      --model-path Qwen/Qwen3-0.6B \
      --quantization mlx_q4 \
      --disable-cuda-graph
    ```
-   Expected log line:
+   预期日志：
    ```
    Quantizing MLX model on-the-fly: bits=4 group_size=64 (preset=mlx_q4)
    Quantization complete in 0.13s — active mem: 1.11 GB -> 0.31 GB (71.9% reduction)
    ```
-   The MLX backend silently ignores `--quantization mlx_q4` when the model is already quantized in its HF config (path 1), so the same flag is safe to pass either way.
+   当模型已在 HF 配置中量化（路径 1）时，MLX 后端会静默忽略 `--quantization mlx_q4`，所以这个参数无论哪种情况都可以安全传入。
 
-## Benchmarking with Requests
+## 用请求做基准测试
 
-`sglang.benchmark_one_batch` calls the synchronous prefill/decode methods directly without going through the scheduler and the overlap code path.
+`sglang.benchmark_one_batch` 直接调用同步的 prefill/decode 方法，不经过调度器和 overlap 代码路径。
 
-`sglang.benchmark_offline_throughput` can toggle overlap scheduling as it uses the scheduler and the overlap code path by using the flag `--disable-overlap-schedule`.
+`sglang.benchmark_offline_throughput` 可以通过 `--disable-overlap-schedule` 参数切换是否启用 overlap 调度，因为它走的是调度器和 overlap 代码路径。
 
-### Throughput Testing
+### 吞吐量测试
 
-Basic synchronous one batch throughput:
+基本的同步单批吞吐量：
 ```bash
 SGLANG_USE_MLX=1 python -m sglang.bench_one_batch \
   --model-path <MODEL_ID_OR_PATH> \
@@ -106,7 +107,7 @@ SGLANG_USE_MLX=1 python -m sglang.bench_one_batch \
   --output-len 10
 ```
 
-Synchronous offline throughput:
+同步离线吞吐量：
 ```bash
 SGLANG_USE_MLX=1 python -m sglang.bench_offline_throughput \
   --model-path <MODEL_ID_OR_PATH> \
@@ -115,7 +116,7 @@ SGLANG_USE_MLX=1 python -m sglang.bench_offline_throughput \
   --disable-overlap-schedule
 ```
 
-Asynchronous offline throughput:
+异步离线吞吐量：
 ```bash
 SGLANG_USE_MLX=1 python -m sglang.bench_offline_throughput \
   --model-path <MODEL_ID_OR_PATH> \

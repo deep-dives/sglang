@@ -1,36 +1,40 @@
 ---
-title: "CPU Servers"
+title: "CPU 服务器"
 ---
-The document addresses how to set up the [SGLang](https://github.com/sgl-project/sglang) environment and run LLM inference on CPU servers.
-SGLang is enabled and optimized on the CPUs equipped with Intel® AMX® Instructions,
-which are 4th generation or newer Intel® Xeon® Scalable Processors.
+本文介绍如何在 CPU 服务器上配置 [SGLang](https://github.com/sgl-project/sglang) 环境并运行 LLM 推理。
+SGLang 在配备 Intel® AMX® 指令的 CPU 上启用并做了优化，
+即第四代及更新的 Intel® Xeon® 可扩展处理器。
 
-A number of popular LLMs are optimized and run efficiently on CPU,
-including the most notable open-source models like Llama series, Qwen series,
-and DeepSeek series like DeepSeek-R1 and DeepSeek-V3.1-Terminus.
-Please check the [SGLang Cookbook pages](https://docs.sglang.io/cookbook/intro)
-in which the support status and example commands can be found.
+许多流行的 LLM 都已在 CPU 上完成优化并能高效运行，
+包括最具代表性的开源模型，如 Llama 系列、Qwen 系列，
+以及 DeepSeek-R1、DeepSeek-V3.1-Terminus 等 DeepSeek 系列。
+请查阅 [SGLang Cookbook 页面](https://docs.sglang.io/cookbook/intro)，
+其中可以找到支持状态和示例命令。
 
-## Installation
+<Note>
+💡 AI Infra 学习笔记：CPU 推理适合 GPU 资源不足、延迟要求不苛刻、或需要利用空闲服务器算力的场景。CPU 上没有 CUDA 这类统一加速栈，性能强依赖 Intel AMX 指令（Xeon 4 代及以上的矩阵加速单元）和优化的 kernel（如 oneDNN 路径），并通过张量并行把负载铺到多个子 NUMA 簇（SNC）上。理解这一点对异构推理部署的硬件选型很有帮助。
+</Note>
 
-### Install Using Docker
+## 安装 {#installation}
 
-It is recommended to use Docker for setting up the SGLang environment.
+### 使用 Docker 安装
 
-#### Pull from Docker Hub
+推荐使用 Docker 搭建 SGLang 环境。
 
-Pull the prebuilt docker image of SGLang package releases from `lmsysorg/sglang` repository.
-The [CPU image tags](https://hub.docker.com/r/lmsysorg/sglang/tags?name=xeon) end with `xeon` suffix.
-The image pulling command is like:
+#### 从 Docker Hub 拉取
+
+从 `lmsysorg/sglang` 仓库拉取 SGLang 发布版的预构建 docker 镜像。
+[CPU 镜像标签](https://hub.docker.com/r/lmsysorg/sglang/tags?name=xeon)以 `xeon` 后缀结尾。
+镜像拉取命令如下：
 
 ```bash Command
 docker pull lmsysorg/sglang:v0.5.13-xeon
 ```
 
-#### Build from Dockerfile
+#### 从 Dockerfile 构建
 
-A [Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xeon.Dockerfile) is provided to facilitate the installation from latest source code.
-Replace `<secret>` below with your [HuggingFace access token](https://huggingface.co/docs/hub/en/security-tokens).
+我们提供了一个 [Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xeon.Dockerfile)，方便你从最新源码安装。
+把下面的 `<secret>` 替换成你的 [HuggingFace access token](https://huggingface.co/docs/hub/en/security-tokens)。
 
 ```bash Command
 # Clone the SGLang repository
@@ -53,18 +57,16 @@ docker run \
     sglang-cpu:latest /bin/bash
 ```
 
-### Install From Source
+### 从源码安装
 
-If you prefer to install SGLang in a bare metal environment,
-the setup process is as follows:
+如果你想在裸机环境中安装 SGLang，
+安装过程如下：
 
-Please install the required packages and libraries beforehand if
-they are not already present on your system.
-You can refer to the Ubuntu-based installation commands in
-[the Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xeon.Dockerfile#L7)
-for guidance.
+请先安装系统上尚未安装的必需软件包和库。
+你可以参考 [Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xeon.Dockerfile#L7)
+中基于 Ubuntu 的安装命令。
 
-1. Install `uv` package manager, then create and activate a virtual environment:
+1. 安装 `uv` 包管理器，然后创建并激活虚拟环境：
 
 ```bash Command
 # Taking '/opt' as the example uv env folder, feel free to change it as needed
@@ -75,14 +77,14 @@ uv venv --python 3.12
 source .venv/bin/activate
 ```
 
-2. Create a config file to direct the installation channel
-    (a.k.a. index-url) of `torch` related packages:
+2. 创建一个配置文件，用来指定 `torch` 相关包的安装渠道
+    （即 index-url）：
 
 ```bash Command
 vim .venv/uv.toml
 ```
 
-Press 'a' to enter insert mode of `vim`, paste the following content into the created file
+按 'a' 进入 `vim` 的插入模式，把以下内容粘贴到刚创建的文件中
 
 ```file
 [[index]]
@@ -103,14 +105,14 @@ url = "https://download.pytorch.org/whl/cpu"
 
 ```
 
-Save the file (in `vim`, press 'esc' to exit insert mode, then ':x+Enter'),
-and set it as the default `uv` config.
+保存文件（在 `vim` 中按 'esc' 退出插入模式，然后输入 ':x+Enter'），
+并将其设置为默认的 `uv` 配置。
 
 ```bash Command
 export UV_CONFIG_FILE=/opt/.venv/uv.toml
 ```
 
-3. Clone the `sglang` source code and build the packages
+3. 克隆 `sglang` 源码并构建软件包
 
 ```bash Command
 # Clone the SGLang code
@@ -131,7 +133,7 @@ cp pyproject_cpu.toml pyproject.toml
 uv pip install .
 ```
 
-4. Set the required environment variables
+4. 设置所需的环境变量
 
 ```bash Command
 export SGLANG_USE_CPU_ENGINE=1
@@ -141,23 +143,22 @@ export LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu
 export LD_PRELOAD=${LD_PRELOAD}:/opt/.venv/lib/libiomp5.so:${LD_LIBRARY_PATH}/libtcmalloc.so.4:${LD_LIBRARY_PATH}/libtbbmalloc.so.2
 ```
 
-Notes:
+注意事项：
 
-- Note that the environment variable `SGLANG_USE_CPU_ENGINE=1`
-    is required to enable the SGLang service with the CPU engine.
+- 请注意，环境变量 `SGLANG_USE_CPU_ENGINE=1`
+    是启用 CPU 引擎的 SGLang 服务所必需的。
 
-- If you encounter code compilation issues during the `sgl-kernel` building process,
-    please check your `gcc` and `g++` versions and upgrade them if they are outdated.
-    It is recommended to use `gcc-13` and `g++-13` as they have been verified
-    in the official Docker container.
+- 如果在 `sgl-kernel` 构建过程中遇到代码编译问题，
+    请检查 `gcc` 和 `g++` 的版本，如果过旧就升级它们。
+    推荐使用 `gcc-13` 和 `g++-13`，它们已在官方 Docker 容器中验证过。
 
-- The system library path is typically located in one of the following directories:
-    `~/.local/lib/`, `/usr/local/lib/`, `/usr/local/lib64/`, `/usr/lib/`, `/usr/lib64/`
-    and `/usr/lib/x86_64-linux-gnu/`. In the above example commands, `/usr/lib/x86_64-linux-gnu`
-    is used. Please adjust the path according to your server configuration.
+- 系统库路径通常位于以下目录之一：
+    `~/.local/lib/`、`/usr/local/lib/`、`/usr/local/lib64/`、`/usr/lib/`、`/usr/lib64/`
+    和 `/usr/lib/x86_64-linux-gnu/`。上面的示例命令中使用的是 `/usr/lib/x86_64-linux-gnu`。
+    请根据你的服务器配置调整路径。
 
-- It is recommended to add the following to your `~/.bashrc` file to
-    avoid setting these variables every time you open a new terminal:
+- 建议把以下内容添加到 `~/.bashrc` 文件中，
+    这样每次打开新终端时就不用重复设置这些变量：
 
     ```bash Command
     source .venv/bin/activate
@@ -166,9 +167,9 @@ Notes:
     export LD_PRELOAD=<YOUR-LIBS-PATHS>
     ```
 
-## Launch of the Serving Engine
+## 启动推理服务 {#launch-of-the-serving-engine}
 
-Example command to launch SGLang serving:
+启动 SGLang 服务的示例命令：
 
 ```bash Launch Server
 sglang serve                          \
@@ -180,28 +181,28 @@ sglang serve                          \
     --tp 6
 ```
 
-Notes:
+注意事项：
 
-1. For running W8A8 quantized models, please add the flag `--quantization w8a8_int8`.
+1. 运行 W8A8 量化模型时，请添加参数 `--quantization w8a8_int8`。
 
-2. The flag `--tp 6` specifies that tensor parallelism will be applied using 6 ranks (TP6).
-    The number of TP specified is how many TP ranks will be used during the execution.
-    On a CPU platform, a TP rank means a sub-NUMA cluster (SNC).
-    Usually we can get the SNC information (How many available) from the Operating System with e.g. `lscpu` command.
+2. 参数 `--tp 6` 指定使用 6 个 rank 进行张量并行（TP6）。
+    指定的 TP 数量即执行期间使用的 TP rank 数。
+    在 CPU 平台上，一个 TP rank 对应一个子 NUMA 簇（SNC）。
+    通常可以用 `lscpu` 之类的命令从操作系统获取 SNC 信息（可用的数量）。
 
-    If the specified TP rank number differs from the total SNC count,
-    the system will automatically utilize the first `n` SNCs.
-    Note that `n` cannot exceed the total SNC number, doing so will result in an error.
+    如果指定的 TP rank 数与 SNC 总数不同，
+    系统会自动使用前 `n` 个 SNC。
+    注意 `n` 不能超过 SNC 总数，否则会报错。
 
-    `SGLANG_CPU_OMP_THREADS_BIND` allows explicit control of CPU cores for each tensor parallel (TP) rank.
+    `SGLANG_CPU_OMP_THREADS_BIND` 允许显式控制每个张量并行（TP）rank 使用的 CPU 核心。
 
-    **example 1**: Run SGLang service with TP=6, using the first 40 cores of each SNC on a Xeon® 6980P server,
-    which has 43-43-42 cores on the 3 SNCs of a socket, we should set:
+    **示例 1**：在一台 Xeon® 6980P 服务器上以 TP=6 运行 SGLang 服务，
+    使用每个 SNC 的前 40 个核心。该服务器单个插槽的 3 个 SNC 各有 43-43-42 个核心，我们应该设置：
 
     ```bash Command
     export SGLANG_CPU_OMP_THREADS_BIND="0-39|43-82|86-125|128-167|171-210|214-253"
     ```
-    This configuration is equivalent to:
+    该配置等价于：
     - rank 0: `numactl -C 0-39 -m 0`
     - rank 1: `numactl -C 43-82 -m 1`
     - rank 2: `numactl -C 86-125 -m 2`
@@ -210,31 +211,31 @@ Notes:
     - rank 5: `numactl -C 214-253 -m 5`
 
 
-    **example 2**: Run SGLang service with TP=2, using 96 cores cross 3 SNCs on a Xeon® 6972P server,
-    which has 32-32-32 cores on the 3 SNCs in a socket, we should set:
+    **示例 2**：在一台 Xeon® 6972P 服务器上以 TP=2 运行 SGLang 服务，
+    跨 3 个 SNC 使用 96 个核心。该服务器单个插槽的 3 个 SNC 各有 32-32-32 个核心，我们应该设置：
     ```bash Command
     export SGLANG_CPU_OMP_THREADS_BIND="0-95|96-191"
     ```
-    This configuration is equivalent to:
+    该配置等价于：
     - rank 0: `numactl -C 0-95 -m 0-2`
     - rank 1: `numactl -C 96-191 -m 3-5`
 
-    Please beware that with SGLANG_CPU_OMP_THREADS_BIND set,
-    the available memory amounts of the ranks may not be determined in prior.
-    You may need to set proper `--max-total-tokens` to avoid the out-of-memory error.
+    请注意，设置了 SGLANG_CPU_OMP_THREADS_BIND 之后，
+    各 rank 可用的内存量可能无法提前确定。
+    你可能需要设置合适的 `--max-total-tokens` 来避免内存不足错误。
 
-3. For optimizing decoding with torch.compile, please add the flag `--enable-torch-compile`.
-    To specify the maximum batch size when using `torch.compile`, set the flag `--torch-compile-max-bs`.
-    For example, `--enable-torch-compile --torch-compile-max-bs 4` means using `torch.compile`
-    and setting the maximum batch size to 4.
+3. 为了用 torch.compile 优化解码，请添加参数 `--enable-torch-compile`。
+    要指定使用 `torch.compile` 时的最大批大小，设置参数 `--torch-compile-max-bs`。
+    例如，`--enable-torch-compile --torch-compile-max-bs 4` 表示使用 `torch.compile`
+    并把最大批大小设为 4。
 
-4. A warmup step is automatically triggered when the service is started.
-    The server is ready when you see the log `The server is fired up and ready to roll!`.
+4. 服务启动时会自动触发预热步骤。
+    当看到日志 `The server is fired up and ready to roll!` 时，服务就绪。
 
-## Benchmarking with Requests
+## 用请求做基准测试 {#benchmarking-with-requests}
 
-You can benchmark the performance via the `bench_serving` script.
-Run the command in another terminal. An example command would be:
+你可以通过 `bench_serving` 脚本对性能做基准测试。
+在另一个终端运行该命令。示例命令如下：
 
 ```bash Run Benchmark
 python -m sglang.bench_serving   \
@@ -246,27 +247,31 @@ python -m sglang.bench_serving   \
     --random-range-ratio 1.0
 ```
 
-Detailed parameter descriptions are available via the command:
+通过以下命令可以查看参数的详细说明：
 
 ```bash Benchmark Help
 python -m sglang.bench_serving -h
 ```
 
-Additionally, requests can be formatted using
-[the OpenAI Completions API](../basic_usage/openai_api_completions)
-and sent via the command line (e.g., using `curl`) or through your own scripts.
+此外，请求可以使用
+[OpenAI Completions API](../basic_usage/openai_api_completions)
+来格式化，并通过命令行（例如用 `curl`）或你自己的脚本发送。
 
-## Example Usage Commands
+## 示例使用命令
 
-Large Language Models can range from fewer than 1 billion to several hundred billion parameters.
-Dense models larger than 20B are expected to run on flagship 6th Gen Intel® Xeon® processors
-with dual sockets and a total of 6 sub-NUMA clusters. Dense models of approximately 10B parameters or fewer,
-or MoE (Mixture of Experts) models with fewer than 10B activated parameters, can run on more common
-4th generation or newer Intel® Xeon® processors, or utilize a single socket of the flagship 6th Gen Intel® Xeon® processors.
+大语言模型的参数规模可以从不到 10 亿到几百亿不等。
+大于 20B 的稠密模型预期运行在旗舰级第六代 Intel® Xeon® 处理器上，
+双插槽共 6 个子 NUMA 簇。大约 10B 参数或更少的稠密模型，
+或激活参数少于 10B 的 MoE（混合专家）模型，可以运行在更常见的
+第四代及更新的 Intel® Xeon® 处理器上，也可以利用旗舰级第六代 Intel® Xeon® 处理器的单个插槽。
 
-### Example: Running DeepSeek-V3.1-Terminus
+<Note>
+💡 AI Infra 学习笔记：CPU 推理的一个关键点是**张量并行粒度和 NUMA 拓扑要匹配**——把 TP rank 绑定到物理上独立的 SNC 上，可以避免跨 NUMA 访存带来的带宽惩罚；`SGLANG_CPU_OMP_THREADS_BIND` 就是做这件事的。另外 CPU 推理常用 W8A8、FP8 等量化来缓解内存带宽瓶颈，并结合 `torch.compile` 减少 Python 层开销。
+</Note>
 
-An example command to launch service of W8A8_INT8 DeepSeek-V3.1-Terminus on a Xeon® 6980P server:
+### 示例：运行 DeepSeek-V3.1-Terminus {#example-running-deepseek-v3-1-terminus}
+
+在 Xeon® 6980P 服务器上启动 W8A8_INT8 DeepSeek-V3.1-Terminus 服务的示例命令：
 
 ```bash W8A8_INT8
 sglang serve                                                        \
@@ -281,7 +286,7 @@ sglang serve                                                        \
     --tp 6
 ```
 
-Similarly, an example command to launch service of FP8 DeepSeek-V3.1-Terminus would be:
+类似地，启动 FP8 DeepSeek-V3.1-Terminus 服务的示例命令：
 
 ```bash FP8
 sglang serve                                         \
@@ -295,12 +300,12 @@ sglang serve                                         \
     --tp 6
 ```
 
-Note: Please set `--torch-compile-max-bs` to the maximum desired batch size for your deployment.
-The value `4` in the examples is illustrative.
+注意：请把 `--torch-compile-max-bs` 设置为你部署中期望的最大批大小。
+示例中的 `4` 只是示意。
 
-### Example: Running Llama-3.2-3B
+### 示例：运行 Llama-3.2-3B
 
-An example command to launch service of Llama-3.2-3B with BF16 precision:
+以 BF16 精度启动 Llama-3.2-3B 服务的示例命令：
 
 ```bash BF16
 sglang serve                                         \
@@ -314,7 +319,7 @@ sglang serve                                         \
     --tp 3
 ```
 
-The example command to launch service of W8A8_INT8 version of Llama-3.2-3B:
+启动 W8A8_INT8 版 Llama-3.2-3B 服务的示例命令：
 
 ```bash W8A8_INT8
 sglang serve                                            \
@@ -329,8 +334,8 @@ sglang serve                                            \
     --tp 3
 ```
 
-Note: The `--torch-compile-max-bs` and `--tp` settings are examples that should be adjusted for your setup.
-For instance, use `--tp 3` to utilize 1 socket with 3 sub-NUMA clusters on an Intel® Xeon® 6980P server.
+注意：`--torch-compile-max-bs` 和 `--tp` 的设置只是示例，需要根据你的环境调整。
+例如，在 Intel® Xeon® 6980P 服务器上，用 `--tp 3` 可以使用带 3 个子 NUMA 簇的 1 个插槽。
 
-Once the server have been launched, you can test it using the `bench_serving` command or create
-your own commands or scripts following [the benchmarking example](#benchmarking-with-requests).
+服务启动后，你可以用 `bench_serving` 命令测试它，也可以按照[基准测试示例](#benchmarking-with-requests)
+创建自己的命令或脚本。

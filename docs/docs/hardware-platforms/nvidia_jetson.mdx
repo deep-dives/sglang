@@ -1,45 +1,45 @@
 ---
 title: NVIDIA Jetson Orin
-description: Guide for installing and running SGLang on NVIDIA Jetson Orin devices.
+description: 在 NVIDIA Jetson Orin 设备上安装并运行 SGLang 的指南。
 ---
-## Prerequisites
+## 前置条件
 
-Before starting, ensure the following:
+开始之前，请确保满足以下条件：
 
-- [**NVIDIA Jetson AGX Orin Devkit**](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/) is set up with **JetPack 6.1** or later.
-- **CUDA Toolkit** and **cuDNN** are installed.
-- Verify that the Jetson AGX Orin is in **high-performance mode**:
+- [**NVIDIA Jetson AGX Orin Devkit**](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/) 已配置 **JetPack 6.1** 或更高版本。
+- **CUDA Toolkit** 和 **cuDNN** 已安装。
+- 确认 Jetson AGX Orin 处于**高性能模式**：
 ```bash
 sudo nvpmodel -m 0
 ```
 * * * * *
-## Installing and running SGLang with Jetson Containers
-Clone the jetson-containers github repository:
+## 使用 Jetson Containers 安装并运行 SGLang
+克隆 jetson-containers github 仓库：
 ```bash
 git clone https://github.com/dusty-nv/jetson-containers.git
 ```
-Run the installation script:
+运行安装脚本：
 ```bash
 bash jetson-containers/install.sh
 ```
-Build the container image:
+构建容器镜像：
 ```bash
 jetson-containers build sglang
 ```
-Run the container:
+运行容器：
 ```
 jetson-containers run $(autotag sglang)
 ```
-Or you can also manually run a container with this command:
+或者你也可以用这条命令手动运行容器：
 ```
 docker run --runtime nvidia -it --rm --network=host IMAGE_NAME
 ```
 * * * * *
 
-Running Inference
+运行推理
 -----------------------------------------
 
-Launch the server:
+启动服务端：
 ```bash
 python -m sglang.launch_server \
   --model-path deepseek-ai/DeepSeek-R1-Distill-Llama-8B \
@@ -49,13 +49,17 @@ python -m sglang.launch_server \
   --mem-fraction-static 0.8 \
   --context-length 8192
 ```
-The quantization and limited context length (`--dtype half --context-length 8192`) are due to the limited computational resources in [Nvidia jetson kit](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/). A detailed explanation can be found in [Server Arguments](../advanced_features/server_arguments).
+量化与受限的上下文长度（`--dtype half --context-length 8192`）是因为 [Nvidia jetson kit](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/) 的计算资源有限。详细解释见[服务端参数](../advanced_features/server_arguments)。
 
-After launching the engine, refer to [Chat completions](../basic_usage/openai_api_completions#usage) to test the usability.
+<Note>
+💡 AI Infra 学习笔记：Jetson 这类边缘设备显存小、算力弱，跑 LLM 时常用"低精度 + 限制上下文长度"的组合来压缩内存占用——半精度（`--dtype half`）把权重和 KV 缓存减半，`--context-length` 限制每个请求的最大 token 数以控制 KV 缓存峰值。这也是推理引擎在内存受限场景下做容量规划的典型思路。
+</Note>
+
+启动引擎后，参考[聊天补全](../basic_usage/openai_api_completions#usage)来测试可用性。
 * * * * *
-Running quantization with TorchAO
+使用 TorchAO 进行量化
 -------------------------------------
-TorchAO is suggested to NVIDIA Jetson Orin.
+在 NVIDIA Jetson Orin 上建议使用 TorchAO。
 ```bash Command
 python -m sglang.launch_server \
     --model-path meta-llama/Meta-Llama-3.1-8B-Instruct \
@@ -66,17 +70,17 @@ python -m sglang.launch_server \
     --context-length 8192 \
     --torchao-config int4wo-128
 ```
-This enables TorchAO's int4 weight-only quantization with a 128-group size. The usage of `--torchao-config int4wo-128` is also for memory efficiency.
+这会启用 TorchAO 的 int4 仅权重量化，组大小为 128。使用 `--torchao-config int4wo-128` 也是为了节省内存。
 
 
 * * * * *
-Structured output with XGrammar
+使用 XGrammar 实现结构化输出
 -------------------------------
-Please refer to [SGLang doc structured output](../advanced_features/structured_outputs).
+请参考 [SGLang 文档结构化输出](../advanced_features/structured_outputs)。
 * * * * *
 
-Thanks to the support from [Nurgaliyev Shakhizat](https://github.com/shahizat), [Dustin Franklin](https://github.com/dusty-nv) and [Johnny Núñez Cano](https://github.com/johnnynunez).
+感谢 [Nurgaliyev Shakhizat](https://github.com/shahizat)、[Dustin Franklin](https://github.com/dusty-nv) 和 [Johnny Núñez Cano](https://github.com/johnnynunez) 的支持。
 
-References
+参考资料
 ----------
--   [NVIDIA Jetson AGX Orin Documentation](https://developer.nvidia.com/embedded/jetson-agx-orin)
+-   [NVIDIA Jetson AGX Orin 文档](https://developer.nvidia.com/embedded/jetson-agx-orin)

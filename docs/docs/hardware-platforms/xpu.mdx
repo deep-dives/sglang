@@ -1,15 +1,15 @@
 ---
 title: XPU
-sidebarTitle: Intel GPUs (XPU)
+sidebarTitle: Intel GPU（XPU）
 ---
-The document addresses how to set up the [SGLang](https://github.com/sgl-project/sglang) environment and run LLM inference on Intel GPU, [see more context about Intel GPU support within PyTorch ecosystem](https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html).
+本文介绍如何在 Intel GPU 上配置 [SGLang](https://github.com/sgl-project/sglang) 环境并运行 LLM 推理，[了解更多 PyTorch 生态中 Intel GPU 支持的背景](https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html)。
 
-Specifically, SGLang is optimized for [Intel® Arc™ Pro B-Series Graphics](https://www.intel.com/content/www/us/en/ark/products/series/242616/intel-arc-pro-b-series-graphics.html) and [
-Intel® Arc™ B-Series Graphics](https://www.intel.com/content/www/us/en/ark/products/series/240391/intel-arc-b-series-graphics.html).
+具体来说，SGLang 针对 [Intel® Arc™ Pro B-Series Graphics](https://www.intel.com/content/www/us/en/ark/products/series/242616/intel-arc-pro-b-series-graphics.html) 和 [
+Intel® Arc™ B-Series Graphics](https://www.intel.com/content/www/us/en/ark/products/series/240391/intel-arc-b-series-graphics.html) 做了优化。
 
-## Optimized Model List
+## 优化模型列表
 
-A list of LLMs have been optimized on Intel GPU, and more are on the way:
+以下 LLM 已在 Intel GPU 上完成优化，更多模型正在路上：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -18,7 +18,7 @@ A list of LLMs have been optimized on Intel GPU, and more are on the way:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Name</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型名称</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>BF16</th>
     </tr>
   </thead>
@@ -38,14 +38,13 @@ A list of LLMs have been optimized on Intel GPU, and more are on the way:
   </tbody>
 </table>
 
-**Note:** The model identifiers listed in the table above
-have been verified on [Intel® Arc™ B580 Graphics](https://www.intel.com/content/www/us/en/products/sku/241598/intel-arc-b580-graphics/specifications.html).
+**注意：** 上表列出的模型标识符已在 [Intel® Arc™ B580 Graphics](https://www.intel.com/content/www/us/en/products/sku/241598/intel-arc-b580-graphics/specifications.html) 上验证通过。
 
-## Installation
+## 安装
 
-### Install From Source
+### 从源码安装
 
-Currently SGLang XPU only supports installation from source. Please refer to ["Getting Started on Intel GPU"](https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html) to install XPU dependency.
+目前 SGLang XPU 只支持从源码安装。请参考 [PyTorch 官方文档"在 Intel GPU 上入门"](https://docs.pytorch.org/docs/stable/notes/get_start_xpu.html)安装 XPU 依赖。
 
 ```bash Command
 # Create and activate a conda environment
@@ -70,10 +69,10 @@ pip install --upgrade pip setuptools
 pip install -v . --extra-index-url https://download.pytorch.org/whl/xpu
 ```
 
-### Install Using Docker
+### 使用 Docker 安装
 
-[The SGLang XPU Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xpu.Dockerfile) is provided to facilitate the installation.
-Replace `<secret>` below with your [HuggingFace access token](https://huggingface.co/docs/hub/en/security-tokens).
+我们提供了 [SGLang XPU Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/xpu.Dockerfile) 方便安装。
+把下面的 `<secret>` 替换成你的 [HuggingFace access token](https://huggingface.co/docs/hub/en/security-tokens)。
 
 ```bash Command
 # Clone the SGLang repository
@@ -100,9 +99,9 @@ docker run \
     sglang-xpu:latest /bin/bash
 ```
 
-## Launch of the Serving Engine
+## 启动推理服务
 
-Example command to launch SGLang serving:
+启动 SGLang 服务的示例命令：
 
 ```bash
 sglang serve                         \
@@ -116,10 +115,10 @@ sglang serve                         \
     --page-size                      \   # intel_xpu attention backend supports [32, 64, 128]
 ```
 
-## Benchmarking with Requests
+## 用请求做基准测试
 
-You can benchmark the performance via the `bench_serving` script.
-Run the command in another terminal.
+你可以通过 `bench_serving` 脚本对性能做基准测试。
+在另一个终端运行该命令。
 
 ```bash
 python -m sglang.bench_serving   \
@@ -131,52 +130,54 @@ python -m sglang.bench_serving   \
     --random-range-ratio 1.0
 ```
 
-The detail explanations of the parameters can be looked up by the command:
+通过以下命令可以查看参数的详细说明：
 
 ```bash
 python -m sglang.bench_serving -h
 ```
 
-Additionally, the requests can be formed with
+此外，请求可以使用
 [OpenAI Completions API](../basic_usage/openai_api_completions)
-and sent via the command line (e.g. using `curl`) or via your own script.
+来格式化，并通过命令行（例如用 `curl`）或你自己的脚本发送。
 
-## XPU Graph [Experimental]
+## XPU 图 [实验性]
 
-SGLang enables XPU graph capture to reduce per-step kernel-launch overhead.
+SGLang 支持 XPU 图捕获，以降低每一步的 kernel 启动开销。
 
-| Phase | Backend | Mechanism | Default |
+<Note>
+💡 AI Infra 学习笔记：CUDA 图 / XPU 图是一类"图捕获"优化——把一串 kernel 启动预录制下来再整体重放，省去逐 kernel 的启动开销（launch overhead）。对 decode 这类"同一个很小的计算要反复跑几千次"的场景收益尤其明显。Intel GPU 上对应的机制是 `torch.xpu.XPUGraph`，SGLang 把解码、预填充两个阶段的图捕获做成了可独立开关的后端。
+</Note>
+
+| 阶段 | 后端 | 机制 | 默认 |
 |---|---|---|---|
-| Decode | `full` | One `torch.xpu.XPUGraph` per batch size, captured on startup | **Off** (opt-in) |
-| Prefill | `tc_piecewise` | `torch.compile` + XPU graph, one graph segment per token-length bucket | **Off** (opt-in) |
-| Prefill | `breakable` | Segmented `torch.xpu.XPUGraph` capture/replay (no `torch.compile`); eager break points at attention / MoE boundaries | **Off** (opt-in) |
+| 解码 | `full` | 每个批大小一个 `torch.xpu.XPUGraph`，启动时捕获 | **关闭**（需手动开启） |
+| 预填充 | `tc_piecewise` | `torch.compile` + XPU 图，每个 token 长度桶一个图段 | **关闭**（需手动开启） |
+| 预填充 | `breakable` | 分段式 `torch.xpu.XPUGraph` 捕获/重放（不用 `torch.compile`）；在 attention / MoE 边界处做 eager 断点 | **关闭**（需手动开启） |
 
-### Enable Decode Graph
+### 启用解码图
 
-Decode graph capture is **opt-in** on XPU. Enable it explicitly:
+XPU 上的解码图捕获是**可选**的。需要显式启用：
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --cuda-graph-backend-decode full
 ```
 
-### Enable Prefill Graph
+### 启用预填充图
 
-Prefill graph capture is **opt-in** on XPU and must be enabled explicitly.
-Two backends are available: `tc_piecewise` and `breakable`.
+XPU 上的预填充图捕获是**可选**的，必须显式启用。
+有两个后端可用：`tc_piecewise` 和 `breakable`。
 
 #### tc_piecewise
 
-Uses `torch.compile` plus an XPU graph, one graph segment per token-length
-bucket:
+使用 `torch.compile` 加 XPU 图，每个 token 长度桶对应一个图段：
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --cuda-graph-backend-prefill tc_piecewise
 ```
 
-By default the prefill subgraphs are compiled with `eager` mode. Switch to
-`inductor` for higher-quality generated code at the cost of longer startup:
+默认情况下，预填充子图用 `eager` 模式编译。切换到 `inductor` 可以生成更高质量的代码，但会拉长启动时间：
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
@@ -186,41 +187,34 @@ python -m sglang.launch_server --model-path <MODEL> --device xpu \
 
 #### breakable
 
-Captures the transformer stack as segmented `XPUGraph`s with eager break points
-at attention / MoE boundaries, without `torch.compile`:
+把 transformer 堆栈捕获为分段的 `XPUGraph`，在 attention / MoE 边界处做 eager 断点，不使用 `torch.compile`：
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --cuda-graph-backend-prefill breakable
 ```
 
-You can also configure both phases together with a single `--cuda-graph-config` JSON argument:
+你也可以用一个 `--cuda-graph-config` JSON 参数同时配置两个阶段：
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --cuda-graph-config '{"decode":{"backend":"full"},"prefill":{"backend":"tc_piecewise","tc_compiler":"eager"}}'
 ```
 
-### Enable torch.compile for Decode
+### 为解码启用 torch.compile
 
-`--enable-torch-compile` adds a `torch.compile` pass on top of the decode
-XPU graph: the model forward is compiled first, and the compiled forward is
-then captured as an `XPUGraph`. This can reduce per-kernel overhead further
-but increases startup time.
+`--enable-torch-compile` 会在解码 XPU 图之上再加一层 `torch.compile` 处理：先编译模型前向，再把编译后的前向捕获为 `XPUGraph`。这可以进一步降低逐 kernel 开销，但会拉长启动时间。
 
 ```bash
 python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --enable-torch-compile
 ```
 
-> **Note:** `--enable-torch-compile` is mutually exclusive with the prefill
-> `tc_piecewise` graph (the compatibility rules auto-disable it). Use them
-> separately or lock the prefill backend explicitly via `--cuda-graph-config`
-> if you need both.
+> **注意：** `--enable-torch-compile` 与预填充 `tc_piecewise` 图互斥（兼容性规则会自动禁用其中之一）。需要两者时请分开使用，或通过 `--cuda-graph-config` 显式锁定预填充后端。
 
-### Disable XPU Graph
+### 禁用 XPU 图
 
-Both phases are disabled by default. To explicitly disable them anyway:
+两个阶段默认都是关闭的。如果想显式禁用它们：
 
 ```bash
 # Disable decode graph (already off by default; explicit form)
@@ -237,10 +231,10 @@ python -m sglang.launch_server --model-path <MODEL> --device xpu \
     --cuda-graph-backend-prefill=disabled
 ```
 
-### Customize Capture Buckets
+### 自定义捕获分桶
 
-By default, prefill capture sizes are derived from `--chunked-prefill-size`.
-To specify explicit token-length buckets:
+默认情况下，预填充捕获规模由 `--chunked-prefill-size` 推导而来。
+要指定显式的 token 长度桶：
 
 ```bash
 python -m sglang.launch_server \
@@ -249,7 +243,7 @@ python -m sglang.launch_server \
     --cuda-graph-bs-prefill 64 128 256 512
 ```
 
-To specify explicit decode graph batch sizes:
+要指定显式的解码图批大小：
 
 ```bash
 python -m sglang.launch_server \
@@ -257,46 +251,46 @@ python -m sglang.launch_server \
     --cuda-graph-bs-decode 1 2 4 8
 ```
 
-### Server Args
+### 服务端参数
 
-| Argument | XPU allowed values | Default | Description |
+| 参数 | XPU 允许值 | 默认值 | 描述 |
 |---|---|---|---|
-| `--cuda-graph-backend-decode` | `full`, `disabled` | `disabled` | Backend for the decode phase. Only `full` is supported on XPU. Set to `full` to enable. |
-| `--cuda-graph-backend-prefill` | `tc_piecewise`, `breakable`, `disabled` | `disabled`* | Backend for the prefill phase. Set to `tc_piecewise` or `breakable` explicitly to enable. |
-| `--cuda-graph-tc-compiler` | `eager`, `inductor` | `eager` | Compiler for `tc_piecewise` prefill subgraphs. `inductor` produces more optimized code but has longer startup. |
-| `--cuda-graph-bs-prefill` | list of ints | auto | Explicit token-length buckets to capture for prefill. |
-| `--cuda-graph-bs-decode` | list of ints | auto | Explicit batch sizes to capture for decode. |
-| `--cuda-graph-config` | JSON string | — | One-shot JSON config for both phases, e.g. `'{"decode":{"backend":"full"},"prefill":{"backend":"tc_piecewise","tc_compiler":"eager"}}'`. Overrides all per-phase flags. |
-| `--disable-decode-cuda-graph` | — | `False` | Shorthand for `--cuda-graph-backend-decode=disabled`. |
-| `--disable-prefill-cuda-graph` | — | `False` | Shorthand for `--cuda-graph-backend-prefill=disabled`. |
-| `--enable-torch-compile` | — | `False` | Apply `torch.compile` on top of the decode XPU graph for further kernel optimization. |
-| `--torch-compile-max-bs` | int | `32` | Maximum batch size compiled by `torch.compile` when `--enable-torch-compile` is set. |
+| `--cuda-graph-backend-decode` | `full`, `disabled` | `disabled` | 解码阶段的后端。XPU 上只支持 `full`。设为 `full` 即可启用。 |
+| `--cuda-graph-backend-prefill` | `tc_piecewise`, `breakable`, `disabled` | `disabled`* | 预填充阶段的后端。显式设为 `tc_piecewise` 或 `breakable` 即可启用。 |
+| `--cuda-graph-tc-compiler` | `eager`, `inductor` | `eager` | `tc_piecewise` 预填充子图的编译器。`inductor` 生成的代码更优，但启动更慢。 |
+| `--cuda-graph-bs-prefill` | 整数列表 | 自动 | 预填充要捕获的显式 token 长度桶。 |
+| `--cuda-graph-bs-decode` | 整数列表 | 自动 | 解码要捕获的显式批大小。 |
+| `--cuda-graph-config` | JSON 字符串 | — | 同时配置两个阶段的一次性 JSON 配置，例如 `'{"decode":{"backend":"full"},"prefill":{"backend":"tc_piecewise","tc_compiler":"eager"}}'`。会覆盖所有分阶段参数。 |
+| `--disable-decode-cuda-graph` | — | `False` | `--cuda-graph-backend-decode=disabled` 的简写。 |
+| `--disable-prefill-cuda-graph` | — | `False` | `--cuda-graph-backend-prefill=disabled` 的简写。 |
+| `--enable-torch-compile` | — | `False` | 在解码 XPU 图之上应用 `torch.compile`，做进一步的 kernel 优化。 |
+| `--torch-compile-max-bs` | 整数 | `32` | 设置 `--enable-torch-compile` 后，`torch.compile` 编译的最大批大小。 |
 
-\* Prefill graph is auto-disabled on XPU unless you lock the backend explicitly
-via `--cuda-graph-backend-prefill` or `--cuda-graph-config`.
+\* 除非通过 `--cuda-graph-backend-prefill` 或 `--cuda-graph-config` 显式锁定后端，
+否则 XPU 上的预填充图会被自动禁用。
 
-### Limitations
+### 限制
 
-| Feature | Status |
+| 特性 | 状态 |
 |---|---|
-| Memory saver (`--enable-memory-saver`) | Not yet supported |
-| Two-batch overlap (`--enable-two-batch-overlap`) | Not yet supported |
-| Speculative decoding | Not yet implemented |
+| 内存节省器（`--enable-memory-saver`） | 暂不支持 |
+| 两批重叠（`--enable-two-batch-overlap`） | 暂不支持 |
+| 投机解码 | 尚未实现 |
 
-## Prefill-Decode (P/D) Disaggregation on Intel XPU [Experimental]
+## Intel XPU 上的预填充-解码（P/D）分离部署 [实验性]
 
-SGLang supports prefill-decode disaggregation on Intel XPU using the [NIXL](https://github.com/ai-dynamo/nixl) KV-transfer backend.
+SGLang 支持在 Intel XPU 上使用 [NIXL](https://github.com/ai-dynamo/nixl) KV 传输后端进行预填充-解码分离部署。
 
-**Tested models:**
+**已测试的模型：**
 
-| Model | Notes |
+| 模型 | 备注 |
 |:---:|:---:|
-| [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) | Used in integration tests; verified on Intel XPU with homogeneous P/D (XPU prefill + XPU decode) |
-| [Qwen/Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) | Verified on Intel XPU with homogeneous P/D (XPU prefill + XPU decode) |
+| [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) | 用于集成测试；已在 Intel XPU 上通过同构 P/D 验证（XPU 预填充 + XPU 解码） |
+| [Qwen/Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) | 已在 Intel XPU 上通过同构 P/D 验证（XPU 预填充 + XPU 解码） |
 
-**Prerequisites:** `pip install nixl sglang-router`
+**前置条件：** `pip install nixl sglang-router`
 
-**Start the prefill server (GPU 0):**
+**启动预填充服务端（GPU 0）：**
 
 ```bash
 ZE_AFFINITY_MASK=0 UCX_POSIX_USE_PROC_LINK=n python -m sglang.launch_server \
@@ -305,7 +299,7 @@ ZE_AFFINITY_MASK=0 UCX_POSIX_USE_PROC_LINK=n python -m sglang.launch_server \
     --disaggregation-bootstrap-port 12335 --host 0.0.0.0 --port 30000
 ```
 
-**Start the decode server (GPU 1):**
+**启动解码服务端（GPU 1）：**
 
 ```bash
 ZE_AFFINITY_MASK=1 UCX_POSIX_USE_PROC_LINK=n python -m sglang.launch_server \
@@ -314,7 +308,7 @@ ZE_AFFINITY_MASK=1 UCX_POSIX_USE_PROC_LINK=n python -m sglang.launch_server \
     --disaggregation-bootstrap-port 12335 --host 0.0.0.0 --port 30001
 ```
 
-**Start the router:**
+**启动路由器：**
 
 ```bash
 python -m sglang_router.launch_router \
@@ -324,7 +318,7 @@ python -m sglang_router.launch_router \
     --host 0.0.0.0 --port 8000
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```bash
 curl http://127.0.0.1:8000/v1/completions \
@@ -332,4 +326,4 @@ curl http://127.0.0.1:8000/v1/completions \
     -d '{"model": "Qwen/Qwen3-0.6B", "prompt": "The capital of France is", "max_tokens": 32}'
 ```
 
-> **Note:** `UCX_POSIX_USE_PROC_LINK=n` is required on Intel XPU to avoid UCX shared-memory transport issues.
+> **注意：** 在 Intel XPU 上必须设置 `UCX_POSIX_USE_PROC_LINK=n`，以避免 UCX 共享内存传输问题。

@@ -1,5 +1,9 @@
 ---
-title: NVIDIA GPUs
+title: NVIDIA GPU
 ---
 
-Please refer to the [Installation Guide](../get-started/install) to get started with SGLang on NVIDIA GPUs.
+要在 NVIDIA GPU 上使用 SGLang，请参考[安装指南](../get-started/install)。
+
+<Note>
+💡 AI Infra 学习笔记：NVIDIA GPU 的代际差异（A100→H100→B200 等）直接决定推理引擎的优化空间——越新的架构算力与显存带宽越高，还会引入新指令集（如 FP8/FP4 量化、新一代张量核心），所以 FlashAttention、量化 kernel 都要按代际针对性优化。这也是推理引擎文档里到处标注硬件代际（如 sm80/sm90）的原因：同一份代码在不同代际 GPU 上的表现可能相差数倍。
+</Note>

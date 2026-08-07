@@ -1,47 +1,47 @@
 ---
-title: "AMD GPUs"
+title: "AMD GPU"
 ---
-This document describes how to run SGLang on AMD GPUs. If you encounter issues or have questions, please [open an issue](https://github.com/sgl-project/sglang/issues).
+本文介绍如何在 AMD GPU 上运行 SGLang。如果遇到问题或有疑问，请[提 issue](https://github.com/sgl-project/sglang/issues)。
 
-## System Configuration
+## 系统配置
 
-When using AMD GPUs (such as MI300X), certain system-level optimizations help ensure stable performance. Here we take MI300X as an example. AMD provides official documentation for MI300X optimization and system tuning:
+使用 AMD GPU（如 MI300X）时，某些系统级优化有助于保证稳定的性能。这里以 MI300X 为例。AMD 提供了 MI300X 优化与系统调优的官方文档：
 
-- [AMD MI300X Tuning Guides](https://rocm.docs.amd.com/en/latest/how-to/tuning-guides/mi300x/index.html)
-- [LLM inference performance validation on AMD Instinct MI300X](https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference/vllm-benchmark.html)
-- [AMD Instinct MI300X System Optimization](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/mi300x.html)
-- [AMD Instinct MI300X Workload Optimization](https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference-optimization/workload.html)
-- [Supercharge DeepSeek-R1 Inference on AMD Instinct MI300X](https://rocm.blogs.amd.com/artificial-intelligence/DeepSeekR1-Part2/README.html)
+- [AMD MI300X 调优指南](https://rocm.docs.amd.com/en/latest/how-to/tuning-guides/mi300x/index.html)
+- [AMD Instinct MI300X 上的 LLM 推理性能验证](https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference/vllm-benchmark.html)
+- [AMD Instinct MI300X 系统优化](https://rocm.docs.amd.com/en/latest/how-to/system-optimization/mi300x.html)
+- [AMD Instinct MI300X 工作负载优化](https://rocm.docs.amd.com/en/latest/how-to/rocm-for-ai/inference-optimization/workload.html)
+- [在 AMD Instinct MI300X 上加速 DeepSeek-R1 推理](https://rocm.blogs.amd.com/artificial-intelligence/DeepSeekR1-Part2/README.html)
 
-**NOTE:** We strongly recommend reading these docs and guides entirely to fully utilize your system.
+**注意：** 我们强烈建议完整阅读这些文档和指南，以充分发挥你的系统性能。
 
-Below are a few key settings to confirm or enable for SGLang:
+下面是需要为 SGLang 确认或启用的几个关键设置：
 
-### Update GRUB Settings
+### 更新 GRUB 设置
 
-In `/etc/default/grub`, append the following to `GRUB_CMDLINE_LINUX`:
+在 `/etc/default/grub` 中，把以下内容追加到 `GRUB_CMDLINE_LINUX`：
 
 ```text GRUB Configuration
 pci=realloc=off iommu=pt
 ```
 
-Afterward, run `sudo update-grub` (or your distro’s equivalent) and reboot.
+然后运行 `sudo update-grub`（或你的发行版对应的命令），并重启。
 
-### Disable NUMA Auto-Balancing
+### 禁用 NUMA 自动平衡
 
 ```bash Disable NUMA
 sudo sh -c 'echo 0 > /proc/sys/kernel/numa_balancing'
 ```
 
-You can automate or verify this change using [this helpful script](https://github.com/ROCm/triton/blob/rocm_env/scripts/amd/env_check.sh).
+你可以用[这个辅助脚本](https://github.com/ROCm/triton/blob/rocm_env/scripts/amd/env_check.sh)自动化或验证该修改。
 
-Again, please go through the entire documentation to confirm your system is using the recommended configuration.
+请再次通读全部文档，确认你的系统采用了推荐配置。
 
-## Install SGLang
+## 安装 SGLang
 
-You can install SGLang using one of the methods below.
+你可以通过以下任一方式安装 SGLang。
 
-### Install from Source
+### 从源码安装
 
 ```bash Command
 # Use the last release branch
@@ -59,20 +59,20 @@ rm -rf python/pyproject.toml && mv python/pyproject_other.toml python/pyproject.
 pip install -e "python[all_hip]"
 ```
 
-### Install Using Docker (Recommended)
+### 使用 Docker 安装（推荐）
 
-The docker images are available on Docker Hub at [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags), built from [rocm.Dockerfile](https://github.com/sgl-project/sglang/tree/main/docker).
+Docker 镜像发布在 Docker Hub 的 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags)，由 [rocm.Dockerfile](https://github.com/sgl-project/sglang/tree/main/docker) 构建。
 
-The steps below show how to build and use an image.
+下面的步骤演示如何构建并使用一个镜像。
 
-1. Build the docker image.
-   If you use pre-built images, you can skip this step and replace `sglang_image` with the pre-built image names in the steps below.
+1. 构建 docker 镜像。
+   如果使用预构建镜像，可以跳过这一步，并在下面的步骤中把 `sglang_image` 替换成预构建镜像的名称。
 
    ```bash Command
    docker build -t sglang_image -f rocm.Dockerfile .
    ```
 
-2. Create a convenient alias.
+2. 创建一个方便的别名。
 
    ```bash Command
    alias drun='docker run -it --rm --network=host --privileged --device=/dev/kfd --device=/dev/dri \
@@ -82,13 +82,13 @@ The steps below show how to build and use an image.
        -v /data:/data'
    ```
 
-   If you are using RDMA, please note that:
-     - `--network host` and `--privileged` are required by RDMA. If you don't need RDMA, you can remove them.
-     - You may need to set `NCCL_IB_GID_INDEX` if you are using RoCE, for example: `export NCCL_IB_GID_INDEX=3`.
+   如果使用 RDMA，请注意：
+     - `--network host` 和 `--privileged` 是 RDMA 所必需的。如果不需要 RDMA，可以去掉它们。
+     - 如果使用 RoCE，可能需要设置 `NCCL_IB_GID_INDEX`，例如：`export NCCL_IB_GID_INDEX=3`。
 
-3. Launch the server.
+3. 启动服务端。
 
-   **NOTE:** Replace `<secret>` below with your [huggingface hub token](https://huggingface.co/docs/hub/en/security-tokens).
+   **注意：** 把下面的 `<secret>` 替换成你的 [huggingface hub token](https://huggingface.co/docs/hub/en/security-tokens)。
 
    ```bash Command
    drun -p 30000:30000 \
@@ -101,7 +101,7 @@ The steps below show how to build and use an image.
        --port 30000
    ```
 
-4. To verify the utility, you can run a benchmark in another terminal or refer to [other docs](../basic_usage/openai_api_completions) to send requests to the engine.
+4. 要验证工具是否可用，可以在另一个终端运行基准测试，或者参考[其他文档](../basic_usage/openai_api_completions)向引擎发送请求。
 
    ```bash Command
    drun sglang_image \
@@ -113,27 +113,27 @@ The steps below show how to build and use an image.
        --random-output 128
    ```
 
-With your AMD system properly configured and SGLang installed, you can now fully leverage AMD hardware to power SGLang’s machine learning capabilities.
+把 AMD 系统配置好并安装 SGLang 之后，你就可以充分利用 AMD 硬件来驱动 SGLang 的机器学习能力了。
 
-## Quantization on AMD GPUs
+## AMD GPU 上的量化
 
-The [Quantization documentation](../advanced_features/quantization#platform-compatibility) has a full compatibility matrix. The short version: FP8, AWQ, MXFP4, W8A8, GPTQ, compressed-tensors, Quark, and **petit_nvfp4** (NVFP4 on ROCm via [Petit](https://github.com/causalflow-ai/petit-kernel)) all work on AMD. Methods that depend on Marlin or NVIDIA-specific kernels (`awq_marlin`, `gptq_marlin`, `gguf`, `modelopt_fp8`, `modelopt_fp4`) do not.
+[量化文档](../advanced_features/quantization#platform-compatibility)给出了完整的兼容性矩阵。简而言之：FP8、AWQ、MXFP4、W8A8、GPTQ、compressed-tensors、Quark 和 **petit_nvfp4**（通过 [Petit](https://github.com/causalflow-ai/petit-kernel) 在 ROCm 上运行的 NVFP4）在 AMD 上都可以使用。依赖 Marlin 或 NVIDIA 专属 kernel 的方法（`awq_marlin`、`gptq_marlin`、`gguf`、`modelopt_fp8`、`modelopt_fp4`）则不可用。
 
-A few things to keep in mind:
+需要记住的几点：
 
-- FP8 works via Aiter or Triton. Pre-quantized FP8 models like DeepSeek-V3/R1 work out of the box.
-- AWQ uses Triton dequantization kernels on AMD. The faster Marlin path is not available.
-- MXFP4 requires CDNA3/CDNA4 and `SGLANG_USE_AITER=1`.
-- `petit_nvfp4` enables NVFP4 models (e.g., [Llama 3.3 70B FP4](https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP4)) on MI250/MI300X via [Petit](https://github.com/causalflow-ai/petit-kernel). Install with `pip install petit-kernel`; no `--quantization` flag needed when loading pre-quantized NVFP4 models.
-- `quark_int4fp8_moe` is an AMD-only online quantization method for MoE models on CDNA3/CDNA4.
+- FP8 通过 Aiter 或 Triton 工作。DeepSeek-V3/R1 这类预量化 FP8 模型开箱即用。
+- 在 AMD 上，AWQ 使用 Triton 反量化 kernel。更快的 Marlin 路径不可用。
+- MXFP4 需要 CDNA3/CDNA4 和 `SGLANG_USE_AITER=1`。
+- `petit_nvfp4` 可通过 [Petit](https://github.com/causalflow-ai/petit-kernel) 在 MI250/MI300X 上运行 NVFP4 模型（例如 [Llama 3.3 70B FP4](https://huggingface.co/nvidia/Llama-3.3-70B-Instruct-FP4)）。用 `pip install petit-kernel` 安装；加载预量化 NVFP4 模型时不需要 `--quantization` 参数。
+- `quark_int4fp8_moe` 是 AMD 独有的在线量化方法，用于 CDNA3/CDNA4 上的 MoE 模型。
 
-Several of these backends are accelerated by [Aiter](https://github.com/ROCm/aiter). Enable it with:
+其中几个后端由 [Aiter](https://github.com/ROCm/aiter) 加速。用以下方式启用：
 
 ```bash Command
 export SGLANG_USE_AITER=1
 ```
 
-Example -- serving an AWQ model:
+示例——服务一个 AWQ 模型：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -142,7 +142,7 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-Example -- FP8 online quantization:
+示例——FP8 在线量化：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -151,11 +151,15 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-## Examples
+<Note>
+💡 AI Infra 学习笔记：量化方法在不同硬件上的可用性差异，本质是 kernel 绑定的结果——Marlin 是专为 NVIDIA GPU 的稀疏/张量核心设计的反量化 kernel，AMD 只能退而求其次用 Triton 或 Aiter 实现。给 LLM 推理做量化选型时，先确认目标硬件的 kernel 生态，否则容易出现"文档说支持、实际跑不起来"的情况。
+</Note>
 
-### Running DeepSeek-V3
+## 示例
 
-The only difference when running DeepSeek-V3 is in how you start the server. Here's an example command:
+### 运行 DeepSeek-V3 {#running-deepseek-v3}
+
+运行 DeepSeek-V3 的唯一区别在于启动服务端的方式。下面是一个示例命令：
 
 ```bash Command
 drun -p 30000:30000 \
@@ -171,11 +175,11 @@ drun -p 30000:30000 \
     --port 30000
 ```
 
-[Running DeepSeek-R1 on a single NDv5 MI300X VM](https://techcommunity.microsoft.com/blog/azurehighperformancecomputingblog/running-deepseek-r1-on-a-single-ndv5-mi300x-vm/4372726) could also be a good reference.
+[在单台 NDv5 MI300X 虚拟机上运行 DeepSeek-R1](https://techcommunity.microsoft.com/blog/azurehighperformancecomputingblog/running-deepseek-r1-on-a-single-ndv5-mi300x-vm/4372726) 也是一个很好的参考。
 
-### Running Llama3.1
+### 运行 Llama3.1
 
-Running Llama3.1 is nearly identical to running DeepSeek-V3. The only difference is in the model specified when starting the server, shown by the following example command:
+运行 Llama3.1 与运行 DeepSeek-V3 几乎完全一样。唯一的区别是启动服务端时指定的模型，如下面的示例命令所示：
 
 ```bash Command
 drun -p 30000:30000 \
@@ -191,6 +195,6 @@ drun -p 30000:30000 \
     --port 30000
 ```
 
-### Warmup Step
+### 预热步骤
 
-When the server displays `The server is fired up and ready to roll!`, it means the startup is successful.
+当服务端显示 `The server is fired up and ready to roll!` 时，表示启动成功。
