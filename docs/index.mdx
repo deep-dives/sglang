@@ -1,6 +1,6 @@
 ---
-title: Welcome to SGLang
-description: High-performance serving framework for large language and multimodal models.
+title: 欢迎使用 SGLang
+description: 面向大语言模型和多模态模型的高性能推理服务框架。
 keywords:
   - sglang
   - llm serving
@@ -23,7 +23,7 @@ import { PopularModels } from "/src/snippets/_popular_models.jsx";
   data-show-count="true"
   aria-label="Star sgl-project/sglang on GitHub"
 >
-  Star
+  加星
 </a>
 <a
   class="github-button"
@@ -39,45 +39,44 @@ import { PopularModels } from "/src/snippets/_popular_models.jsx";
 <br></br>
 
 <CardGroup cols={2}>
-  <Card title="Performance & Runtime" icon="arrow-trend-up">
-    Designed for low-latency, high-throughput inference with RadixAttention, prefix caching, and multi-GPU parallelism.
+  <Card title="性能与运行时" icon="arrow-trend-up">
+    依托 RadixAttention、前缀缓存和多 GPU 并行，实现低延迟、高吞吐的推理。
   </Card>
 
-<Card title="Models & Ecosystem" icon="hexagon-nodes">
-  Broad support for Llama, Qwen, DeepSeek, and more. Compatible with Hugging
-  Face and OpenAI APIs.
+<Card title="模型与生态" icon="hexagon-nodes">
+  广泛支持 Llama、Qwen、DeepSeek 等模型，兼容 Hugging Face 与 OpenAI API。
 </Card>
 
-<Card title="Extensive Hardware Support" icon="microchip">
-  Native support across <a href="./docs/hardware-platforms/overview">Hardware Platforms</a>
-  including NVIDIA, AMD, Intel Xeon, Google TPU, and Ascend NPU accelerators.
+<Card title="广泛的硬件支持" icon="microchip">
+  原生支持 <a href="./docs/hardware-platforms/overview">硬件平台</a>，
+  包括 NVIDIA、AMD、Intel Xeon、Google TPU 和昇腾 NPU 等加速器。
 </Card>
 
-  <Card title="Community & Training" icon="users">
-    Open-source with widespread adoption, powering 400k+ GPUs and integrated with major RL frameworks.
+  <Card title="社区与训练" icon="users">
+    开源且被广泛采用，驱动 40 万+ GPU，并与主流强化学习框架深度集成。
   </Card>
 </CardGroup>
 
-SGLang powers large-scale production deployments, generating trillions of tokens each day across more than 400,000 GPUs worldwide. It is hosted under the non-profit open-source organization [LMSYS](https://lmsys.org/about/).
+SGLang 支撑着大规模生产部署，每天在全球超过 40 万张 GPU 上生成数万亿 token。它托管于非营利开源组织 [LMSYS](https://lmsys.org/about/) 之下。
 
 ---
 
-## Get Started
+## 快速开始
 
-SGLang is an inference framework meant for production level serving.
-It is designed to deliver low-latency and high-throughput inference across a wide range of setups, from a single GPU to large distributed clusters.
+SGLang 是面向生产级推理服务的框架，
+旨在从单张 GPU 到大规模分布式集群的各种场景下，提供低延迟、高吞吐的推理能力。
 
 <CardGroup cols={2}>
-<Card title="Install SGLang" icon="angles-down" href="./docs/get-started/install">
-  Install SGLang with pip, from source, or via Docker on your preferred hardware platform.
+<Card title="安装 SGLang" icon="angles-down" href="./docs/get-started/install">
+  在你的目标硬件平台上，通过 pip、源码或 Docker 安装 SGLang。
 </Card>
 
-<Card title="Quickstart" icon="zap" href="./docs/get-started/quickstart">
-  Launch your first model server and send requests in minutes with OpenAI-compatible APIs.
+<Card title="快速上手" icon="zap" href="./docs/get-started/quickstart">
+  用兼容 OpenAI 的 API 在几分钟内启动第一个模型服务并发送请求。
 </Card>
 </CardGroup>
 
-## News and latest blogs
+## 新闻与最新博客
 
 {/* BEGIN_LMSYS_SGLANG_BLOG_CARDS */}
 <div className="not-prose">
@@ -425,7 +424,7 @@ It is designed to deliver low-latency and high-throughput inference across a wid
 
 ---
 
-## Learn more and join the community
+## 了解更多并加入社区
 
 <div className="not-prose">
   <div
@@ -445,7 +444,7 @@ It is designed to deliver low-latency and high-throughput inference across a wid
         opacity: 0.72,
       }}
     >
-      Stay connected
+      保持联系
     </p>
     <div
       style={{
@@ -459,45 +458,45 @@ It is designed to deliver low-latency and high-throughput inference across a wid
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="map" size={14} />
         </span>{" "}
-        <a href="https://roadmap.sglang.io">Development roadmap</a>
-        <span style={{ opacity: 0.62 }}> to follow current priorities and upcoming work.</span>
+        <a href="https://roadmap.sglang.io">开发路线图</a>
+        <span style={{ opacity: 0.62 }}>，了解当前优先级和后续工作。</span>
       </div>
       <div>
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="calendar-days" size={14} />
         </span>{" "}
-        <a href="https://meet.sglang.io">Weekly public development meeting</a>
-        <span style={{ opacity: 0.62 }}> to hear updates and join open discussions.</span>
+        <a href="https://meet.sglang.io">每周公开开发会议</a>
+        <span style={{ opacity: 0.62 }}>，获取最新动态并参与公开讨论。</span>
       </div>
       <div>
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="slack" size={14} />
         </span>{" "}
         <a href="https://slack.sglang.io/">Slack</a>
-        <span style={{ opacity: 0.62 }}> for questions, feedback, and community support.</span>
+        <span style={{ opacity: 0.62 }}>，用于提问、反馈和社区支持。</span>
       </div>
       <div>
-        <a href="https://x.com/lmsysorg">X Twitter</a>
-        <span style={{ opacity: 0.62 }}> and </span>
+        <a href="https://x.com/lmsysorg">X（Twitter）</a>
+        <span style={{ opacity: 0.62 }}> 和 </span>
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="linkedin" size={14} />
         </span>{" "}
         <a href="https://www.linkedin.com/company/sgl-project/">LinkedIn</a>
-        <span style={{ opacity: 0.62 }}> for project updates.</span>
+        <span style={{ opacity: 0.62 }}>，获取项目更新。</span>
       </div>
       <div>
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="newspaper" size={14} />
         </span>{" "}
-        <a href="https://lmsys.org/blog/">LMSYS blog</a>
-        <span style={{ opacity: 0.62 }}> for release notes, benchmarks, and technical deep dives.</span>
+        <a href="https://lmsys.org/blog/">LMSYS 博客</a>
+        <span style={{ opacity: 0.62 }}>，发布说明、基准测试和技术深潜内容。</span>
       </div>
       <div>
         <span style={{ display: "inline-flex", alignItems: "center", verticalAlign: "-0.125em" }}>
           <Icon icon="book-open" size={14} />
         </span>{" "}
-        <a href="https://github.com/sgl-project/sgl-learning-materials">Learning materials</a>
-        <span style={{ opacity: 0.62 }}> for blogs, slides, and videos.</span>
+        <a href="https://github.com/sgl-project/sgl-learning-materials">学习资料</a>
+        <span style={{ opacity: 0.62 }}>，包含博客、幻灯片和视频。</span>
       </div>
     </div>
   </div>
