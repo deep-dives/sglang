@@ -1,20 +1,20 @@
 ---
-title: "OpenAI APIs - Embedding"
+title: "OpenAI API - 嵌入"
 metatags:
-    description: "This tutorial covers the embedding APIs for embedding models."
+    description: "本教程介绍嵌入模型的嵌入 API。"
 ---
-SGLang provides OpenAI-compatible APIs to enable a smooth transition from OpenAI services to self-hosted local models.
-A complete reference for the API is available in the [OpenAI API Reference](https://platform.openai.com/docs/guides/embeddings).
+SGLang 提供兼容 OpenAI 的 API，帮助你从 OpenAI 服务平滑过渡到本地自托管模型。
+完整的 API 参考见 [OpenAI API Reference](https://platform.openai.com/docs/guides/embeddings)。
 
-This tutorial covers the embedding APIs for embedding models. For a list of the supported models see the [corresponding overview page](../supported-models)
+本教程介绍嵌入模型的嵌入 API。支持哪些模型请参见[对应概览页面](../supported-models)
 
+## 启动服务端
 
+在终端启动服务端并等待其初始化完成。原生编码器（encoder）架构的嵌入模型和 `google/embeddinggemma-300m` 会被自动识别。解码器（decoder）风格的嵌入模型仍然需要 `--is-embedding`。
 
-## Launch A Server
-
-Launch the server in your terminal and wait for it to initialize. Native encoder embedding architectures and `google/embeddinggemma-300m` are detected automatically. Decoder-style embedding models still require `--is-embedding`.
-
-
+<Note>
+💡 AI Infra 学习笔记：嵌入模型的架构分两类——编码器式（如 BERT 系）天然输出整句向量；解码器式（把生成式 LLM 改造为嵌入模型）则需要特殊处理。SGLang 对已知的编码器架构自动识别，但解码器式嵌入模型必须显式加 `--is-embedding`，否则会被当成生成模型启动。这也是「同一套推理内核复用多种模型类型」的典型例子。
+</Note>
 
 ```python Example
 from sglang.test.doc_patch import launch_server_cmd
@@ -30,9 +30,7 @@ sglang serve --model-path Alibaba-NLP/gte-Qwen2-1.5B-instruct \
 wait_for_server(f"http://localhost:{port}")
 ```
 
-## Using cURL
-
-
+## 使用 cURL
 
 ```python Example
 import subprocess, json
@@ -52,9 +50,7 @@ text_embedding = json.loads(result)["data"][0]["embedding"]
 print_highlight(f"Text embedding (first 10): {text_embedding[:10]}")
 ```
 
-## Using Python Requests
-
-
+## 使用 Python requests
 
 ```python Example
 import requests
@@ -71,9 +67,7 @@ text_embedding = response.json()["data"][0]["embedding"]
 print_highlight(f"Text embedding (first 10): {text_embedding[:10]}")
 ```
 
-## Using OpenAI Python Client
-
-
+## 使用 OpenAI Python 客户端
 
 ```python Example
 import openai
@@ -90,11 +84,9 @@ embedding = response.data[0].embedding[:10]
 print_highlight(f"Text embedding (first 10): {embedding}")
 ```
 
-## Using Input IDs
+## 使用 input_ids 输入
 
-SGLang also supports `input_ids` as input to get the embedding.
-
-
+SGLang 也支持把 `input_ids` 作为输入来获取嵌入。
 
 ```python Example
 import json
@@ -117,9 +109,13 @@ input_ids_embedding = json.loads(subprocess.check_output(curl_ids, shell=True))[
 print_highlight(f"Input IDs embedding (first 10): {input_ids_embedding[:10]}")
 ```
 
-## Compact Base64 Responses
+## 紧凑的 Base64 响应
 
-Set `encoding_format` to `base64` when JSON arrays would dominate response size. The encoded value contains little-endian FP32 values and can be decoded by OpenAI-compatible clients.
+当 JSON 数组会占据大部分响应体积时，可把 `encoding_format` 设为 `base64`。编码后的值是小端序的 FP32 数据，可由兼容 OpenAI 的客户端解码。
+
+<Note>
+💡 AI Infra 学习笔记：嵌入向量通常是数百上千维的浮点数组，用 JSON 数组表示时括号、逗号和数字文本会让体积膨胀数倍，解析开销也大。Base64 + 小端 FP32 编码把体积压到接近原始二进制，是 RAG 等大规模向量场景下的常见优化。
+</Note>
 
 ```python Example
 response = requests.post(
@@ -135,10 +131,9 @@ base64_embedding = response.json()["data"][0]["embedding"]
 print_highlight(f"Base64 embedding: {base64_embedding[:20]}...")
 ```
 
-
 ```python Example
 terminate_process(embedding_process)
 ```
 
-## Multi-Modal Embedding Model
-Please refer to [Multi-Modal Embedding Model](../supported-models)
+## 多模态嵌入模型
+请参见[多模态嵌入模型](../supported-models)

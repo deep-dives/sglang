@@ -1,31 +1,31 @@
 ---
-title: "SGLang Native APIs"
+title: "SGLang 原生 API"
 metatags:
-    description: "SGLang native server APIs for text generation, embedding, reranking, model info, cache management, and more."
+    description: "SGLang 原生服务端 API：文本生成、嵌入、重排序、模型信息、缓存管理等等。"
 ---
-Apart from the OpenAI compatible APIs, the SGLang Runtime also provides its native server APIs. We introduce the following APIs:
+除了兼容 OpenAI 的 API，SGLang Runtime 还提供原生服务端 API。我们介绍以下 API：
 
-- `/generate` (text generation model)
+- `/generate`（文本生成模型）
 - `/get_model_info`
 - `/server_info`
 - `/health`
 - `/health_generate`
 - `/flush_cache`
 - `/update_weights`
-- `/encode`(embedding model)
-- `/v1/rerank`(cross encoder rerank model)
-- `/v1/score`(decoder-only scoring)
-- `/classify`(reward model)
+- `/encode`（嵌入模型）
+- `/v1/rerank`（交叉编码器重排序模型）
+- `/v1/score`（仅解码器打分）
+- `/classify`（奖励模型）
 - `/start_expert_distribution_record`
 - `/stop_expert_distribution_record`
 - `/dump_expert_distribution_record`
 - `/tokenize`
 - `/detokenize`
-- A full list of these APIs can be found at [http_server.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/entrypoints/http_server.py)
+- 完整的 API 列表见 [http_server.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/entrypoints/http_server.py)
 
-We mainly use `requests` to test these APIs in the following examples. You can also use `curl`.
+在下面的示例中，我们主要用 `requests` 测试这些 API。你也可以使用 `curl`。
 
-## Launch A Server
+## 启动服务端
 
 ```python Example
 from sglang.test.doc_patch import launch_server_cmd
@@ -38,8 +38,12 @@ server_process, port = launch_server_cmd(
 wait_for_server(f"http://localhost:{port}", process=server_process)
 ```
 
-## Generate (text generation model)
-Generate completions. This is similar to the `/v1/completions` in OpenAI API. Detailed parameters can be found in the [sampling parameters](./sampling_params).
+## 生成（文本生成模型）
+生成补全内容。这与 OpenAI API 中的 `/v1/completions` 类似。详细参数见[采样参数](./sampling_params)。
+
+<Note>
+💡 AI Infra 学习笔记：一次文本生成可以分成两个阶段——prefill（预填充）并行处理整个输入提示词、逐位置写入 KV 缓存，决定首个输出 token；decode（解码）逐 token 自回归生成，每一步都依赖上一步结果，串行且访存密集。绝大多数推理优化（分块预填充、投机解码、PD 分离等）都是围绕这两个阶段的特性展开的。
+</Note>
 
 ```python Example
 import requests
@@ -51,20 +55,20 @@ response = requests.post(url, json=data)
 print_highlight(response.json())
 ```
 
-## Get Model Info
+## 获取模型信息
 
-Get the information of the model.
+获取模型的信息。
 
-- `model_path`: The path/name of the model.
-- `is_generation`: Whether the model is used as generation model or embedding model.
-- `tokenizer_path`: The path/name of the tokenizer.
-- `preferred_sampling_params`: The default sampling params specified via `--preferred-sampling-params`. `None` is returned in this example as we did not explicitly configure it in server args.
-- `weight_version`: This field contains the version of the model weights. This is often used to track changes or updates to the model’s trained parameters.
-- `has_image_understanding`: Whether the model has image-understanding capability.
-- `has_audio_understanding`: Whether the model has audio-understanding capability.
-- `model_type`: The model type from the HuggingFace config (e.g., "qwen2", "llama").
-- `architectures`: The model architectures from the HuggingFace config (e.g., ["Qwen2ForCausalLM"]).
-- `embedding`: The resolved embedding-serving plan. It includes pooling, normalization, execution and attention style, Matryoshka dimensions, cache policy, and effective BCG prefill settings. This field is available when the model configuration exposes an embedding capability contract.
+- `model_path`：模型的路径/名称。
+- `is_generation`：该模型是用作生成模型还是嵌入模型。
+- `tokenizer_path`：分词器的路径/名称。
+- `preferred_sampling_params`：通过 `--preferred-sampling-params` 指定的默认采样参数。本例中我们未在服务端参数里显式配置，因此返回 `None`。
+- `weight_version`：该字段包含模型权重的版本，常用于追踪模型训练参数的变化或更新。
+- `has_image_understanding`：模型是否具备图像理解能力。
+- `has_audio_understanding`：模型是否具备音频理解能力。
+- `model_type`：来自 HuggingFace 配置的模型类型（例如 "qwen2"、"llama"）。
+- `architectures`：来自 HuggingFace 配置的模型架构（例如 ["Qwen2ForCausalLM"]）。
+- `embedding`：解析后的嵌入服务方案。它包含池化、归一化、执行与注意力风格、Matryoshka 维度、缓存策略，以及生效的 BCG 预填充设置。当模型配置暴露了嵌入能力契约时，该字段可用。
 
 ```python Example
 url = f"http://localhost:{port}/get_model_info"
@@ -90,9 +94,9 @@ assert response_json.keys() == {
 }
 ```
 
-## Get Server Info
-Gets the server information including CLI arguments, token limits, and memory pool sizes.
-- Note: `get_server_info` merges the following deprecated endpoints:
+## 获取服务端信息
+获取服务端信息，包括 CLI 参数、token 上限和内存池大小。
+- 注意：`get_server_info` 合并了以下已废弃的端点：
   - `get_server_args`
   - `get_memory_pool_size`
   - `get_max_total_num_tokens`
@@ -104,9 +108,9 @@ response = requests.get(url)
 print_highlight(response.text)
 ```
 
-## Health Check
-- `/health`: Check the health of the server.
-- `/health_generate`: Check the health of the server by generating one token.
+## 健康检查
+- `/health`：检查服务端的健康状况。
+- `/health_generate`：通过生成一个 token 来检查服务端的健康状况。
 
 ```python Example
 url = f"http://localhost:{port}/health_generate"
@@ -122,12 +126,16 @@ response = requests.get(url)
 print_highlight(response.text)
 ```
 
-## Flush Cache
+## 清空缓存
 
-Flush the radix cache. It will be automatically triggered when the model weights are updated by the `/update_weights` API.
+清空 Radix 缓存。当 `/update_weights` API 更新模型权重时，会自动触发清空。
 
-Parameters:
-- `timeout` (query, float, default `0`, unit: seconds): Wait time for idle state before flushing. `0` means fail fast if not idle. When HiCache async operations are in-flight, a non-zero timeout allows the server to wait until idle before flushing, avoiding unnecessary 400 errors.
+参数：
+- `timeout`（query，float，默认 `0`，单位：秒）：清空前的空闲等待时间。`0` 表示若未空闲则立即失败。当 HiCache 异步操作正在进行时，非零 timeout 允许服务端等待至空闲后再清空，避免不必要的 400 错误。
+
+<Note>
+💡 AI Infra 学习笔记：Radix 缓存把 prompt 的 token 序列组织成共享前缀树，命中的前缀直接复用已有 KV 缓存，省去重新 prefill。`flush_cache` 用于在权重更新等场景下清空这些缓存，避免旧 KV 与新权重不匹配；离线批量推理/评测时通常希望干净状态，所以先 flush 再跑更可靠。
+</Note>
 
 ```bash Command
 # With timeout (wait up to 30s for idle state)
@@ -141,11 +149,11 @@ response = requests.post(url)
 print_highlight(response.text)
 ```
 
-## Update Weights From Disk
+## 从磁盘更新权重
 
-Update model weights from disk without restarting the server. Only applicable for models with the same architecture and parameter size.
+无需重启服务端即可从磁盘更新模型权重。仅适用于架构和参数量相同的模型。
 
-SGLang support `update_weights_from_disk` API for continuous evaluation during training (save checkpoint to disk and update weights from disk).
+SGLang 支持 `update_weights_from_disk` API，用于训练过程中的持续评估（把检查点保存到磁盘，再从磁盘更新权重）。
 
 ```python Example
 # successful update with same architecture and size
@@ -180,10 +188,10 @@ assert response_json["message"] == (
 terminate_process(server_process)
 ```
 
-## Encode (embedding model)
+## 编码（嵌入模型）
 
-Encode text into embeddings. Note that this API is only available for [embedding models](./openai_api_embeddings) and will raise an error for generation models.
-Therefore, we launch a new server to server an embedding model.
+把文本编码为嵌入向量。注意，该 API 仅适用于[嵌入模型](./openai_api_embeddings)，对生成模型会报错。
+因此，我们另起一个服务端来服务嵌入模型。
 
 ```python Example
 embedding_process, port = launch_server_cmd("""
@@ -209,8 +217,8 @@ print_highlight(f"Text embedding (first 10): {response_json['embedding'][:10]}")
 terminate_process(embedding_process)
 ```
 
-## v1/rerank (cross encoder rerank model)
-Rerank a list of documents given a query using a cross-encoder model. Note that this API is only available for cross encoder model like [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) with `attention-backend` `triton` and `torch_native`.
+## v1/rerank（交叉编码器重排序模型）
+给定一个查询，用交叉编码器模型对一组文档重排序。注意，该 API 仅适用于像 [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) 这样的交叉编码器模型，且 `attention-backend` 需为 `triton` 或 `torch_native`。
 
 ```python Example
 reranker_process, port = launch_server_cmd("""
@@ -244,19 +252,19 @@ for item in response_json:
 terminate_process(reranker_process)
 ```
 
-## v1/score (decoder-only scoring)
+## v1/score（仅解码器打分）
 
-Compute token probabilities for specified tokens given a query and items. This is useful for classification tasks, scoring responses, or computing log-probabilities.
+给定一个查询和若干候选项，计算指定 token 的概率。这对分类任务、响应打分或计算对数概率很有用。
 
-Parameters:
-- `query`: Query text
-- `items`: Item text(s) to score
-- `label_token_ids`: Token IDs to compute probabilities for
-- `apply_softmax`: Whether to apply softmax to get normalized probabilities (default: False)
-- `item_first`: Whether items come first in concatenation order (default: False)
-- `model`: Model name
+参数：
+- `query`：查询文本
+- `items`：要打分的候选项文本
+- `label_token_ids`：要计算概率的 token ID
+- `apply_softmax`：是否应用 softmax 得到归一化概率（默认：False）
+- `item_first`：拼接顺序中候选项是否在前（默认：False）
+- `model`：模型名
 
-The response contains `scores` - a list of probability lists, one per item, each in the order of `label_token_ids`.
+响应中包含 `scores` —— 一个概率列表的列表，每个候选项对应一份，每份按 `label_token_ids` 的顺序排列。
 
 ```python Example
 score_process, port = launch_server_cmd("""
@@ -293,9 +301,9 @@ for item, scores in zip(items, response_json["scores"]):
 terminate_process(score_process)
 ```
 
-## Classify (reward model)
+## 分类（奖励模型）
 
-SGLang Runtime also supports reward models. Here we use a reward model to classify the quality of pairwise generations.
+SGLang Runtime 也支持奖励模型。这里我们用奖励模型对成对生成的质量进行分类。
 
 ```python Example
 # Note that SGLang now treats embedding models and reward models as the same type of models.
@@ -338,11 +346,15 @@ for response in responses:
 terminate_process(reward_process)
 ```
 
-## Capture expert selection distribution in MoE models
+## 捕获 MoE 模型中的专家选择分布
 
-SGLang Runtime supports recording the number of times an expert is selected in a MoE model run for each expert in the model. This is useful when analyzing the throughput of the model and plan for optimization.
+SGLang Runtime 支持记录 MoE 模型运行过程中每个专家被选中的次数。这在分析模型吞吐量、规划优化时很有用。
 
-*Note: We only print out the first 10 lines of the csv below for better readability. Please adjust accordingly if you want to analyze the results more deeply.*
+*注意：为了便于阅读，下面我们只打印 csv 的前 10 行。如果你需要更深入地分析结果，请按需调整。*
+
+<Note>
+💡 AI Infra 学习笔记：MoE（混合专家）模型每个 token 只激活少量专家（top-k），不同专家被选中的频率差异很大，会出现「热门专家」与「冷门专家」。统计专家选择分布能帮助判断负载是否均衡，进而指导专家并行（EP）切分、专家复制等优化——这是 MoE 推理性能调优的重要分析手段。
+</Note>
 
 ```python Example
 expert_record_server_process, port = launch_server_cmd(
@@ -373,9 +385,9 @@ print_highlight(response)
 terminate_process(expert_record_server_process)
 ```
 
-## Tokenize/Detokenize Example (Round Trip)
+## Tokenize/Detokenize 示例（往返）
 
-This example demonstrates how to use the /tokenize and /detokenize endpoints together. We first tokenize a string, then detokenize the resulting IDs to reconstruct the original text. This workflow is useful when you need to handle tokenization externally but still leverage the server for detokenization.
+这个示例演示了如何一起使用 /tokenize 和 /detokenize 端点。我们先把一个字符串分词，再把得到的 ID 反分词以重建原始文本。当需要在外部处理分词、但仍想借助服务端进行反分词时，这个工作流很有用。
 
 ```python Example
 tokenizer_free_server_process, port = launch_server_cmd("""

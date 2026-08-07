@@ -1,14 +1,14 @@
 ---
-title: "Sampling Parameters"
+title: "采样参数"
 metatags:
-    description: "Complete reference for SGLang sampling parameters: temperature, top_p, top_k, frequency penalty, stop tokens, and more."
+    description: "SGLang 采样参数完整参考：temperature、top_p、top_k、frequency penalty、停止 token 等。"
 ---
-This doc describes the sampling parameters of the SGLang Runtime. It is the low-level endpoint of the runtime.
-If you want a high-level endpoint that can automatically handle chat templates, consider using the [OpenAI Compatible API](./openai_api_completions).
+本文档介绍 SGLang Runtime 的采样参数。它是 Runtime 的低层端点。
+如果你想要一个能自动处理对话模板的高层端点，可以考虑使用[兼容 OpenAI 的 API](./openai_api_completions)。
 
-## `/generate` Endpoint
+## `/generate` 端点
 
-The `/generate` endpoint accepts the following parameters in JSON format. For detailed usage, see the [native API doc](./native_api). The object is defined at `io_struct.py::GenerateReqInput`. You can also read the source code to find more arguments and docs.
+`/generate` 端点以 JSON 格式接受以下参数。详细用法见[原生 API 文档](./native_api)。该对象定义在 `io_struct.py::GenerateReqInput`。你也可以阅读源码找到更多参数和文档。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -18,112 +18,112 @@ The `/generate` endpoint accepts the following parameters in JSON format. For de
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型/默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>text</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[str], str]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The input prompt. Can be a single prompt or a batch of prompts.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>输入提示词。可以是单个提示词，也可以是一批提示词。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>input_ids</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[List[int]], List[int]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The token IDs for text; one can specify either text or input_ids.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>文本对应的 token ID；可以在 text 和 input_ids 之间任选其一。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>input_embeds</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[List[List[float]]], List[List[float]]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The embeddings for input_ids; one can specify either text, input_ids, or input_embeds.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>input_ids 对应的嵌入向量；可以在 text、input_ids 和 input_embeds 之间任选其一。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>image_data</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[List[ImageDataItem]], List[ImageDataItem], ImageDataItem]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The image input. Supports three formats: (1) **Raw images**: PIL Image, file path, URL, or base64 string; (2) **Processor output**: Dict with `format: "processor_output"` containing HuggingFace processor outputs; (3) **Precomputed embeddings**: Dict with `format: "precomputed_embedding"` and `feature` containing pre-calculated visual embeddings. Can be a single image, list of images, or list of lists of images. See [Multimodal Input Formats](#multimodal) for details.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>图像输入。支持三种格式：(1) **原始图像**：PIL Image、文件路径、URL 或 base64 字符串；(2) **处理器输出**：包含 HuggingFace 处理器输出的 `format: "processor_output"` 字典；(3) **预计算嵌入**：包含预计算视觉嵌入的 `format: "precomputed_embedding"` 与 `feature` 字典。可以是单张图像、图像列表或图像列表的列表。详见[多模态输入格式](#multimodal)。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>audio_data</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[AudioDataItem], AudioDataItem]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The audio input. Can be a file name, URL, or base64 encoded string.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>音频输入。可以是文件名、URL 或 base64 编码字符串。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>sampling_params</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[Dict], Dict]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The sampling parameters as described in the sections below.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>采样参数，如下面各节所述。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>rid</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[str], str]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The request ID.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>请求 ID。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>return_logprob</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[bool], bool]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether to return log probabilities for tokens.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>是否返回 token 的对数概率。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>logprob_start_len</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[int], int]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>If return_logprob, the start location in the prompt for returning logprobs. Default is "-1", which returns logprobs for output tokens only.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>若 return_logprob 为真，返回 logprobs 时在提示词中的起始位置。默认是 "-1"，只返回输出 token 的 logprobs。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>top_logprobs_num</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[int], int]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>If return_logprob, the number of top logprobs to return at each position.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>若 return_logprob 为真，每个位置返回的 top logprobs 数量。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>token_ids_logprob</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[List[int]], List[int]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>If return_logprob, the token IDs to return logprob for.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>若 return_logprob 为真，需要返回 logprob 的 token ID。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>return_text_in_logprobs</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether to detokenize tokens in text in the returned logprobs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>是否在返回的 logprobs 中把 token 反分词为文本。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>stream</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether to stream output.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>是否流式输出。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>lora_path</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[Optional[str]], Optional[str]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The path to the LoRA.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>LoRA 的路径。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>custom_logit_processor</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[List[Optional[str]], str]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Custom logit processor for advanced sampling control. Must be a serialized instance of `CustomLogitProcessor` using its `to_str()` method. For usage see below.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>用于高级采样控制的自定义 logit 处理器。必须是 `CustomLogitProcessor` 通过其 `to_str()` 方法序列化后的实例。用法见下文。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>return_hidden_states</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Union[List[bool], bool] = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether to return hidden states.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>是否返回隐藏状态。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>return_routed_experts</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether to return routed experts for MoE models. Requires `--enable-return-routed-experts` server flag. With the default `routed_experts_start_len=0`, returns the full available sequence `[0, seqlen - 1)` because RL workflows need routed experts for the full sequence. The result is base64-encoded int32 expert IDs as a flattened array with logical shape `[num_tokens, num_layers, top_k]`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>是否返回 MoE 模型的路由专家。需要 `--enable-return-routed-experts` 服务端参数。默认 `routed_experts_start_len=0`，返回全部可用序列 `[0, seqlen - 1)`，因为 RL 工作流需要整段序列的路由专家。结果是 base64 编码的 int32 专家 ID，作为逻辑形状为 `[num_tokens, num_layers, top_k]` 的扁平数组。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>routed_experts_start_len</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int = 0`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>If `return_routed_experts`, the absolute start position for returned routed-experts rows. `0` preserves the default full sequence; set it to an accumulated prefix length to return only `[routed_experts_start_len, seqlen - 1)`. For example, in multi-turn RL rollouts, routed experts for tokens from previous turns have already been collected, so setting this value avoids unnecessary transfer that cause bottlenecks. Must be in `[0, prompt_tokens]`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>若 `return_routed_experts` 为真，返回的路由专家行的绝对起始位置。`0` 保留默认的完整序列；把它设为某个累积前缀长度，可只返回 `[routed_experts_start_len, seqlen - 1)`。例如，在多轮 RL rollout 中，前几轮 token 的路由专家已经收集过了，设置该值可避免不必要的传输——它往往是瓶颈所在。取值必须在 `[0, prompt_tokens]` 内。</td>
     </tr>
   </tbody>
 </table>
 
-## Sampling parameters
+## 采样参数
 
-The object is defined at `sampling_params.py::SamplingParams`. You can also read the source code to find more arguments and docs.
+该对象定义在 `sampling_params.py::SamplingParams`。你也可以阅读源码找到更多参数和文档。
 
-### Note on defaults
+### 关于默认值的说明
 
-By default, SGLang initializes several sampling parameters from the model's `generation_config.json` (when the server is launched with `--sampling-defaults model`, which is the default). To use SGLang/OpenAI constant defaults instead, start the server with `--sampling-defaults openai`. You can always override any parameter per request via `sampling_params`.
+默认情况下，SGLang 从模型的 `generation_config.json` 初始化若干采样参数（当服务端以 `--sampling-defaults model` 启动时，这是默认行为）。要改用 SGLang/OpenAI 的固定默认值，请以 `--sampling-defaults openai` 启动服务端。你随时可以通过请求中的 `sampling_params` 覆盖任意参数。
 
 ```bash Command
 # Use model-provided defaults from generation_config.json (default behavior)
@@ -133,7 +133,7 @@ python -m sglang.launch_server --model-path <MODEL> --sampling-defaults model
 python -m sglang.launch_server --model-path <MODEL> --sampling-defaults openai
 ```
 
-### Core parameters
+### 核心参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -143,56 +143,60 @@ python -m sglang.launch_server --model-path <MODEL> --sampling-defaults openai
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型/默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>max_new_tokens</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int = 128`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The maximum output length measured in tokens.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>最大输出长度，以 token 计。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>stop</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[str, List[str]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>One or multiple [stop words](https://platform.openai.com/docs/api-reference/chat/create#chat-create-stop). Generation will stop if one of these words is sampled.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>一个或多个[停止词](https://platform.openai.com/docs/api-reference/chat/create#chat-create-stop)。只要采样到其中一个词，生成就会停止。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>stop_token_ids</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[List[int]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Provide stop words in the form of token IDs. Generation will stop if one of these token IDs is sampled.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>以 token ID 形式提供停止词。只要采样到其中一个 token ID，生成就会停止。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>stop_regex</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[Union[str, List[str]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Stop when hitting any of the regex patterns in this list</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>命中列表中任一正则模式时停止。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>temperature</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float (model default; fallback 1.0)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Temperature](https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature) when sampling the next token. `temperature = 0` corresponds to greedy sampling, a higher temperature leads to more diversity.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>采样下一个 token 时的[温度](https://platform.openai.com/docs/api-reference/chat/create#chat-create-temperature)。`temperature = 0` 对应贪心采样，温度越高多样性越强。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>top_p</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float (model default; fallback 1.0)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Top-p](https://platform.openai.com/docs/api-reference/chat/create#chat-create-top_p) selects tokens from the smallest sorted set whose cumulative probability exceeds `top_p`. When `top_p = 1`, this reduces to unrestricted sampling from all tokens.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Top-p](https://platform.openai.com/docs/api-reference/chat/create#chat-create-top_p) 从累积概率超过 `top_p` 的最小排序集合中选取 token。当 `top_p = 1` 时，退化为从所有 token 中无限制采样。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>top_k</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int (model default; fallback -1)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Top-k](https://developer.nvidia.com/blog/how-to-get-better-outputs-from-your-large-language-model/#predictability_vs_creativity) randomly selects from the `k` highest-probability tokens.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Top-k](https://developer.nvidia.com/blog/how-to-get-better-outputs-from-your-large-language-model/#predictability_vs_creativity) 从概率最高的 `k` 个 token 中随机选取。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>min_p</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float (model default; fallback 0.0)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Min-p](https://github.com/huggingface/transformers/issues/27670) samples from tokens with probability larger than `min_p * highest_token_probability`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[Min-p](https://github.com/huggingface/transformers/issues/27670) 从概率大于 `min_p * 最高token概率` 的 token 中采样。</td>
     </tr>
   </tbody>
 </table>
 
-### Penalizers
+<Note>
+💡 AI Infra 学习笔记：采样策略决定「从概率分布里怎么选 token」——temperature 先把 logits 除以该值再做 softmax，值越低分布越尖锐、越接近贪心；top_p 从累积概率达到阈值的集合中采样；top_k 只从前 k 个最高概率 token 里选。三者常组合使用，在「确定性/稳定性」与「多样性/创造力」之间权衡，是推理 API 里最常见的调参点。
+</Note>
+
+### 惩罚项（Penalizers）
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -202,38 +206,42 @@ python -m sglang.launch_server --model-path <MODEL> --sampling-defaults openai
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型/默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>frequency_penalty</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float = 0.0`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Penalizes tokens based on their frequency in generation so far. Must be between `-2` and `2` where negative numbers encourage repeatment of tokens and positive number encourages sampling of new tokens. The scaling of penalization grows linearly with each appearance of a token.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>根据 token 在已生成文本中出现的频率进行惩罚。取值必须在 `-2` 到 `2` 之间：负值鼓励重复 token，正值鼓励采样新 token。惩罚强度随 token 每次出现而线性增长。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>presence_penalty</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float = 0.0`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Penalizes tokens if they appeared in the generation so far. Must be between `-2` and `2` where negative numbers encourage repeatment of tokens and positive number encourages sampling of new tokens. The scaling of the penalization is constant if a token occurred.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>只要 token 在已生成文本中出现过就对其进行惩罚。取值必须在 `-2` 到 `2` 之间：负值鼓励重复 token，正值鼓励采样新 token。只要 token 出现过，惩罚强度就保持恒定。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>repetition_penalty</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`float = 1.0`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Scales the logits of previously generated tokens to discourage (values > 1) or encourage (values < 1) repetition. Valid range is `(0, 2]`; `1.0` leaves probabilities unchanged.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>缩放已生成 token 的 logits，以抑制（值 > 1）或鼓励（值 < 1）重复。有效范围是 `(0, 2]`；`1.0` 保持概率不变。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>min_new_tokens</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int = 0`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Forces the model to generate at least `min_new_tokens` until a stop word or EOS token is sampled. Note that this might lead to unintended behavior, for example, if the distribution is highly skewed towards these tokens.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>强制模型至少生成 `min_new_tokens` 个 token，之后才允许采样到停止词或 EOS token。注意这可能导致意外行为，例如当分布高度偏向这些 token 时。</td>
     </tr>
   </tbody>
 </table>
 
-### Constrained decoding
+<Note>
+💡 AI Infra 学习笔记：三种惩罚都是为缓解「重复/复读」问题——frequency_penalty 按 token 已出现次数线性增加惩罚，presence_penalty 只问「出现过没有」（出现一次就恒定惩罚），repetition_penalty 则直接缩放已生成 token 的 logits。理解它们的区别，才能在调去重效果时对症下药，而不是盲目加大数值。
+</Note>
 
-Please refer to our dedicated guide on [constrained decoding](../advanced_features/structured_outputs) for the following parameters.
+### 约束解码（Constrained decoding）
+
+以下参数的专门指南请参考我们的[约束解码](../advanced_features/structured_outputs)文档。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -243,36 +251,40 @@ Please refer to our dedicated guide on [constrained decoding](../advanced_featur
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型/默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>json_schema</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[str] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>JSON schema for structured outputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>结构化输出的 JSON schema。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>regex</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[str] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Regex for structured outputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>结构化输出的正则表达式。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>ebnf</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[str] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>EBNF for structured outputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>结构化输出的 EBNF。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>structural_tag</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[str] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The structal tag for structured outputs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>结构化输出的结构标签。</td>
     </tr>
   </tbody>
 </table>
 
-### Other options
+<Note>
+💡 AI Infra 学习笔记：约束解码（结构化输出）通过在采样阶段就屏蔽不符合语法的 token，保证输出一定满足 JSON schema / 正则 / EBNF——这与「生成后再校验重试」完全不同。它的实现依赖语法后端（XGrammar/Outlines）在每一步动态维护一个有限状态机（DFA），因此在推理引擎里是一个独立且性能敏感的组件。
+</Note>
+
+### 其他选项
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -282,56 +294,56 @@ Please refer to our dedicated guide on [constrained decoding](../advanced_featur
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型/默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>n</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`int = 1`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Specifies the number of output sequences to generate per request. (Generating multiple outputs in one request (n > 1) is discouraged; repeating the same prompts several times offers better control and efficiency.)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>指定每个请求生成的输出序列数量。（不建议在单个请求中生成多个输出（n > 1）；重复提交相同提示词多次能提供更好的控制与效率。）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>ignore_eos</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Don't stop generation when EOS token is sampled.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>采样到 EOS token 时不停止生成。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>skip_special_tokens</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = True`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Remove special tokens during decoding.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>解码时移除特殊 token。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>spaces_between_special_tokens</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = True`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whether or not to add spaces between special tokens during detokenization.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>反分词时是否在特殊 token 之间添加空格。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>no_stop_trim</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`bool = False`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Don't trim stop words or EOS token from the generated text.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>不从生成的文本中裁剪停止词或 EOS token。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>custom_params</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`Optional[List[Optional[Dict[str, Any]]]] = None`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Used when employing `CustomLogitProcessor`. For usage, see below.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>在使用 `CustomLogitProcessor` 时使用。用法见下文。</td>
     </tr>
   </tbody>
 </table>
 
-## Examples
+## 示例
 
-### Normal
+### 常规
 
-Launch a server:
+启动服务端：
 
 ```bash Command
 python -m sglang.launch_server --model-path meta-llama/Meta-Llama-3-8B-Instruct --port 30000
 ```
 
-Send a request:
+发送请求：
 
 ```python Example
 import requests
@@ -349,11 +361,11 @@ response = requests.post(
 print(response.json())
 ```
 
-Detailed example in [send request](./send_request).
+详细示例见[发送请求](./send_request)。
 
-### Streaming
+### 流式
 
-Send a request and stream the output:
+发送请求并流式输出：
 
 ```python Example
 import requests, json
@@ -384,23 +396,23 @@ for chunk in response.iter_lines(decode_unicode=False):
 print("")
 ```
 
-Detailed example in [openai compatible api](./openai_api_completions).
+详细示例见[兼容 OpenAI 的 API](./openai_api_completions)。
 
-### Multimodal
+### 多模态
 
-Launch a server:
+启动服务端：
 
 ```bash Command
 python3 -m sglang.launch_server --model-path lmms-lab/llava-onevision-qwen2-7b-ov
 ```
 
-Download an image:
+下载图片：
 
 ```bash Command
 curl -o example_image.png -L https://github.com/sgl-project/sglang/blob/main/examples/assets/example_image.png?raw=true
 ```
 
-Send a request:
+发送请求：
 
 ```python Example
 import requests
@@ -421,23 +433,23 @@ response = requests.post(
 print(response.json())
 ```
 
-The `image_data` can be a file name, a URL, or a base64 encoded string. See also `python/sglang/srt/utils.py:load_image`.
+`image_data` 可以是文件名、URL 或 base64 编码字符串。另见 `python/sglang/srt/utils.py:load_image`。
 
-Streaming is supported in a similar manner as [above](#streaming).
+流式支持的用法与[上文](#streaming)类似。
 
-Detailed example in [OpenAI API Vision](./openai_api_vision).
+详细示例见[OpenAI API - 视觉](./openai_api_vision)。
 
-### Structured Outputs (JSON, Regex, EBNF)
+### 结构化输出（JSON、Regex、EBNF）
 
-You can specify a JSON schema, regular expression or [EBNF](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) to constrain the model output. The model output will be guaranteed to follow the given constraints. Only one constraint parameter (`json_schema`, `regex`, or `ebnf`) can be specified for a request.
+你可以指定 JSON schema、正则表达式或 [EBNF](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) 来约束模型输出。模型输出将保证遵循给定的约束。每个请求只能指定一个约束参数（`json_schema`、`regex` 或 `ebnf`）。
 
-SGLang supports two grammar backends:
+SGLang 支持两个语法后端：
 
-- [XGrammar](https://github.com/mlc-ai/xgrammar) (default): Supports JSON schema, regular expression, and EBNF constraints.
-  - XGrammar currently uses the [GGML BNF format](https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md).
-- [Outlines](https://github.com/dottxt-ai/outlines): Supports JSON schema and regular expression constraints.
+- [XGrammar](https://github.com/mlc-ai/xgrammar)（默认）：支持 JSON schema、正则表达式和 EBNF 约束。
+  - XGrammar 目前使用 [GGML BNF 格式](https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md)。
+- [Outlines](https://github.com/dottxt-ai/outlines)：支持 JSON schema 和正则表达式约束。
 
-If instead you want to initialize the Outlines backend, you can use `--grammar-backend outlines` flag:
+如果你想改用 Outlines 后端，可以使用 `--grammar-backend outlines` 参数：
 
 ```bash Command
 python -m sglang.launch_server --model-path meta-llama/Meta-Llama-3.1-8B-Instruct \
@@ -500,11 +512,11 @@ response = requests.post(
 print(response.json())
 ```
 
-Detailed example in [structured outputs](../advanced_features/structured_outputs).
+详细示例见[结构化输出](../advanced_features/structured_outputs)。
 
-### Custom logit processor
+### 自定义 logit 处理器
 
-Launch a server with `--enable-custom-logit-processor` flag on.
+以 `--enable-custom-logit-processor` 参数启动服务端。
 
 ```bash Command
 python -m sglang.launch_server \
@@ -513,7 +525,7 @@ python -m sglang.launch_server \
   --enable-custom-logit-processor
 ```
 
-Define a custom logit processor that will always sample a specific token id.
+定义一个总会采样到特定 token ID 的自定义 logit 处理器。
 
 ```python Example
 from sglang.srt.sampling.custom_logit_processor import CustomLogitProcessor
@@ -536,7 +548,7 @@ class DeterministicLogitProcessor(CustomLogitProcessor):
         return logits
 ```
 
-Send a request:
+发送请求：
 
 ```python Example
 import requests
@@ -556,7 +568,7 @@ response = requests.post(
 print(response.json())
 ```
 
-Send an OpenAI chat completion request:
+发送一个 OpenAI 聊天补全请求：
 
 ```python Example
 import openai

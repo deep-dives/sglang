@@ -1,11 +1,15 @@
 ---
-title: "Ollama-Compatible API"
+title: "兼容 Ollama 的 API"
 metatags:
-    description: "SGLang provides Ollama API compatibility, allowing you to use the Ollama CLI and Python library with SGLang as the inference backend."
+    description: "SGLang 提供 Ollama API 兼容性，让你可以把 Ollama CLI 和 Python 库与 SGLang 一起使用，以 SGLang 作为推理后端。"
 ---
-SGLang provides Ollama API compatibility, allowing you to use the Ollama CLI and Python library with SGLang as the inference backend.
+SGLang 提供 Ollama API 兼容性，让你可以把 Ollama CLI 和 Python 库与 SGLang 一起使用，以 SGLang 作为推理后端。
 
-## Prerequisites
+<Note>
+💡 AI Infra 学习笔记：Ollama 兼容的本质同样是「协议翻译」——SGLang 在服务端实现 Ollama 的 `/api/chat`、`/api/generate` 等路由，把 Ollama 客户端的请求映射到自己的引擎。这样用户可以沿用熟悉的 Ollama 工具链（CLI、库、生态脚本）享受 SGLang 的高性能，而无需改代码。
+</Note>
+
+## 前置条件
 
 <CodeGroup>
 ```bash Command
@@ -14,9 +18,9 @@ pip install ollama
 ```
 </CodeGroup>
 
-<Note>You don't need the Ollama server installed - SGLang acts as the backend. You only need the `ollama` CLI or Python library as the client.</Note>
+<Note>你不需要安装 Ollama 服务端——SGLang 充当后端。你只需要 `ollama` CLI 或 Python 库作为客户端。</Note>
 
-## Endpoints
+## 端点
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -26,43 +30,43 @@ pip install ollama
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Endpoint</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>端点</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`/`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GET, HEAD</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Health check for Ollama CLI</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>供 Ollama CLI 使用的健康检查</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`/api/tags`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GET</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List available models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出可用模型</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`/api/chat`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>POST</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Chat completions (streaming & non-streaming)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>聊天补全（流式与非流式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`/api/generate`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>POST</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Text generation (streaming & non-streaming)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>文本生成（流式与非流式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`/api/show`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>POST</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Model information</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>模型信息</td>
     </tr>
   </tbody>
 </table>
 
-## Quick Start
+## 快速开始
 
-### 1. Launch SGLang Server
+### 1. 启动 SGLang 服务端
 
 <CodeGroup>
 ```bash Command
@@ -73,9 +77,9 @@ python -m sglang.launch_server \
 ```
 </CodeGroup>
 
-<Note>The model name used with `ollama run` must match exactly what you passed to `--model`.</Note>
+<Note>`ollama run` 使用的模型名必须与你传给 `--model` 的完全一致。</Note>
 
-### 2. Use Ollama CLI
+### 2. 使用 Ollama CLI
 
 <CodeGroup>
 ```bash Command
@@ -87,7 +91,7 @@ OLLAMA_HOST=http://localhost:30001 ollama run "Qwen/Qwen2.5-1.5B-Instruct"
 ```
 </CodeGroup>
 
-If connecting to a remote server behind a firewall:
+如果连接的是防火墙后面的远程服务端：
 
 <CodeGroup>
 ```bash Command
@@ -99,7 +103,7 @@ OLLAMA_HOST=http://localhost:30001 ollama list
 ```
 </CodeGroup>
 
-### 3. Use Ollama Python Library
+### 3. 使用 Ollama Python 库
 
 ```python Example
 import ollama
@@ -123,11 +127,15 @@ for chunk in stream:
     print(chunk['message']['content'], end='', flush=True)
 ```
 
-## Smart Router
+## 智能路由（Smart Router）
 
-For intelligent routing between local Ollama (fast) and remote SGLang (powerful) using an LLM judge, see the [Smart Router documentation](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/entrypoints/ollama/README.md).
+想用 LLM 判断器在本地 Ollama（快）与远程 SGLang（强）之间做智能路由，请参见 [Smart Router 文档](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/entrypoints/ollama/README.md)。
 
-## Summary
+<Note>
+💡 AI Infra 学习笔记：智能路由（LLM-as-judge）是典型的「延迟/质量权衡」方案——简单查询交给本地小模型（低延迟、低成本），复杂查询才路由到远程强模型。对 AI Infra 学习者来说，这是理解「模型分级 / 多后端调度」与成本优化的入门场景。
+</Note>
+
+## 小结
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -136,22 +144,22 @@ For intelligent routing between local Ollama (fast) and remote SGLang (powerful)
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Component</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Purpose</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>组件</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Ollama API**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Familiar CLI/API that developers already know</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>开发者已经熟悉的 CLI/API</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**SGLang Backend**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>High-performance inference engine</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**SGLang 后端**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>高性能推理引擎</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Smart Router**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Intelligent routing - fast local for simple tasks, powerful remote for complex tasks</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**智能路由**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>智能路由——简单任务用快速本地，复杂任务用强大远程</td>
     </tr>
   </tbody>
 </table>

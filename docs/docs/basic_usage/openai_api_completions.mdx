@@ -1,21 +1,21 @@
 ---
-title: "OpenAI APIs - Completions"
+title: "OpenAI API - 补全"
 metatags:
-    description: "This tutorial covers the following popular APIs: 'chat/completions' and 'completions'"
+    description: "本教程介绍以下热门 API：'chat/completions' 和 'completions'"
 ---
-SGLang provides OpenAI-compatible APIs to enable a smooth transition from OpenAI services to self-hosted local models.
-A complete reference for the API is available in the [OpenAI API Reference](https://platform.openai.com/docs/api-reference).
+SGLang 提供兼容 OpenAI 的 API，帮助你从 OpenAI 服务平滑过渡到本地自托管模型。
+完整的 API 参考见 [OpenAI API Reference](https://platform.openai.com/docs/api-reference)。
 
-This tutorial covers the following popular APIs:
+本教程介绍以下热门 API：
 
 - `chat/completions`
 - `completions`
 
-Check out other tutorials to learn about [vision APIs](./openai_api_vision) for vision-language models and [embedding APIs](./openai_api_embeddings) for embedding models.
+视觉语言模型的[视觉 API](./openai_api_vision) 和嵌入模型的[嵌入 API](./openai_api_embeddings) 请参阅其他教程。
 
-## Launch A Server
+## 启动服务端
 
-Launch the server in your terminal and wait for it to initialize.
+在终端启动服务端并等待其初始化完成。
 
 ```python Example
 from sglang.test.doc_patch import launch_server_cmd
@@ -29,13 +29,13 @@ wait_for_server(f"http://localhost:{port}")
 print(f"Server started on http://localhost:{port}")
 ```
 
-## Chat Completions
+## 聊天补全（Chat Completions）
 
-### Usage
+### 用法
 
-The server fully implements the OpenAI API.
-It will automatically apply the chat template specified in the Hugging Face tokenizer, if one is available.
-You can also specify a custom chat template with `--chat-template` when launching the server.
+服务端完整实现了 OpenAI API。
+如果有对话模板，它会自动应用 Hugging Face 分词器中指定的对话模板。
+你也可以在启动服务端时用 `--chat-template` 指定自定义对话模板。
 
 ```python Example
 import openai
@@ -54,11 +54,15 @@ response = client.chat.completions.create(
 print_highlight(f"Response: {response}")
 ```
 
-### Model Thinking/Reasoning Support
+### 模型的思维/推理支持
 
-Some models support internal reasoning or thinking processes that can be exposed in the API response. SGLang provides unified support for various reasoning models through the `chat_template_kwargs` parameter and compatible reasoning parsers.
+部分模型支持内部推理或思考过程，并可在 API 响应中暴露出来。SGLang 通过 `chat_template_kwargs` 参数和兼容的推理解析器，为各种推理模型提供统一支持。
 
-#### Supported Models and Configuration
+<Note>
+💡 AI Infra 学习笔记：推理模型会先在内部生成一段「思考」内容（如 DeepSeek-R1 的思维链），再输出最终答案。`chat_template_kwargs` 负责在对话模板层开关思考模式，`--reasoning-parser` 负责把模型输出的特殊标记解析成独立的 `reasoning_content` 字段——两者配合才能把推理过程与答案干净地分离开，供上层应用展示或处理。
+</Note>
+
+#### 支持的模型与配置
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -69,10 +73,10 @@ Some models support internal reasoning or thinking processes that can be exposed
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Chat Template Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Reasoning Parser</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型系列</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>对话模板参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>推理解析器</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
@@ -80,53 +84,53 @@ Some models support internal reasoning or thinking processes that can be exposed
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>DeepSeek-R1 (R1, R1-0528, R1-Distill)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`enable_thinking`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser deepseek-r1`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Standard reasoning models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>标准推理模型</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>DeepSeek-V3.1</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`thinking`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser deepseek-v3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hybrid model (thinking/non-thinking modes)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>混合模型（思考/非思考模式）</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Qwen3 (standard)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Qwen3（标准）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`enable_thinking`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser qwen3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hybrid model (thinking/non-thinking modes)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>混合模型（思考/非思考模式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Qwen3-Thinking</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A (always enabled)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A（始终启用）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser qwen3-thinking`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Always generates reasoning</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>始终生成推理内容</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Kimi</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A (always enabled)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A（始终启用）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser kimi`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Kimi thinking models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Kimi 思考模型</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Gpt-Oss</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A (always enabled)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A（始终启用）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--reasoning-parser gpt-oss`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Gpt-Oss thinking models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Gpt-Oss 思考模型</td>
     </tr>
   </tbody>
 </table>
 
-#### Basic Usage
+#### 基本用法
 
-To enable reasoning output, you need to:
-1. Launch the server with the appropriate reasoning parser
-2. Set the model-specific parameter in `chat_template_kwargs`
-3. Optionally use `separate_reasoning: False` to not get reasoning content separately (default to `True`)
+要启用推理输出，你需要：
+1. 用合适的推理解析器启动服务端
+2. 在 `chat_template_kwargs` 中设置模型专属参数
+3. 可选地使用 `separate_reasoning: False` 不单独返回推理内容（默认 `True`）
 
 <Note>
-**Note for Qwen3-Thinking models:** These models always generate thinking content and do not support the `enable_thinking` parameter. Use `--reasoning-parser qwen3-thinking` or `--reasoning-parser qwen3` to parse the thinking content.
+**Qwen3-Thinking 模型注意：** 这些模型始终生成思考内容，不支持 `enable_thinking` 参数。请用 `--reasoning-parser qwen3-thinking` 或 `--reasoning-parser qwen3` 解析思考内容。
 </Note>
 
-#### Example: Qwen3 Models
+#### 示例：Qwen3 模型
 
 ```python Example
 # Launch server:
@@ -156,7 +160,7 @@ print("-"*100)
 print("Answer:", response.choices[0].message.content)
 ```
 
-**ExampleOutput:**
+**示例输出：**
 ```text Output
 Reasoning: Okay, so the user is asking how many 'r's are in the word 'strawberry'. Let me think. First, I need to make sure I have the word spelled correctly. Strawberry... S-T-R-A-W-B-E-R-R-Y. Wait, is that right? Let me break it down.
 
@@ -176,22 +180,26 @@ Thus, the total count is **3**.
 **Answer:** 3.
 ```
 <Note>
-Setting `"enable_thinking": False` (or omitting it) will result in `reasoning_content` being `None`. Qwen3-Thinking models always generate reasoning content and don't support the `enable_thinking` parameter.
+设置 `"enable_thinking": False`（或省略该参数）会让 `reasoning_content` 为 `None`。Qwen3-Thinking 模型始终生成推理内容，不支持 `enable_thinking` 参数。
 </Note>
 
-#### Logit Bias Support
+#### 对数偏置（Logit Bias）支持
 
-SGLang supports the `logit_bias` parameter for both chat completions and completions APIs. This parameter allows you to modify the likelihood of specific tokens being generated by adding bias values to their logits. The bias values can range from -100 to 100, where:
+SGLang 在聊天补全和补全 API 中都支持 `logit_bias` 参数。该参数通过给某些 token 的 logits 加上偏置值，来修改这些 token 被生成的概率。偏置值范围是 -100 到 100，其中：
 
-- **Positive values** (0 to 100) increase the likelihood of the token being selected
-- **Negative values** (-100 to 0) decrease the likelihood of the token being selected
-- **-100** effectively prevents the token from being generated
+- **正值**（0 到 100）提高该 token 被选中的概率
+- **负值**（-100 到 0）降低该 token 被选中的概率
+- **-100** 实际上会阻止该 token 被生成
 
-The `logit_bias` parameter accepts a dictionary where keys are token IDs (as strings) and values are the bias amounts (as floats).
+<Note>
+💡 AI Infra 学习笔记：LLM 每一步都在「词汇表上的 logits 分布」上采样，`logit_bias` 就是在 softmax 之前直接对某些 token 的 logit 值做加减。加偏置相当于人为抬高/压低该 token 的概率；设为 -100 时其概率被压到接近 0，等同「禁用」。这是实现敏感词过滤、强制偏好等需求的最直接手段。
+</Note>
 
-#### Getting Token IDs
+`logit_bias` 参数接受一个字典，键为 token ID（字符串形式），值为偏置量（浮点数形式）。
 
-To use `logit_bias` effectively, you need to know the token IDs for the words you want to bias. Here's how to get token IDs:
+#### 获取 token ID
+
+要有效使用 `logit_bias`，你需要知道想偏置的词的 token ID。获取方法如下：
 
 ```python Example
 # Get tokenizer to find token IDs
@@ -209,12 +217,12 @@ print(f"Token IDs for '{word}': {token_ids}")
 # and get token IDs for bias
 ```
 <Tip>
-**Important:** The `logit_bias` parameter uses token IDs as string keys, not the actual words.
+**重要：** `logit_bias` 参数使用字符串形式的 token ID 作为键，而不是实际的词。
 </Tip>
 
-#### Example: DeepSeek-V3 Models
+#### 示例：DeepSeek-V3 模型
 
-DeepSeek-V3 models support thinking mode through the `thinking` parameter:
+DeepSeek-V3 模型通过 `thinking` 参数支持思考模式：
 
 ```python Example
 # Launch server:
@@ -244,7 +252,7 @@ print("-"*100)
 print("Answer:", response.choices[0].message.content)
 ```
 
-**Example Output:**
+**示例输出：**
 ```text Output
 Reasoning: First, the question is: "How many r's are in 'strawberry'?"
 
@@ -266,7 +274,7 @@ Answer: The word "strawberry" contains **3** instances of the letter "r". Here's
 - The "r" appears at the 3rd, 8th, and 9th positions.
 ```
 <Note>
-DeepSeek-V3 models use the `thinking` parameter (not `enable_thinking`) to control reasoning output.
+DeepSeek-V3 模型使用 `thinking` 参数（而不是 `enable_thinking`）来控制推理输出。
 </Note>
 
 ```python Example
@@ -290,11 +298,11 @@ response = client.chat.completions.create(
 print_highlight(f"Response with logit bias: {response.choices[0].message.content}")
 ```
 
-### Parameters
+### 参数
 
-The chat completions API accepts OpenAI Chat Completions API's parameters. Refer to [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat/create) for more details.
+聊天补全 API 接受 OpenAI Chat Completions API 的参数。更多细节参见 [OpenAI Chat Completions API](https://platform.openai.com/docs/api-reference/chat/create)。
 
-SGLang extends the standard API with the `extra_body` parameter, allowing for additional customization. One key option within `extra_body` is `chat_template_kwargs`, which can be used to pass arguments to the chat template processor.
+SGLang 通过 `extra_body` 参数扩展了标准 API，支持额外定制。`extra_body` 中的一个关键选项是 `chat_template_kwargs`，可用来向对话模板处理器传参。
 
 ```python Example
 response = client.chat.completions.create(
@@ -323,11 +331,11 @@ response = client.chat.completions.create(
 print_highlight(response.choices[0].message.content)
 ```
 
-Streaming mode is also supported.
+同时也支持流式模式。
 
-#### Logit Bias Support
+#### 对数偏置支持
 
-The completions API also supports the `logit_bias` parameter with the same functionality as described in the chat completions section above.
+补全 API 同样支持 `logit_bias` 参数，功能与上面聊天补全部分所述一致。
 
 ```python Example
 stream = client.chat.completions.create(
@@ -340,9 +348,13 @@ for chunk in stream:
         print(chunk.choices[0].delta.content, end="")
 ```
 
-#### Returning Routed Experts (MoE Models)
+#### 返回路由专家（MoE 模型）
 
-For MoE models, set `return_routed_experts: true` in `extra_body` to return expert routing data. Requires `--enable-return-routed-experts` server flag. The `routed_experts` field will be returned in the `sgl_ext` object on each choice, containing base64-encoded int32 expert IDs as a flattened array with logical shape `[num_tokens, num_layers, top_k]`. By default this returns `[0, seqlen - 1)`, the full available sequence, because RL workflows need routed experts for the full sequence. Set `routed_experts_start_len` in `extra_body` to an absolute prefix length to return only `[routed_experts_start_len, seqlen - 1)`. For example, in multi-turn RL rollouts, routed experts for tokens from previous turns have already been collected, so setting this value avoids unnecessary transfer that cause bottlenecks.
+对于 MoE 模型，在 `extra_body` 中设置 `return_routed_experts: true` 即可返回专家路由数据。这需要 `--enable-return-routed-experts` 服务端参数。`routed_experts` 字段会在每个 choice 的 `sgl_ext` 对象中返回，包含 base64 编码的 int32 专家 ID，作为逻辑形状为 `[num_tokens, num_layers, top_k]` 的扁平数组。默认返回 `[0, seqlen - 1)`，即全部可用序列，因为 RL 工作流需要整段序列的路由专家。在 `extra_body` 中设置 `routed_experts_start_len` 为某个绝对前缀长度，可以只返回 `[routed_experts_start_len, seqlen - 1)`。例如，在多轮 RL rollout 中，前几轮 token 的路由专家已经收集过了，设置该值可避免不必要的传输——它往往是瓶颈所在。
+
+<Note>
+💡 AI Infra 学习笔记：MoE 的每个 token 都要经路由器选出 top-k 个专家，这条「路由信息」本身对训练对齐（如 GRPO）很有价值，但对纯推理却是多余的输出开销。`return_routed_experts` 把每层每 token 的专家 ID 传回客户端；多轮 rollout 里还可以用 `routed_experts_start_len` 只取本轮新增部分，避免重复传输——这是 RL 数据流水线的传输优化细节。
+</Note>
 
 ```python Example
 # Example with logit_bias parameter for completions API
@@ -363,10 +375,10 @@ response = client.completions.create(
 print_highlight(f"Response with logit bias: {response.choices[0].text}")
 ```
 
-## Completions
+## 补全（Completions）
 
-### Usage
-Completions API is similar to Chat Completions API, but without the `messages` parameter or chat templates.
+### 用法
+补全 API 与聊天补全 API 类似，但没有 `messages` 参数，也不走对话模板。
 
 ```python Example
 response = client.completions.create(
@@ -381,11 +393,11 @@ response = client.completions.create(
 print_highlight(f"Response: {response}")
 ```
 
-### Parameters
+### 参数
 
-The completions API accepts OpenAI Completions API's parameters.  Refer to [OpenAI Completions API](https://platform.openai.com/docs/api-reference/completions/create) for more details.
+补全 API 接受 OpenAI Completions API 的参数。更多细节参见 [OpenAI Completions API](https://platform.openai.com/docs/api-reference/completions/create)。
 
-Here is an example of a detailed completions request:
+下面是一个详细的补全请求示例：
 
 ```python Example
 response = client.completions.create(
@@ -404,19 +416,19 @@ response = client.completions.create(
 print_highlight(f"Response: {response}")
 ```
 
-#### Returning Routed Experts (MoE Models)
+#### 返回路由专家（MoE 模型）
 
-For MoE models, set `return_routed_experts: true` in `extra_body` to return expert routing data. Requires `--enable-return-routed-experts` server flag. The `routed_experts` field will be returned in the `sgl_ext` object on each choice, containing base64-encoded int32 expert IDs as a flattened array with logical shape `[num_tokens, num_layers, top_k]`. By default this returns `[0, seqlen - 1)`, the full available sequence, because RL workflows need routed experts for the full sequence. Set `routed_experts_start_len` in `extra_body` to an absolute prefix length to return only `[routed_experts_start_len, seqlen - 1)`. For example, in multi-turn RL rollouts, routed experts for tokens from previous turns have already been collected, so setting this value avoids unnecessary transfer that cause bottlenecks.
+对于 MoE 模型，在 `extra_body` 中设置 `return_routed_experts: true` 即可返回专家路由数据。这需要 `--enable-return-routed-experts` 服务端参数。`routed_experts` 字段会在每个 choice 的 `sgl_ext` 对象中返回，包含 base64 编码的 int32 专家 ID，作为逻辑形状为 `[num_tokens, num_layers, top_k]` 的扁平数组。默认返回 `[0, seqlen - 1)`，即全部可用序列，因为 RL 工作流需要整段序列的路由专家。在 `extra_body` 中设置 `routed_experts_start_len` 为某个绝对前缀长度，可以只返回 `[routed_experts_start_len, seqlen - 1)`。例如，在多轮 RL rollout 中，前几轮 token 的路由专家已经收集过了，设置该值可避免不必要的传输——它往往是瓶颈所在。
 
-## Structured Outputs (JSON, Regex, EBNF)
+## 结构化输出（JSON、Regex、EBNF）
 
-For OpenAI compatible structured outputs API, refer to [Structured Outputs](../advanced_features/structured_outputs) for more details.
+兼容 OpenAI 的结构化输出 API 请参见[结构化输出](../advanced_features/structured_outputs)了解详情。
 
-## Using LoRA Adapters
+## 使用 LoRA 适配器
 
-SGLang supports LoRA (Low-Rank Adaptation) adapters with OpenAI-compatible APIs. You can specify which adapter to use directly in the `model` parameter using the `base-model:adapter-name` syntax.
+SGLang 支持与 OpenAI 兼容 API 配合使用的 LoRA（低秩适配）适配器。你可以用 `base-model:adapter-name` 语法直接在 `model` 参数中指定要使用的适配器。
 
-**Server Setup:**
+**服务端设置：**
 ```bash Command
 python -m sglang.launch_server \
     --model-path qwen/qwen2.5-0.5b-instruct \
@@ -424,11 +436,11 @@ python -m sglang.launch_server \
     --lora-paths adapter_a=/path/to/adapter_a adapter_b=/path/to/adapter_b
 ```
 
-For more details on LoRA serving configuration, see the [LoRA documentation](../advanced_features/lora).
+LoRA 服务化配置的更多细节见 [LoRA 文档](../advanced_features/lora)。
 
-**API Call:**
+**API 调用：**
 
-(Recommended) Use the `model:adapter` syntax to specify which adapter to use:
+（推荐）使用 `model:adapter` 语法指定要使用的适配器：
 ```python Example
 response = client.chat.completions.create(
     model="qwen/qwen2.5-0.5b-instruct:adapter_a",  # ← base-model:adapter-name
@@ -437,9 +449,9 @@ response = client.chat.completions.create(
 )
 ```
 
-**Backward Compatible: Using `extra_body`**
+**向后兼容：使用 `extra_body`**
 
-The old `extra_body` method is still supported for backward compatibility:
+旧版的 `extra_body` 方法仍受支持，用于向后兼容：
 ```python Example
 # Backward compatible method
 response = client.chat.completions.create(
@@ -449,7 +461,7 @@ response = client.chat.completions.create(
     max_tokens=50,
 )
 ```
-**Note:** When both `model:adapter` and `extra_body["lora_path"]` are specified, the `model:adapter` syntax takes precedence.
+**注意：** 当同时指定 `model:adapter` 和 `extra_body["lora_path"]` 时，`model:adapter` 语法优先。
 
 ```python Example
 terminate_process(server_process)

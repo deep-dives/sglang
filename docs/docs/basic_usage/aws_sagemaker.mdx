@@ -1,43 +1,39 @@
 ---
 title: "Amazon SageMaker AI"
-description: "Deploy SGLang on Amazon SageMaker AI endpoints using the AWS Deep Learning Container."
+description: "使用 AWS Deep Learning Container 将 SGLang 部署到 Amazon SageMaker AI 端点上。"
 ---
 
-Deploy SGLang on [Amazon SageMaker AI](https://aws.amazon.com/sagemaker/) endpoints using the
-[AWS Deep Learning Container (DLC)](https://aws.github.io/deep-learning-containers/sglang/) for SGLang.
-The SageMaker image variant accepts model configuration via environment variables and serves on port 8080.
+使用针对 SGLang 的 [AWS Deep Learning Container（DLC）](https://aws.github.io/deep-learning-containers/sglang/) 把 SGLang 部署到 [Amazon SageMaker AI](https://aws.amazon.com/sagemaker/) 端点上。
+SageMaker 镜像变体通过环境变量接收模型配置，并在 8080 端口对外服务。
 
-This guide uses the pre-built DLC image. To build and deploy your own container instead, see
-[Method 7: Run on AWS SageMaker](/docs/get-started/install#more-3) in the installation guide.
+本指南使用预构建的 DLC 镜像。如果你想自行构建并部署自己的容器，请参见安装指南中的[方法七：在 AWS SageMaker 上运行](/docs/get-started/install#more-3)。
 
-## Container image
+## 容器镜像
 
-AWS publishes pre-built, security-patched SGLang DLCs. The SageMaker GPU image is available from the
-Amazon ECR registry (account `763104351884`) in each supported region. For example, in `us-west-2`:
+AWS 发布了预构建且已打安全补丁的 SGLang DLC。SageMaker GPU 镜像可在每个受支持区域的 Amazon ECR 仓库（账号 `763104351884`）中获取。例如，在 `us-west-2` 区域：
 
 ```text
 763104351884.dkr.ecr.us-west-2.amazonaws.com/sglang:server-sagemaker-cuda-v1.0
 ```
 
-For the full list of image tags, see the
-[Available DLC Images](https://aws.github.io/deep-learning-containers/reference/available_images/) reference,
-and for region-specific account IDs and supported regions, see
-[Region Availability](https://aws.github.io/deep-learning-containers/reference/region_availability/).
+完整的镜像标签列表请参见 [可用 DLC 镜像](https://aws.github.io/deep-learning-containers/reference/available_images/) 参考文档；区域专属的账号 ID 与受支持区域请参见[区域可用性](https://aws.github.io/deep-learning-containers/reference/region_availability/)。
 
-## Specifying the model
+## 指定模型
 
-The SageMaker image resolves the model in this order:
+SageMaker 镜像按以下顺序解析模型：
 
-1. **`SM_SGLANG_MODEL_PATH` environment variable** — explicit Hugging Face ID or path.
-2. **`/opt/ml/model`** — when SageMaker mounts model artifacts via `ModelDataUrl` or `ModelDataSource`,
-   the entrypoint uses this path by default.
+1. **`SM_SGLANG_MODEL_PATH` 环境变量** —— 显式指定的 Hugging Face ID 或路径。
+2. **`/opt/ml/model`** —— 当 SageMaker 通过 `ModelDataUrl` 或 `ModelDataSource` 挂载模型产物时，入口脚本默认使用该路径。
 
-For gated models, also pass `HF_TOKEN`.
+对于受门禁（gated）控制的模型，还需要传入 `HF_TOKEN`。
 
-Any `SM_SGLANG_*` environment variable is converted to a `--<name>` SGLang server argument
-(for example, `SM_SGLANG_CONTEXT_LENGTH=4096` becomes `--context-length 4096`).
+所有 `SM_SGLANG_*` 环境变量都会被转换为 `--<name>` 形式的 SGLang 服务端参数（例如，`SM_SGLANG_CONTEXT_LENGTH=4096` 会变成 `--context-length 4096`）。
 
-## Deploy with the SageMaker Python SDK
+<Note>
+💡 AI Infra 学习笔记：用环境变量统一配置入口（`SM_SGLANG_*` → `--<name>`）是云平台容器化部署的常见模式——它把推理引擎的启动参数与托管平台的配置接口解耦，方便平台侧以标准方式注入模型路径、上下文长度等运行时设置。理解这类「配置适配层」有助于排查云端部署中参数没生效的问题。
+</Note>
+
+## 使用 SageMaker Python SDK 部署
 
 ```python
 from sagemaker.model import Model
@@ -70,7 +66,7 @@ predictor.delete_model()
 predictor.delete_endpoint(delete_endpoint_config=True)
 ```
 
-## Deploy with Boto3
+## 使用 Boto3 部署
 
 ```python
 import json
@@ -119,11 +115,9 @@ sm.delete_endpoint_config(EndpointConfigName="sglang-config")
 sm.delete_model(ModelName="sglang-model")
 ```
 
-## Model artifacts
+## 模型产物
 
-When `ModelDataUrl` (or `ModelDataSource`) points to a tarball or S3 prefix, SageMaker mounts the contents
-at `/opt/ml/model`. The entrypoint defaults `--model-path` to that location, so `SM_SGLANG_MODEL_PATH`
-can be omitted:
+当 `ModelDataUrl`（或 `ModelDataSource`）指向一个 tarball 或 S3 前缀时，SageMaker 会把它挂载到 `/opt/ml/model`。入口脚本默认把 `--model-path` 指向该位置，因此可以省略 `SM_SGLANG_MODEL_PATH`：
 
 ```text
 model.tar.gz
@@ -132,11 +126,7 @@ model.tar.gz
 └── *.safetensors
 ```
 
-## Notes
+## 注意事项
 
-- GPU deployments require `inference_ami_version` — the default SageMaker host AMI has incompatible NVIDIA
-  drivers for CUDA 13 images. See the
-  [ProductionVariant API reference](https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ProductionVariant.html)
-  for valid values.
-- The endpoint exposes an OpenAI-compatible API, so the request body matches the SGLang server's
-  `/v1/chat/completions` schema.
+- GPU 部署需要 `inference_ami_version` —— SageMaker 默认宿主 AMI 的 NVIDIA 驱动与 CUDA 13 镜像不兼容。合法取值请参见 [ProductionVariant API 参考](https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ProductionVariant.html)。
+- 该端点暴露的是兼容 OpenAI 的 API，因此请求体与 SGLang 服务端的 `/v1/chat/completions` 模式一致。

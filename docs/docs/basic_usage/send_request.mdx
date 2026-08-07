@@ -1,18 +1,15 @@
 ---
-title: "Tutorial: Sending a request"
+title: "教程：发送请求"
 metatags:
-    description: "This notebook provides a quick-start guide to use SGLang in chat completions after installation. "
+    description: "本教程提供安装后使用 SGLang 进行聊天补全的快速入门指南。"
 ---
-This notebook provides a quick-start guide to use SGLang in chat completions after installation. Once your server is running, API documentation is available at `http://localhost:30000/docs` (Swagger UI), `http://localhost:30000/redoc` (ReDoc), or `http://localhost:30000/openapi.json` (OpenAPI spec, useful for AI agents). Replace `30000` with your port if using a different one.
+本教程提供安装后使用 SGLang 进行聊天补全的快速入门指南。服务端运行起来后，API 文档可在 `http://localhost:30000/docs`（Swagger UI）、`http://localhost:30000/redoc`（ReDoc）或 `http://localhost:30000/openapi.json`（OpenAPI 规范，对 AI 智能体很有用）查看。如果使用其他端口，请把 `30000` 换成你的端口。
 
-- For Vision Language Models, see [OpenAI APIs - Vision](./openai_api_vision).
-- For Embedding Models, see [OpenAI APIs - Embedding](./openai_api_embeddings) and [Encode (embedding model)](./native_api#encode-embedding-model).
-- For Reward Models, see [Classify (reward model)](./native_api#classify-reward-model).
+- 视觉语言模型请参见 [OpenAI API - 视觉](./openai_api_vision)。
+- 嵌入模型请参见 [OpenAI API - 嵌入](./openai_api_embeddings) 和 [Encode（嵌入模型）](./native_api#encode-embedding-model)。
+- 奖励模型请参见 [Classify（奖励模型）](./native_api#classify-reward-model)。
 
-
-## Launch A Server
-
-
+## 启动服务端
 
 ```python Example
 from sglang.test.doc_patch import launch_server_cmd
@@ -31,10 +28,7 @@ python3 -m sglang.launch_server --model-path qwen/qwen2.5-0.5b-instruct \
 wait_for_server(f"http://localhost:{port}")
 ```
 
-## Using cURL
-
-
-
+## 使用 cURL
 
 ```python Example
 import subprocess, json
@@ -49,9 +43,7 @@ response = json.loads(subprocess.check_output(curl_command, shell=True))
 print(response)
 ```
 
-## Using Python Requests
-
-
+## 使用 Python requests
 
 ```python Example
 import requests
@@ -67,9 +59,11 @@ response = requests.post(url, json=data)
 print(response.json())
 ```
 
-## Using OpenAI Python Client
+## 使用 OpenAI Python 客户端
 
-
+<Note>
+💡 AI Infra 学习笔记：`/v1/chat/completions` 请求在服务端会先经过「对话模板」，把 messages 列表组装成模型期望的完整输入文本（包括 system/role 等特殊标记），再分词、prefill。所以同样的消息，换模型后输出可能不同——对话模板是推理服务里容易被忽略的「隐藏参数」，也可用 `--chat-template` 覆盖。
+</Note>
 
 ```python Example
 import openai
@@ -87,9 +81,11 @@ response = client.chat.completions.create(
 print(response)
 ```
 
-### Streaming
+### 流式
 
-
+<Note>
+💡 AI Infra 学习笔记：流式响应使用 Server-Sent Events（SSE）协议，数据以 `data:` 前缀的 JSON 分块到达，最后以 `data: [DONE]` 结束。逐 chunk 打印能显著降低首 token 延迟（TTFT）的感知，是聊天类产品的基本交互模式。
+</Note>
 
 ```python Example
 import openai
@@ -113,11 +109,9 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-## Using Native Generation APIs
+## 使用原生生成 API
 
-You can also use the native `/generate` endpoint with requests, which provides more flexibility. An API reference is available at [Sampling Parameters](./sampling_params).
-
-
+你也可以用 requests 调用更灵活的原生 `/generate` 端点。API 参考见[采样参数](./sampling_params)。
 
 ```python Example
 import requests
@@ -135,9 +129,7 @@ response = requests.post(
 
 print(response.json())
 ```
-### Streaming
-
-
+### 流式
 
 ```python Example
 import requests, json

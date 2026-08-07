@@ -1,12 +1,16 @@
 ---
-title: Basic Usage
-description: Core APIs and common usage patterns for SGLang.
+title: 基本用法
+description: SGLang 的核心 API 与常用使用模式。
 ---
 
-- [OpenAI-Compatible APIs](./openai_api_completions) — Chat completions, vision, and embeddings
-- [Anthropic-Compatible API](./anthropic_api) — `/v1/messages`, including Claude Code integration
+<Note>
+💡 AI Infra 学习笔记：SGLang 同时提供多套 API——兼容 OpenAI/Anthropic/Ollama 的 HTTP 端点方便直接对接现有生态工具，原生 `/generate` 等低层端点暴露更多采样与调度控制，离线 `Engine` 则跳过 HTTP 层用于批量脚本。理解这层 API 分层有助于定位瓶颈：在线服务化走 HTTP + 连续批处理，离线批量推理省去网络与序列化开销。
+</Note>
+
+- [兼容 OpenAI 的 API](./openai_api_completions) — 聊天补全、视觉与嵌入
+- [兼容 Anthropic 的 API](./anthropic_api) — `/v1/messages`，包括 Claude Code 集成
 - [Ollama API](./ollama_api)
-- [Offline Engine API](./offline_engine_api)
-- [Native API](./native_api)
-- [Sampling Parameters](./sampling_params)
-- [Popular Model Usage](/cookbook/autoregressive/intro) — DeepSeek, GLM, Qwen, Llama, and more
+- [离线引擎 API](./offline_engine_api)
+- [原生 API](./native_api)
+- [采样参数](./sampling_params)
+- [热门模型用法](/cookbook/autoregressive/intro) — DeepSeek、GLM、Qwen、Llama 等
