@@ -1,13 +1,13 @@
 ---
-title: "Model Loading"
-description: "Control how SGLang loads model weights: load formats, model loader extra config, multithreaded loading, prefetching, and remote/streaming loaders."
+title: "模型加载"
+description: "控制 SGLang 如何加载模型权重：加载格式、模型加载器额外配置、多线程加载、预取，以及远程/流式加载器。"
 ---
 
-`--model-path` selects the checkpoint to serve; `--load-format` and the weight-loading flags below control how those weights are read into memory. To stream weights from cloud object storage (S3/GCS/Azure), see [Loading Models from Object Storage](./object_storage).
+`--model-path` 选择要服务的检查点；`--load-format` 和下面的权重加载参数控制这些权重如何读入内存。要从云对象存储（S3/GCS/Azure）流式加载权重，见 [从对象存储加载模型](./object_storage)。
 
-## How loading works
+## 加载是如何工作的
 
-SGLang picks a loader from `--load-format`, falling back to auto-detection from the checkpoint or model path. The default `auto` loader reads `safetensors` and falls back to PyTorch `.bin`.
+SGLang 根据 `--load-format` 选择加载器，否则会从检查点或模型路径自动检测。默认的 `auto` 加载器读取 `safetensors`，失败时回退到 PyTorch `.bin`。
 
 ```bash
 python -m sglang.launch_server \
@@ -15,16 +15,20 @@ python -m sglang.launch_server \
   --load-format auto
 ```
 
-Some formats are auto-detected and override `auto`:
+有些格式会自动检测并覆盖 `auto`：
 
-- A Mistral native checkpoint is detected and loaded with `mistral`.
-- A `.gguf` model path is detected and loaded with `gguf`.
-- An object storage URI (`s3://`, `gs://`, `az://`) is loaded with `runai_streamer`.
-- A remote URI is loaded with `remote`.
+- 检测到 Mistral 原生检查点时用 `mistral` 加载。
+- 模型路径以 `.gguf` 结尾时用 `gguf` 加载。
+- 对象存储 URI（`s3://`、`gs://`、`az://`）用 `runai_streamer` 加载。
+- 远程 URI 用 `remote` 加载。
 
-## Load formats
+<Note>
+💡 AI Infra 学习笔记：模型权重有多种存储格式，加载格式决定了引擎"怎么读"和"读到哪"：`safetensors` 是 Hugging Face 生态的主流格式（内存安全、可零拷贝 mmap），PyTorch `.bin` 是老格式（依赖 pickle、有安全风险），`dummy` 用随机值占位（供性能剖析，不读真实权重），`sharded_state` 让每个张量并行 rank 只读自己的分片（省掉"全部读进来再切分"的浪费）。选对加载格式直接影响启动速度和峰值内存，是部署环节的实用知识。
+</Note>
 
-Set with `--load-format`:
+## 加载格式
+
+用 `--load-format` 设置：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -33,77 +37,77 @@ Set with `--load-format`:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Format</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>格式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>auto</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default. Load <code>safetensors</code> if available, otherwise fall back to the PyTorch <code>.bin</code> format.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>默认。有 <code>safetensors</code> 就加载它，否则回退到 PyTorch <code>.bin</code> 格式。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>safetensors</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load weights in the safetensors format.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>以 safetensors 格式加载权重。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>pt</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load weights in the PyTorch <code>.bin</code> format.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>以 PyTorch <code>.bin</code> 格式加载权重。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>npcache</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load PyTorch-format weights and store a numpy cache to speed up subsequent loads. Only supports <code>.bin</code> checkpoints.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>加载 PyTorch 格式权重并保存 numpy 缓存以加速后续加载。只支持 <code>.bin</code> 检查点。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>dummy</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Initialize weights with random values, for profiling.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用随机值初始化权重，供性能剖析使用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>sharded_state</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Each tensor-parallel worker reads only its own pre-sharded shard rather than the full checkpoint, giving a fast load path for large TP models. See <code>examples/runtime/engine/save_sharded_state.py</code> for creating a sharded checkpoint.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每个张量并行 worker 只读自己的预分片，而不是读完整检查点，为大 TP 模型提供快速加载路径。创建分片检查点见 <code>examples/runtime/engine/save_sharded_state.py</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>fastsafetensors</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load safetensors using the <code>fastsafetensors</code> iterator.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用 <code>fastsafetensors</code> 迭代器加载 safetensors。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>layered</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load weights layer by layer, so a layer can be quantized before the next is loaded, lowering the peak memory envelope.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>逐层加载权重，这样下一层加载前就可以先量化上一层，降低峰值内存占用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>gguf</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load weights in the GGUF format. Auto-detected from a <code>.gguf</code> model path.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>以 GGUF 格式加载权重。模型路径以 <code>.gguf</code> 结尾时自动检测。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>bitsandbytes</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load weights using bitsandbytes quantization.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用 bitsandbytes 量化加载权重。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>mistral</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load a Mistral native-format checkpoint. Auto-detected for such checkpoints.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>加载 Mistral 原生格式检查点。这类检查点会自动检测。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>flash_rl</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load a BF16/FP16 checkpoint with native SGLang FP8 quantization for RL training. Requires <code>--rl-quant-profile</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>加载 BF16/FP16 检查点，配合 SGLang 原生 FP8 量化用于 RL 训练。需要 <code>--rl-quant-profile</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>runai_streamer</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Stream weights from SSDs, shared filesystems, or object storage. See <a href="./object_storage">Loading Models from Object Storage</a>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>从 SSD、共享文件系统或对象存储流式加载权重。见 <a href="./object_storage">从对象存储加载模型</a>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>remote</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load tensors from a remote KV/filesystem connector. Auto-detected for remote URIs.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>从远程 KV/文件系统连接器加载张量。远程 URI 会自动检测。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>remote_instance</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Pull weights over the network from another running SGLang instance (the "seed") rather than from disk. Configured with the <code>--remote-instance-weight-loader-*</code> flags.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>通过网络从另一个正在运行的 SGLang 实例（即"种子"）拉取权重，而不是从磁盘读取。用 <code>--remote-instance-weight-loader-*</code> 参数配置。</td>
     </tr>
   </tbody>
 </table>
 
-## Model loader extra config
+## 模型加载器额外配置
 
-`--model-loader-extra-config` takes a JSON string passed to the loader selected by `--load-format`.
+`--model-loader-extra-config` 接受一个 JSON 字符串，会传给 `--load-format` 选中的加载器。
 
 ```bash
 python -m sglang.launch_server \
@@ -120,55 +124,55 @@ python -m sglang.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Load format</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>Key</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>加载格式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>键</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>auto</code> / <code>safetensors</code> / <code>pt</code> / <code>npcache</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>enable_multithread_load</code> (bool)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Read weight shards with a thread pool instead of sequentially. Disabled by default when <code>--weight-loader-prefetch-checkpoints</code> is set (to avoid I/O oversubscription with the prefetch threads); set this to <code>true</code> to opt back in.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>用线程池读取权重分片，而不是顺序读取。当设置 <code>--weight-loader-prefetch-checkpoints</code> 时默认禁用（避免与预取线程争抢 I/O）；设为 <code>true</code> 可重新启用。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>true</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>auto</code> / <code>safetensors</code> / <code>pt</code> / <code>npcache</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>num_threads</code> (int)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Number of worker threads when multithreaded loading is enabled.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>启用多线程加载时的 worker 线程数。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>8</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>sharded_state</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>pattern</code> (str)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Filename pattern for per-rank shards.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个 rank 分片的文件名模式。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>model-rank-&#123;rank&#125;-part-&#123;part&#125;.safetensors</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>fastsafetensors</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>enable_gds</code> (bool)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Use GPU Direct Storage. Set to <code>false</code> when the host does not provide the NVIDIA GPUDirect Storage kernel driver, such as in a gVisor sandbox.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>使用 GPU Direct Storage。当宿主机没有 NVIDIA GPUDirect Storage kernel 驱动（例如 gVisor 沙箱环境）时设为 <code>false</code>。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>true</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>bitsandbytes</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>qlora_adapter_name_or_path</code> (str)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>QLoRA adapter to apply on top of the bitsandbytes-quantized base weights.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>要叠加在 bitsandbytes 量化基础权重之上的 QLoRA 适配器。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>—</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>runai_streamer</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>distributed</code>, <code>concurrency</code>, <code>memory_limit</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Streaming controls. See <a href="./object_storage">Loading Models from Object Storage</a>.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>See linked page</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>流式控制参数。见 <a href="./object_storage">从对象存储加载模型</a>。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>见链接页面</td>
     </tr>
   </tbody>
 </table>
 
-## Weight-loading performance flags
+## 权重加载性能参数
 
-Top-level arguments that tune how safetensors weights are read, independent of `--load-format`.
+一些顶层参数，用于独立于 `--load-format` 调整 safetensors 权重的读取方式。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -178,47 +182,51 @@ Top-level arguments that tune how safetensors weights are read, independent of `
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Flag</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--download-dir</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Directory used to download and cache Hugging Face model files.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>HF default</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于下载和缓存 Hugging Face 模型文件的目录。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>HF 默认</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.05)"}}><code>--weight-loader-disable-mmap</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Disable mmap while loading safetensors. Can help on filesystems where mmap is slow.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>加载 safetensors 时禁用 mmap。在 mmap 较慢的文件系统上有帮助。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>off</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--weight-loader-prefetch-checkpoints</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefetch checkpoint files into the OS page cache before loading. Each rank prefetches a fraction of the shards, cutting total network I/O on shared filesystems (NFS/Lustre) from N×checkpoint to 1×checkpoint. Recommended for models on network storage. When enabled, multi-threaded safetensors loading is disabled by default to avoid I/O oversubscription with the prefetch threads; set <code>enable_multithread_load=true</code> in <code>--model-loader-extra-config</code> to keep multi-threaded loading (e.g. on local NVMe where prefetch is a no-op).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>加载前把检查点文件预取到操作系统 page cache。每个 rank 预取一部分分片，把共享文件系统（NFS/Lustre）上的总网络 I/O 从 N×检查点降到 1×检查点。模型在网络存储上时推荐开启。启用后，多线程 safetensors 加载默认被禁用，以避免与预取线程争抢 I/O；如果想保留多线程加载（例如在本地 NVMe 上，预取本身是空操作），请在 <code>--model-loader-extra-config</code> 里设置 <code>enable_multithread_load=true</code>。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>off</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.05)"}}><code>--weight-loader-prefetch-num-threads</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Threads per rank for checkpoint prefetching.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个 rank 用于检查点预取的线程数。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>4</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--weight-loader-drop-cache-after-load</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Call <code>posix_fadvise(DONTNEED)</code> after successfully loading each shard, freeing page cache. Supported by the standard safetensors and <code>fastsafetensors</code> loaders.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>成功加载每个分片后调用 <code>posix_fadvise(DONTNEED)</code> 释放 page cache。标准的 safetensors 和 <code>fastsafetensors</code> 加载器支持。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>off</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.05)"}}><code>--custom-weight-loader</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Import path(s) of a custom weight-loading function, e.g. <code>my_package.weight_load_func</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>自定义权重加载函数的导入路径，例如 <code>my_package.weight_load_func</code>。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>—</td>
     </tr>
   </tbody>
 </table>
 
-## See also
+<Note>
+💡 AI Infra 学习笔记：加载阶段的性能手段本质是"把磁盘/网络 I/O 与 CPU/GPU 利用重叠起来"：mmap 让文件按需映射、避免整份拷贝；多线程加载并行读分片；预取（prefetch）在真正加载前就把文件拉进操作系统 page cache——在 NFS/Lustre 这类共享文件系统上，多个 rank 各自预取一部分，能让总网络流量从"每个 rank 都读一整份"降到"整份只读一次"。做推理引擎面试时，"启动/加载优化"与"运行时优化"是两条并行的知识线，前者经常被忽略。
+</Note>
 
-- [Loading Models from Object Storage](./object_storage)
-- [Quantization](./quantization)
-- [Server Arguments](./server_arguments)
+## 参见
+
+- [从对象存储加载模型](./object_storage)
+- [量化](./quantization)
+- [服务端参数](./server_arguments)

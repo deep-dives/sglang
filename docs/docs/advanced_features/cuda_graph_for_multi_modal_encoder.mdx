@@ -1,67 +1,77 @@
 ---
-title: "Cuda Graph for Multi-Modal Encoder in SGLang"
+title: "SGLang 中多模态编码器的 CUDA 图"
 metatags:
-    description: "CUDA Graph optimization for ViT in SGLang: reduce kernel launch overhead, dynamic input handling, support for Qwen2.5-VL and Qwen3-VL models."
+    description: "SGLang 中 ViT 的 CUDA 图优化：降低 kernel 启动开销、动态输入处理、支持 Qwen2.5-VL 与 Qwen3-VL 模型。"
 ---
-## Motivation
+## 动机
 
-In multimodal reasoning services, the visual encoder (ViT / Vision Transformer) typically has a few characteristic traits:
+在多模态推理服务中，视觉编码器（ViT / Vision Transformer）通常有几个典型特征：
 
-Many layers, fragmented operators: Each layer includes LN, QKV projections, attention, MLP, residual connections, etc., resulting in extremely frequent kernel launches.
+层数多、算子碎片化：每一层都包含 LN、QKV 投影、注意力、MLP、残差连接等，导致 kernel 启动极其频繁。
 
-Server-side “small batch / low latency” is common: The batch size is very small (sometimes it looks like 1 after “flattening” the batch), so kernel launch overhead accounts for a large portion of end-to-end latency.
+服务端常见「小批量 / 低延迟」：批大小非常小（有时把 batch 展开后看起来就像 1），因此 kernel 启动开销占端到端延迟的很大一部分。
 
-Input token count (number of patches) varies frequently: Different image/video resolutions and different batch composition lead to different sequence lengths
-S — and this is precisely the biggest obstacle for CUDA Graph (unstable shapes).
+输入 token 数（patch 数量）频繁变化：不同的图像/视频分辨率和不同的批组成会导致不同的序列长度 S——而这正是 CUDA 图（形状不稳定）最大的障碍。
 
-The value of CUDA Graph: It captures a long sequence of GPU kernels with fixed shapes and fixed memory addresses into a graph; later, for the same shapes, it can replay the graph directly, dramatically reducing launch overhead and making GPU scheduling more compact.
+CUDA 图的价值：它把一长串形状固定、内存地址固定的 GPU kernel 捕获成一张图；之后遇到相同形状，可以直接重放这张图，大幅降低启动开销，让 GPU 调度更紧凑。
 
-This led us to seek a CUDA Graph enabled feature for ViT in order to improve ViT performance.
+这促使我们为 ViT 打造一个支持 CUDA 图的特性，以提升 ViT 的性能。
 
-## Design and Restrictions
+<Note>
+💡 AI Infra 学习笔记：视觉编码器（ViT）是「kernel 启动开销占比极高」的典型场景：层多、算子碎、批量小，GPU 计算时间短而启动开销相对明显。CUDA 图在这里的价值与 LLM 解码一致——固定形状后把整串 kernel 一次录制、整体重放。ViT 的难点在于序列长度（patch 数）随图像分辨率/批量动态变化，需要按 S 建立图缓存，这也是多模态引擎优化中的常见模式。
+</Note>
 
-The new CUDA Graph enabled ViT logic is built on ViTCudaGraphRunner. This runner captures the "blocks + merger + deepstack merger (optional)" part of a vision transformer into a CUDA graph and replays it for identical shapes. See the following design consideration and restrictions for more details.
+## 设计与限制
 
-### Dynamic inputs to fit static constraints of CUDA Graph
+新的 CUDA 图 ViT 逻辑构建在 ViTCudaGraphRunner 之上。该 runner 把视觉 transformer 中「blocks + merger + deepstack merger（可选）」的部分捕获成 CUDA 图，并在遇到相同形状时重放。更多细节参见下面的设计考虑与限制。
 
-Variable sequence length S is very common in ViT. While CUDA Graph requires fixed shapes. The solution is to build a graph cache by S(e.g., graph_key = S). The first time create a new S, and then capture a graph; afterwards, replay it.
+### 用动态输入适配 CUDA 图的静态约束
 
-If there are many distinct S values, we need to increase VRAM usage which is graph-private memory pools for many graphs.
+在 ViT 中，可变的序列长度 S 非常常见，而 CUDA 图要求形状固定。解决方案是按 S 建立图缓存（例如 graph_key = S）。第一次遇到某个新的 S 时，捕获一张图；之后直接重放。
 
-### Stable addresses
+<Note>
+💡 AI Infra 学习笔记：按 S 建立图缓存的本质是「以显存换启动开销」：每种序列长度各捕获一张图，重放前把当前输入补齐/映射到对应形状。当 S 的取值很多时，图私有的内存池会显著增加显存占用——这是动态形状场景下使用 CUDA 图最常见的成本考量，需要在捕获数量与命中率之间做权衡。
+</Note>
 
-Everything "parameter-like" becomes a static buffer:
+如果有许多不同的 S 值，就需要增加显存开销——每张图都有图私有的内存池，图多了显存占用随之上升。
+
+### 稳定的地址
+
+所有「参数类」的东西都变成静态缓冲区：
 
 - block_input / block_ws / block_output
-- cu_full_len / cu_window_len and their kk variants
+- cu_full_len / cu_window_len 及其 kk 变体
 - sin_cos_ws
 
-In this way to solve the underlying requirement: during replay, not allowed to swap tensors, can only modify tensor contents.
+这样做是为了满足底层要求：重放期间不允许交换 tensor，只能修改 tensor 的内容。
 
-### Attention backend arguments
-Attention backend arguments are fixed inside the graph:
+### Attention 后端参数
+
+Attention 后端的参数在图中被固定：
 
 TritonAttn expects [cu_seqlens, cu_seqlens_kk, max_len]
 FA3 expects [cu_seqlens, max_len]
 
-max_len is frozen as an int constant.
-cu_seqlens is cached into a dict during create_graph(), and its contents are not updated during subsequent replays.
+max_len 被冻结为一个 int 常量。
+cu_seqlens 在 create_graph() 期间被缓存进一个 dict，后续重放不会更新其内容。
 
-For the same graph_key = S, you not only require the input shape to match, but also require the segmentation pattern in cu_seqlens (and window seqlens) to be identical. Otherwise, attention will segment the sequence incorrectly.
+对相同的 graph_key = S，你不仅要求输入形状匹配，还要求 cu_seqlens（以及 window seqlens）中的切分模式完全一致。否则注意力会对序列做错误的切分。
 
-### Rotary buffer management
-The feature reallocates a larger sin_cos_ws when seq_len increases.
-The max_content_len is used to make sure the maximum size of the allocated rotary buffer.
+### 旋转位置编码缓冲区管理
+
+该特性会在 seq_len 增大时重新分配更大的 sin_cos_ws。
+max_content_len 用于确保分配的旋转缓冲区达到最大尺寸。
 
 
-## Command Example
-You can enable CUDA Graph for ViT by setting env variable `SGLANG_VIT_ENABLE_CUDA_GRAPH=1`, for example:
+## 命令示例
+
+你可以通过设置环境变量 `SGLANG_VIT_ENABLE_CUDA_GRAPH=1` 为 ViT 启用 CUDA 图，例如：
 ```shell Command
 SGLANG_VIT_ENABLE_CUDA_GRAPH=1 \
 python3 -m sglang.launch_server \
   --model Qwen/Qwen3-VL-8B-Instruct
 ```
-Or you can run CUDA Graph for ViT together with Piecewise CUDA Graph feature by both setting env variable `SGLANG_VIT_ENABLE_CUDA_GRAPH=1` and setting `--enable-piecewise-cuda-graph`, for example:
+也可以同时启用 ViT 的 CUDA 图和分片 CUDA 图特性：同时设置环境变量 `SGLANG_VIT_ENABLE_CUDA_GRAPH=1` 和 `--enable-piecewise-cuda-graph`，例如：
 ```shell Command
 SGLANG_VIT_ENABLE_CUDA_GRAPH=1 \
 python3 -m sglang.launch_server \
@@ -71,6 +81,6 @@ python3 -m sglang.launch_server \
   --piecewise-cuda-graph-compiler eager
 ```
 
-## Known supported models
+## 已知支持的模型
 - Qwen2.5-VL (https://github.com/sgl-project/sglang/pull/14422)
 - Qwen3-VL (https://github.com/sgl-project/sglang/pull/15320)

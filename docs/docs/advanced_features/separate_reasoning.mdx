@@ -1,11 +1,15 @@
 ---
-title: "Reasoning Parser"
+title: "推理解析器"
 metatags:
-    description: "SGLang reasoning parser: separate thinking content from output for DeepSeek R1, Qwen3, Kimi K2, GPT-OSS, and Apertus reasoning models."
+    description: "SGLang 推理解析器：为 DeepSeek R1、Qwen3、Kimi K2、GPT-OSS 与 Apertus 推理模型分离思维内容与输出。"
 ---
-SGLang supports parsing reasoning content out from "normal" content for reasoning models such as [DeepSeek R1](https://huggingface.co/deepseek-ai/DeepSeek-R1).
+SGLang 支持为 [DeepSeek R1](https://huggingface.co/deepseek-ai/DeepSeek-R1) 这类推理模型，把"思维"（reasoning）内容从"正常"内容中解析出来。
 
-## Supported Models & Parsers
+<Note>
+💡 AI Infra 学习笔记：推理模型（reasoning model）在给出最终答案前会先生成一段"思维链"（chain-of-thought），通常用特殊标签包起来（如 `<think>...</think>`），这段内容对用户其实没有直接价值，只占 token 和费用。推理解析器的职责就是识别这些标签，把思维内容和正式答案分到两个字段（`reasoning_content` 和 `content`），让客户端可以只展示答案、隐藏思维过程。对服务方来说，这段思维往往占生成 token 的一半以上，理解"如何解析"直接关系到 API 设计（参照 DeepSeek 的 `separate_reasoning` 约定）和 token 计费口径。
+</Note>
+
+## 支持的模型与解析器
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -16,87 +20,87 @@ SGLang supports parsing reasoning content out from "normal" content for reasonin
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Reasoning tags</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parser</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>推理标签</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>解析器</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Apertus 2509 models](https://huggingface.co/swiss-ai/Apertus-8B-Instruct-2509)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Apertus 2509 模型](https://huggingface.co/swiss-ai/Apertus-8B-Instruct-2509)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`<|inner_prefix|>` … `<|inner_suffix|>`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`apertus2509`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Supports `enable_thinking` parameter</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>支持 `enable_thinking` 参数</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[DeepSeek‑R1 series](https://huggingface.co/collections/deepseek-ai/deepseek-r1-678e1e131c0169c0bc89728d)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[DeepSeek‑R1 系列](https://huggingface.co/collections/deepseek-ai/deepseek-r1-678e1e131c0169c0bc89728d)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`<think>` … `</think>`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseek-r1`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Supports all variants (R1, R1-0528, R1-Distill)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>支持所有变体（R1、R1-0528、R1-Distill）</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[DeepSeek‑V3 series](https://huggingface.co/deepseek-ai/DeepSeek-V3.1)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[DeepSeek‑V3 系列](https://huggingface.co/deepseek-ai/DeepSeek-V3.1)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`<think>` … `</think>`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseek-v3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Including [DeepSeek‑V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp). Supports `thinking` parameter</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>包括 [DeepSeek‑V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp)。支持 `thinking` 参数</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Standard Qwen3 models](https://huggingface.co/collections/Qwen/qwen3-67dd247413f0e2e4f653967f)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[标准 Qwen3 模型](https://huggingface.co/collections/Qwen/qwen3-67dd247413f0e2e4f653967f)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`<think>` … `</think>`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Supports `enable_thinking` parameter</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>支持 `enable_thinking` 参数</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Qwen3-Thinking models](https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Qwen3-Thinking 模型](https://huggingface.co/Qwen/Qwen3-235B-A22B-Thinking-2507)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`<think>` … `</think>`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3` or `qwen3-thinking`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Always generates thinking content</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3` 或 `qwen3-thinking`</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>总是生成思维内容</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[Kimi K2 Thinking](https://huggingface.co/moonshotai/Kimi-K2-Thinking)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`◁think▷` … `◁/think▷`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`kimi_k2`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Uses special thinking delimiters. Also requires `--tool-call-parser kimi_k2` for tool use.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用特殊的思维定界符。工具调用时还需要 `--tool-call-parser kimi_k2`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>[GPT OSS](https://huggingface.co/openai/gpt-oss-120b)</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`&lt;|channel|&gt;analysis&lt;|message|&gt;` … `&lt;|end|&gt;`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`gpt-oss`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>N/A</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>不适用</td>
     </tr>
   </tbody>
 </table>
-### Model-Specific Behaviors
+### 各模型的具体行为
 
-**Apertus 2509:**
-- Uses `<|inner_prefix|>` and `<|inner_suffix|>` to delimit reasoning content. For agentic tool use, also specify `--tool-call-parser apertus2509`.
+**Apertus 2509：**
+- 用 `<|inner_prefix|>` 和 `<|inner_suffix|>` 定界思维内容。用于 agent 式工具调用时，还要指定 `--tool-call-parser apertus2509`。
 
-**DeepSeek-R1 Family:**
-- DeepSeek-R1: No `<think>` start tag, jumps directly to thinking content
-- DeepSeek-R1-0528: Generates both `<think>` start and `</think>` end tags
-- Both are handled by the same `deepseek-r1` parser
+**DeepSeek-R1 家族：**
+- DeepSeek-R1：没有 `<think>` 开始标签，直接跳到思维内容
+- DeepSeek-R1-0528：会生成 `<think>` 开始和 `</think>` 结束两个标签
+- 两者都由同一个 `deepseek-r1` 解析器处理
 
-**DeepSeek-V3 Family:**
-- DeepSeek-V3.1/V3.2: Hybrid model supporting both thinking and non-thinking modes, use the `deepseek-v3` parser and `thinking` parameter (NOTE: not `enable_thinking`)
+**DeepSeek-V3 家族：**
+- DeepSeek-V3.1/V3.2：混合模型，同时支持思考和不思考两种模式，用 `deepseek-v3` 解析器和 `thinking` 参数（注意：不是 `enable_thinking`）
 
-**Qwen3 Family:**
-- Standard Qwen3 (e.g., Qwen3-2507): Use `qwen3` parser, supports `enable_thinking` in chat templates
-- Qwen3-Thinking (e.g., Qwen3-235B-A22B-Thinking-2507): Use `qwen3` or `qwen3-thinking` parser, always thinks
+**Qwen3 家族：**
+- 标准 Qwen3（如 Qwen3-2507）：用 `qwen3` 解析器，对话模板里支持 `enable_thinking`
+- Qwen3-Thinking（如 Qwen3-235B-A22B-Thinking-2507）：用 `qwen3` 或 `qwen3-thinking` 解析器，总是思考
 
-**Kimi K2:**
-- Kimi K2 Thinking: Uses special `◁think▷` and `◁/think▷` tags. For agentic tool use, also specify `--tool-call-parser kimi_k2`.
+**Kimi K2：**
+- Kimi K2 Thinking：使用特殊的 `◁think▷` 和 `◁/think▷` 标签。用于 agent 式工具调用时，还要指定 `--tool-call-parser kimi_k2`。
 
-**GPT OSS:**
-- GPT OSS: Uses special `<|channel|>analysis<|message|>` and `<|end|>` tags
-
-
-## Usage
-
-### Launching the Server
+**GPT OSS：**
+- GPT OSS：使用特殊的 `<|channel|>analysis<|message|>` 和 `<|end|>` 标签
 
 
-Specify the `--reasoning-parser` option.
+## 使用方法
+
+### 启动服务端
+
+
+指定 `--reasoning-parser` 选项。
 
 
 
@@ -113,15 +117,15 @@ server_process, port = launch_server_cmd(
 wait_for_server(f"http://localhost:{port}")
 ```
 
-Note that `--reasoning-parser` defines the parser used to interpret responses.
+注意，`--reasoning-parser` 定义了用来解释响应的解析器。
 
 
-### OpenAI Compatible API
+### OpenAI 兼容 API
 
-Using the OpenAI compatible API, the contract follows the [DeepSeek API design](https://api-docs.deepseek.com/guides/reasoning_model) established with the release of DeepSeek-R1:
+使用 OpenAI 兼容 API 时，契约遵循随 DeepSeek-R1 发布确立的 [DeepSeek API 设计](https://api-docs.deepseek.com/guides/reasoning_model)：
 
-- `reasoning_content`: The content of the CoT.
-- `content`: The content of the final answer.
+- `reasoning_content`：思维链（CoT）的内容。
+- `content`：最终答案的内容。
 
 
 
@@ -138,7 +142,7 @@ messages = [
 ]
 ```
 
-#### Non-Streaming Request
+#### 非流式请求
 
 
 
@@ -158,7 +162,7 @@ print_highlight("==== Text ====")
 print_highlight(response_non_stream.choices[0].message.content)
 ```
 
-#### Streaming Request
+#### 流式请求
 
 
 
@@ -187,7 +191,7 @@ print_highlight("==== Text ====")
 print_highlight(content)
 ```
 
-Optionally, you can buffer the reasoning content to the last reasoning chunk (or the first chunk after the reasoning content).
+可选地，你可以把思维内容缓冲到最后一个思维 chunk（或思维内容之后的第一个 chunk）。
 
 
 
@@ -216,8 +220,8 @@ print_highlight("==== Text ====")
 print_highlight(content)
 ```
 
-The reasoning separation is enable by default when specify .
-**To disable it, set the `separate_reasoning` option to `False` in request.**
+指定 `--reasoning-parser` 后，推理分离默认启用。
+**要禁用它，在请求中把 `separate_reasoning` 选项设为 `False`。**
 
 
 
@@ -235,7 +239,7 @@ print_highlight("==== Original Output ====")
 print_highlight(response_non_stream.choices[0].message.content)
 ```
 
-### SGLang Native API
+### SGLang 原生 API
 
 
 
@@ -281,7 +285,7 @@ print_highlight(separate_reasoning_response_json["text"])
 terminate_process(server_process)
 ```
 
-### Offline Engine API
+### 离线引擎 API
 
 
 
@@ -321,6 +325,10 @@ print_highlight(text)
 llm.shutdown()
 ```
 
-## Supporting New Reasoning Model Schemas
+<Note>
+💡 AI Infra 学习笔记：推理解析器本质是个"流式状态机"——生成过程中逐个 token 地识别开始/结束标签，把 token 流切成"思维段"和"答案段"，然后在 API 层分流到 `reasoning_content` 和 `content` 两个字段。这要求解析器按模型而定（不同模型的标签不同，有的甚至没有开始标签、上来就是思维内容），所以 SGLang 把它做成可插拔的 parser。对新推理模型做接入时，只需要继承 `BaseReasoningFormatDetector` 实现一个解析器，这是推理引擎生态里常见的"适配层"设计模式。
+</Note>
 
-For future reasoning models, you can implement the reasoning parser as a subclass of `BaseReasoningFormatDetector` in `python/sglang/srt/reasoning_parser.py` and specify the reasoning parser for new reasoning model schemas accordingly.
+## 支持新的推理模型格式
+
+对于未来的推理模型，你可以在 `python/sglang/srt/reasoning_parser.py` 中实现一个 `BaseReasoningFormatDetector` 的子类作为推理解析器，并据此为新推理模型格式指定对应的推理解析器。

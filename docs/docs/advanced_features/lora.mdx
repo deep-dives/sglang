@@ -1,53 +1,56 @@
 ---
-title: "LoRA Serving"
+title: "LoRA 服务化"
 metatags:
-    description: "SGLang multi-LoRA serving: S-LoRA and Punica techniques, dynamic adapter loading, GPU pinning, overlap loading, Triton and CSGMV backends."
+    description: "SGLang 多 LoRA 服务：S-LoRA 与 Punica 技术、动态适配器加载、GPU 固定（pinning）、重叠加载、Triton 与 CSGMV 后端。"
 ---
-SGLang enables the use of [LoRA adapters](https://arxiv.org/abs/2106.09685) with a base model. By incorporating techniques from [S-LoRA](https://arxiv.org/pdf/2311.03285) and [Punica](https://arxiv.org/pdf/2310.18547), SGLang can efficiently support multiple LoRA adapters for different sequences within a single batch of inputs.
+SGLang 支持在基础模型上使用 [LoRA 适配器](https://arxiv.org/abs/2106.09685)。借鉴 [S-LoRA](https://arxiv.org/pdf/2311.03285) 和 [Punica](https://arxiv.org/pdf/2310.18547) 的技术，SGLang 可以在同一个输入批次里高效支持多个 LoRA 适配器，让不同序列各自套用不同的适配器。
+
+<Note>
+💡 AI Infra 学习笔记：LoRA（低秩适配）是参数高效微调的主流方法——冻结基础模型权重，只训练很小的低秩矩阵（A×B，秩 r 通常 4~256），推理时把两个小矩阵的乘积加回原层输出。它的价值在于：一个基础模型可以同时挂成百上千个"专属技能"适配器（每个只有几十 MB），不用为每个下游任务存一份完整模型。多 LoRA 服务的难点是"同一批请求里的不同序列要用不同适配器"——这迫使 kernel 支持分段/分组的 GEMM（如 SGMV），否则不同适配器只能串行跑。S-LoRA 和 Punica 就是解决"多适配器 + 单批混合"的两个代表性方案，是推理引擎面试中"参数高效服务化"方向的高频考点。
+</Note>
+
+## LoRA 服务化相关参数
 
 
-## Arguments for LoRA Serving
+以下服务端参数与多 LoRA 服务相关：
+
+* `enable_lora`：为模型启用 LoRA 支持。为了向后兼容，如果提供了 `--lora-paths`，该参数会自动设为 True。
+
+* `enable_lora_overlap_loading`：启用异步 LoRA 权重加载，把 H2D 传输与 GPU 计算重叠起来。如果发现你的 LoRA 负载瓶颈在适配器权重加载上（例如频繁加载大 LoRA 适配器），应该开启它。
+
+* `lora_paths`：要加载的 LoRA 适配器列表。每个适配器必须用以下格式之一指定：&lt;路径&gt; | &lt;名称&gt;=&lt;路径&gt; | 带 schema 的 JSON &#123;"lora_name":str,"lora_path":str,"pinned":bool&#125;。
+
+* `max_loras_per_batch`：每个批次最多可用的适配器数量。这个参数会影响多 LoRA 服务预留的 GPU 显存量，显存紧张时应设小一些。默认是 8。
+
+* `max_loaded_loras`：如果指定，会限制同一时刻 CPU 内存里最多加载多少个 LoRA 适配器。该值必须大于或等于 `max-loras-per-batch`。
+
+* `lora_eviction_policy`：GPU 内存池满时的 LoRA 适配器驱逐策略。`lru`：最近最少使用（默认，缓存效率更好）。`fifo`：先进先出。
+
+* `lora_backend`：运行 LoRA 模块 GEMM kernel 的后端。目前支持 Triton LoRA 后端（`triton`）和分块 SGMV 后端（`csgmv`）。未来会增加基于 Cutlass 或 Cuda kernel 的更快的后端。
+
+* `max_lora_rank`：需要支持的最大 LoRA 秩。如果没指定，会从 `--lora-paths` 提供的适配器自动推断。如果你预期服务启动后要动态加载更大 LoRA 秩的适配器，就需要指定这个参数。
+
+* `lora_target_modules`：应用 LoRA 的所有目标模块的并集（例如 `q_proj`、`k_proj`、`gate_proj`）。如果没指定，会从 `--lora-paths` 提供的适配器自动推断。如果你预期服务启动后要动态加载不同目标模块的适配器，就需要指定这个参数。也可以设为 `all` 来对所有支持的模块启用 LoRA。不过，在额外模块上启用 LoRA 会带来少量性能开销。如果你的应用对性能敏感，建议只指定你计划加载适配器的模块。
+
+* `max_lora_chunk_size`：ChunkedSGMV LoRA 后端的最大分块大小。只在 `--lora-backend` 为 `csgmv` 时使用。取更大值可能提升性能。请根据你的硬件和工作负载调优。默认是 16。
+
+* `lora_drain_wait_threshold`：当某个 LoRA 适配器的请求等待时间超过这个阈值（秒）时，调度器会有选择地腾出一个正在运行的适配器来腾出位置。这通过防止一小撮适配器霸占批次槽位，缓解高负载或不均衡负载下的极端尾延迟。设为 0 禁用该排空机制（默认）。
+
+* `tp_size`：SGLang 支持 LoRA 服务与张量并行一起使用。`tp_size` 控制张量并行使用的 GPU 数量。张量分片策略的更多细节见 [S-LoRA](https://arxiv.org/pdf/2311.03285) 论文。
+
+客户端这边，用户需要提供一个字符串列表作为输入批次，以及每个输入序列对应的适配器名称列表。
 
 
-The following server arguments are relevant for multi-LoRA serving:
+## 使用方法
 
-* `enable_lora`: Enable LoRA support for the model. This argument is automatically set to True if `--lora-paths` is provided for backward compatibility.
-
-* `enable_lora_overlap_loading`: Enable asynchronous LoRA weight loading in order to overlap H2D transfers with GPU compute. This should be enabled if you find that your LoRA workloads are bottlenecked by adapter weight loading, for example when frequently loading large LoRA adapters.
-
-* `lora_paths`: The list of LoRA adapters to load. Each adapter must be specified in one of the following formats: &lt;PATH&gt; | &lt;NAME&gt;=&lt;PATH&gt; | JSON with schema &#123;"lora_name":str,"lora_path":str,"pinned":bool&#125;.
-
-* `max_loras_per_batch`: Maximum number of adaptors used by each batch. This argument can affect the amount of GPU memory reserved for multi-LoRA serving, so it should be set to a smaller value when memory is scarce. Defaults to be 8.
-
-* `max_loaded_loras`: If specified, it limits the maximum number of LoRA adapters loaded in CPU memory at a time. The value must be greater than or equal to `max-loras-per-batch`.
-
-* `lora_eviction_policy`: LoRA adapter eviction policy when GPU memory pool is full. `lru`: Least Recently Used (default, better cache efficiency). `fifo`: First-In-First-Out.
-
-* `lora_backend`: The backend of running GEMM kernels for Lora modules. Currently we support Triton LoRA backend (`triton`) and Chunked SGMV backend (`csgmv`). In the future, faster backend built upon Cutlass or Cuda kernels will be added.
-
-* `max_lora_rank`: The maximum LoRA rank that should be supported. If not specified, it will be automatically inferred from the adapters provided in `--lora-paths`. This argument is needed when you expect to dynamically load adapters of larger LoRA rank after server startup.
-
-* `lora_target_modules`: The union set of all target modules where LoRA should be applied (e.g., `q_proj`, `k_proj`, `gate_proj`). If not specified, it will be automatically inferred from the adapters provided in `--lora-paths`. This argument is needed when you expect to dynamically load adapters of different target modules after server startup. You can also set it to `all` to enable LoRA for all supported modules. However, enabling LoRA on additional modules introduces a minor performance overhead. If your application is performance-sensitive, we recommend only specifying the modules for which you plan to load adapters.
-
-* `max_lora_chunk_size`: Maximum chunk size for the ChunkedSGMV LoRA backend. Only used when --lora-backend is 'csgmv'. Choosing a larger value might improve performance. Please tune this value based on your hardware and workload as needed. Defaults to 16.
-
-* `lora_drain_wait_threshold`: When any LoRA adapter request waits longer than this threshold (in seconds), the scheduler will selectively drain one running adapter to make room. This mitigates extreme tail latency under high or skewed workloads by preventing a small set of adapters from monopolizing batch slots. Set to 0 to disable draining (default).
-
-* `tp_size`: LoRA serving along with Tensor Parallelism is supported by SGLang. `tp_size` controls the number of GPUs for tensor parallelism. More details on the tensor sharding strategy can be found in [S-Lora](https://arxiv.org/pdf/2311.03285) paper.
-
-From client side, the user needs to provide a list of strings as input batch, and a list of adaptor names that each input sequence corresponds to.
+### 服务单个适配器
 
 
-## Usage
+**注意：** SGLang 通过两个 API 支持 LoRA 适配器：
 
-### Serving Single Adaptor
+1. **OpenAI 兼容 API**（`/v1/chat/completions`、`/v1/completions`）：使用 `model:adapter-name` 语法。示例见 [带 LoRA 的 OpenAI API](../basic_usage/openai_api_completions#using-lora-adapters)。
 
-
-**Note:** SGLang supports LoRA adapters through two APIs:
-
-1. **OpenAI-Compatible API** (`/v1/chat/completions`, `/v1/completions`): Use the `model:adapter-name` syntax. See [OpenAI API with LoRA](../basic_usage/openai_api_completions#using-lora-adapters) for examples.
-
-2. **Native API** (`/generate`): Pass `lora_path` in the request body (shown below).
+2. **原生 API**（`/generate`）：在请求体里传 `lora_path`（如下所示）。
 
 
 
@@ -100,7 +103,7 @@ print(f"Output 1: {response.json()[1]['text']}")
 terminate_process(server_process)
 ```
 
-### Serving Multiple Adaptors
+### 服务多个适配器
 
 
 
@@ -144,12 +147,12 @@ print(f"Output 1: {response.json()[1]['text']}")
 terminate_process(server_process)
 ```
 
-### Dynamic LoRA loading
+### 动态 LoRA 加载
 
 
-Instead of specifying all adapters during server startup via `--lora-paths`. You can also load & unload LoRA adapters dynamically via the `/load_lora_adapter` and `/unload_lora_adapter` API.
+除了在服务启动时通过 `--lora-paths` 一次性指定所有适配器，你也可以通过 `/load_lora_adapter` 和 `/unload_lora_adapter` API 动态加载/卸载 LoRA 适配器。
 
-When using dynamic LoRA loading, it's recommended to explicitly specify both `--max-lora-rank` and `--lora-target-modules` at startup. For backward compatibility, SGLang will infer these values from `--lora-paths` if they are not explicitly provided. However, in that case, you would have to ensure that all dynamically loaded adapters share the same shape (rank and target modules) as those in the initial `--lora-paths` or are strictly "smaller".
+使用动态 LoRA 加载时，建议在启动时显式指定 `--max-lora-rank` 和 `--lora-target-modules`。为了向后兼容，如果没显式提供，SGLang 会从 `--lora-paths` 推断这些值。但那样的话，你必须保证所有动态加载的适配器与初始 `--lora-paths` 里的适配器形状相同（秩和目标模块），或者严格"更小"。
 
 
 
@@ -177,7 +180,7 @@ url = f"http://127.0.0.1:{port}"
 wait_for_server(url)
 ```
 
-Load adapter lora0
+加载适配器 lora0
 
 
 
@@ -196,7 +199,7 @@ else:
     print("Failed to load LoRA adapter.", response.json())
 ```
 
-Load adapter lora1:
+加载适配器 lora1：
 
 
 
@@ -215,7 +218,7 @@ else:
     print("Failed to load LoRA adapter.", response.json())
 ```
 
-Check inference output:
+检查推理输出：
 
 
 
@@ -238,7 +241,7 @@ print(f"Output from lora0: \n{response.json()[0]['text']}\n")
 print(f"Output from lora1 (updated): \n{response.json()[1]['text']}\n")
 ```
 
-Unload lora0 and replace it with a different adapter:
+卸载 lora0 并替换成另一个适配器：
 
 
 
@@ -264,7 +267,7 @@ else:
     print("Failed to load LoRA adapter.", response.json())
 ```
 
-Check output again:
+再次检查输出：
 
 
 
@@ -292,20 +295,20 @@ print(f"Output from lora1 (updated): \n{response.json()[1]['text']}\n")
 terminate_process(server_process)
 ```
 
-### OpenAI-compatible API usage
+### OpenAI 兼容 API 用法
 
-You can use LoRA adapters via the OpenAI-compatible APIs by specifying the adapter in the `model` field using the `base-model:adapter-name` syntax (for example, `qwen/qwen2.5-0.5b-instruct:adapter_a`). For more details and examples, see the “Using LoRA Adapters” section in the OpenAI API documentation: [openai_api_completions](../basic_usage/openai_api_completions).
-
-
-
-### LoRA GPU Pinning
+你可以通过 OpenAI 兼容 API 使用 LoRA 适配器：在 `model` 字段中用 `base-model:adapter-name` 语法指定适配器（例如 `qwen/qwen2.5-0.5b-instruct:adapter_a`）。更多细节和示例见 OpenAI API 文档中的"Using LoRA Adapters"一节：[openai_api_completions](../basic_usage/openai_api_completions)。
 
 
-Another advanced option is to specify adapters as `pinned` during loading. When an adapter is pinned, it is permanently assigned to one of the available GPU pool slots (as configured by `--max-loras-per-batch`) and will not be evicted from GPU memory during runtime. Instead, it remains resident until it is explicitly unloaded.
 
-This can improve performance in scenarios where the same adapter is frequently used across requests, by avoiding repeated memory transfers and reinitialization overhead. However, since GPU pool slots are limited, pinning adapters reduces the flexibility of the system to dynamically load other adapters on demand. If too many adapters are pinned, it may lead to degraded performance, or in the most extreme case (`Number of pinned adapters == max-loras-per-batch`), halt all unpinned requests. Therefore, currently SGLang limits maximal number of pinned adapters to `max-loras-per-batch - 1` to prevent unexpected starvations.
+### LoRA GPU 固定（Pinning）
 
-In the example below, we start a server with `lora1` loaded as pinned, `lora2` and `lora3` loaded as regular (unpinned) adapters. Please note that, we intentionally specify `lora2` and `lora3` in two different formats to demonstrate that both are supported.
+
+另一个高级选项是在加载时把适配器指定为 `pinned`（固定）。固定后，适配器会永久分配到可用的 GPU 池槽位之一（由 `--max-loras-per-batch` 配置），运行期间不会被从 GPU 显存驱逐。它会一直驻留，直到显式卸载。
+
+在同一个适配器被跨请求频繁使用的场景下，这可以避免重复的内存传输和重新初始化开销，从而提升性能。但 GPU 池槽位有限，固定适配器会降低系统按需动态加载其他适配器的灵活性。如果固定太多适配器，可能导致性能下降，最极端的情况（`固定适配器数量 == max-loras-per-batch`）会让所有未固定的请求停摆。因此，SGLang 目前把固定适配器的最大数量限制为 `max-loras-per-batch - 1`，以防止意外饥饿。
+
+下面的例子中，我们启动一个服务，`lora1` 以固定方式加载，`lora2` 和 `lora3` 以普通（非固定）方式加载。请注意，我们故意用两种不同格式指定 `lora2` 和 `lora3`，以说明两种格式都支持。
 
 
 
@@ -331,7 +334,7 @@ url = f"http://127.0.0.1:{port}"
 wait_for_server(url)
 ```
 
-You can also specify adapter as pinned during dynamic adapter loading. In the example below, we reload `lora2` as pinned adapter:
+你也可以在动态加载适配器时把它指定为固定。下面这个例子把 `lora2` 重新加载为固定适配器：
 
 
 
@@ -353,7 +356,7 @@ response = requests.post(
 )
 ```
 
-Verify that the results are expected:
+验证结果是否符合预期：
 
 
 
@@ -383,14 +386,14 @@ print(f"Output from lora2 (not pinned): \n{response.json()[2]['text']}\n")
 terminate_process(server_process)
 ```
 
-## Choosing LoRA Backend
+## 选择 LoRA 后端
 
-SGLang supports two LoRA backends that you can choose from using the `--lora-backend` argument:
+SGLang 支持两种 LoRA 后端，可以用 `--lora-backend` 参数选择：
 
-- `triton`: Basic Triton-based backend.
-- `csgmv`: Default chunked SGMV backend optimized for high concurrency scenarios.
+- `triton`：基础的基于 Triton 的后端。
+- `csgmv`：默认的分块 SGMV 后端，针对高并发场景优化。
 
-The `csgmv` backend was recently introduced to improve performance especially at high-concurrency scenarios. Our benchmark shows that it achieves 20% to 80% latency improvements over the basic triton backend.
+`csgmv` 后端是最近引入的，用于尤其在高并发场景下提升性能。我们的基准测试显示，相比基础 triton 后端，它带来了 20% 到 80% 的延迟改善。
 
 
 
@@ -412,10 +415,10 @@ server_process, port = launch_server_cmd(
 terminate_process(server_process)
 ```
 
-## LoRA Overlap Loading
+## LoRA 重叠加载
 
 
-By using the `--enable-lora-overlap-loading` server argument, the SGLang engine is able to overlap the loading of LoRA weights with prefill and decode compute, essentially hiding the data movement for LoRA weights behind GPU computation. Our benchmarks show that under adversarial conditions, enabling this feature can result in a ~35% reduction in median TTFT - (see the [LoRA overlap loading PR](https://github.com/sgl-project/sglang/pull/15512) for detailed benchmarks).
+使用 `--enable-lora-overlap-loading` 服务端参数，SGLang 引擎可以把 LoRA 权重的加载与 prefill 和 decode 计算重叠起来，本质上把 LoRA 权重的数据移动隐藏在 GPU 计算后面。我们的基准测试显示，在对抗性条件下，启用该特性可以让中位 TTFT 降低约 35%——详细基准见 [LoRA 重叠加载 PR](https://github.com/sgl-project/sglang/pull/15512)。
 
 
 
@@ -477,33 +480,37 @@ for i in range(3):
 terminate_process(server_process)
 ```
 
-#### Limitations of LoRA Overlap Loading
+<Note>
+💡 AI Infra 学习笔记：重叠加载的本质是"用计算掩盖数据搬运"——LoRA 适配器权重从 CPU 拷到 GPU（H2D）的延迟本来是阻塞的，异步加载让它在 prefill/decode kernel 跑的同时进行，用户感知不到等待。这背后的通用思想是"overlap 而非串行"：推理引擎里几乎所有性能优化（CUDA 图、多流、预取、流水线）都是让不同资源（磁盘、PCIe、SM）同时干活。但重叠不是免费的：需要固定（pinned）CPU 内存做异步拷贝，而且适配器到达 GPU 的时间错开，会削弱调度器把多个适配器拼进同一个 prefill 批的能力——所以它默认关闭，只在权重加载确实成为瓶颈时才开。理解这种"收益 vs 副作用"的权衡是系统设计的关键。
+</Note>
+
+#### LoRA 重叠加载的局限
 
 
-However, LoRA overlap loading is not free and comes with two important caveats:
+不过，LoRA 重叠加载并非免费，有两个重要的注意事项：
 
-1. **Pinned CPU memory requirement**:
-   Asynchronous H2D memory copies require LoRA weights to be pinned in CPU memory, which is a finite system resource. To mitigate excessive pinned-memory usage, SGLang currently restricts `max_loaded_loras` to be at most 2× `max_loras_per_batch` when LoRA overlap loading is enabled.
+1. **需要固定（pinned）CPU 内存**：
+   异步 H2D 内存拷贝要求 LoRA 权重固定（pinned）在 CPU 内存中，而固定内存是有限的系统资源。为了控制固定内存的过度占用，SGLang 目前规定启用 LoRA 重叠加载时，`max_loaded_loras` 最多是 `max_loras_per_batch` 的 2 倍。
 
-2. **Reduced multi-adapter prefill batching**:
-   With overlap loading, adapters become available on the GPU at different times because each adapter is loaded asynchronously. This can reduce the scheduler’s ability to form multi-adapter prefill batches, since only requests whose adapters are currently loaded can be grouped together. As a result, requests for different adapters will be scheduled in separate (or smaller) prefill batches, which can increase TTFT when adapter load time is small compared to prefill compute time. This is why LoRA overlap loading is disabled by default: it should only be enabled when users have determined that LoRA weight loading is a bottleneck (EG high adapter churn, heavy adapter weights, or PCIe-bottlenecked workloads).
-
-
-
-#### Example When Overlap Loading Results in Higher Latency
+2. **多适配器 prefill 批处理能力下降**：
+   启用重叠加载后，每个适配器是异步加载的，因此适配器在不同时间点才在 GPU 上就绪。这会削弱调度器组建多适配器 prefill 批次的能力——因为只有"适配器已加载"的请求才能被分到同一组。结果就是，不同适配器的请求会被调度到独立（或更小）的 prefill 批次里，当适配器加载时间相对 prefill 计算时间很小时，TTFT 反而会上升。这正是 LoRA 重叠加载默认关闭的原因：只有在确定 LoRA 权重加载是瓶颈时（例如适配器频繁换入换出、适配器权重很大、或 PCIe 受限的工作负载）才应该开启。
 
 
-For instance, suppose we have four LoRA adapters: `lora0`, `lora1`, `lora2`, and `lora3`. Loading any adapter takes 2ms, while the prefill step for requests for that adapter takes 20ms.
 
-1. **Baseline**:
-  The engine loads all four adapters synchronously, then runs one combined prefill batch, giving us a total time of ≈ `2 * 4 + 20 = 28ms`
-
-2. **With LoRA overlap loading enabled**:
-  The engine begins loading `lora0` and, once it is ready, schedules a prefill batch containing only `lora0` while `lora1` loads in the background. Then it schedules `lora1`’s prefill while `lora2` loads, and so on. In the worst case where prefill cannot be batched across adapters, total time is ≈ `2 + 4 * 20 = 82ms`
-
-In this scenario, overlap loading reduces adapter-load overhead, but the loss of multi-adapter prefill batching dominates and leads to higher TTFT.
+#### 重叠加载导致更高延迟的示例
 
 
-## Future Works
+例如，假设我们有四个 LoRA 适配器：`lora0`、`lora1`、`lora2` 和 `lora3`。加载任意一个适配器需要 2ms，而针对该适配器的请求的 prefill 步骤需要 20ms。
 
-The development roadmap for LoRA-related features can be found in this [issue](https://github.com/sgl-project/sglang/issues/2929). Other features, including Embedding Layer, Unified Paging, Cutlass backend are still under development.
+1. **基线**：
+  引擎同步加载全部四个适配器，然后运行一个合并的 prefill 批次，总时间约为 `2 * 4 + 20 = 28ms`
+
+2. **启用 LoRA 重叠加载**：
+  引擎开始加载 `lora0`，一旦就绪就调度一个只含 `lora0` 的 prefill 批次，同时后台加载 `lora1`。然后调度 `lora1` 的 prefill，同时加载 `lora2`，依此类推。在 prefill 无法跨适配器批处理的最坏情况下，总时间约为 `2 + 4 * 20 = 82ms`
+
+在这个场景里，重叠加载降低了适配器加载开销，但丢失多适配器 prefill 批处理带来的损失占主导，导致 TTFT 更高。
+
+
+## 未来工作
+
+LoRA 相关特性的开发路线图见这个 [issue](https://github.com/sgl-project/sglang/issues/2929)。其他特性，包括 Embedding 层、统一分页（Unified Paging）、Cutlass 后端，仍在开发中。

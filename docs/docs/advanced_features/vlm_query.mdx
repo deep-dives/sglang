@@ -1,40 +1,44 @@
 ---
-title: "Query VLM with Offline Engine"
+title: "用离线引擎查询 VLM"
 metatags:
-    description: "SGLang VLM offline engine: raw images, processor output, precomputed embeddings. Qwen2.5-VL and Llama 4 examples."
+    description: "SGLang VLM 离线引擎：原始图像、processor 输出、预计算嵌入。Qwen2.5-VL 与 Llama 4 示例。"
 ---
-This tutorial demonstrates how to use SGLang's **offline Engine API** to query VLMs. We will demonstrate usage with Qwen2.5-VL and Llama 4. This section demonstrates three different calling approaches:
+本教程演示如何用 SGLang 的**离线引擎 API** 查询 VLM。我们以 Qwen2.5-VL 和 Llama 4 为例演示用法。本节演示三种不同的调用方式：
 
-1. **Basic Call**: Directly pass images and text.
-2. **Processor Output**: Use HuggingFace processor for data preprocessing.
-3. **Precomputed Embeddings**: Pre-calculate image features to improve inference efficiency.
+1. **基本调用**：直接传入图像和文本。
+2. **Processor 输出**：用 HuggingFace processor 做数据预处理。
+3. **预计算嵌入**：预先计算图像特征以提升推理效率。
 
-## Understanding the Three Input Formats
+## 理解三种输入格式
 
-SGLang supports three ways to pass visual data, each optimized for different scenarios:
+SGLang 支持三种传入视觉数据的方式，每种针对不同场景做了优化：
 
-### 1. **Raw Images** - Simplest approach
-- Pass PIL Images, file paths, URLs, or base64 strings directly
-- SGLang handles all preprocessing automatically
-- Best for: Quick prototyping, simple applications
+### 1. **原始图像** —— 最简单的方式
+- 直接传 PIL Image、文件路径、URL 或 base64 字符串
+- SGLang 自动完成所有预处理
+- 适用场景：快速原型、简单应用
 
-### 2. **Processor Output** - For custom preprocessing
-- Pre-process images with HuggingFace processor
-- Pass the complete processor output dict with `format: "processor_output"`
-- Best for: Custom image transformations, integration with existing pipelines
-- Requirement: Must use `input_ids` instead of text prompt
+### 2. **Processor 输出** —— 用于自定义预处理
+- 用 HuggingFace processor 预处理图像
+- 用 `format: "processor_output"` 传入完整的 processor 输出字典
+- 适用场景：自定义图像变换、与现有 pipeline 集成
+- 要求：必须用 `input_ids` 而不是文本提示词
 
-### 3. **Precomputed Embeddings** - For maximum performance
-- Pre-calculate visual embeddings using the vision encoder
-- Pass embeddings with `format: "precomputed_embedding"`
-- Best for: Repeated queries on same images, caching, high-throughput serving
-- Performance gain: Avoids redundant vision encoder computation (30-50% speedup)
+### 3. **预计算嵌入** —— 追求最高性能
+- 用视觉编码器预先计算视觉嵌入
+- 用 `format: "precomputed_embedding"` 传入嵌入
+- 适用场景：对相同图像反复查询、缓存、高吞吐服务
+- 性能收益：避免重复的视觉编码器计算（可提速 30-50%）
 
-**Key Rule**: Within a single request, use only one format for all images. Don't mix formats.
+**关键规则**：单个请求内，所有图像只能用一种格式。不要混用格式。
 
-The examples below demonstrate all three approaches with both Qwen2.5-VL and Llama 4 models.
+<Note>
+💡 AI Infra 学习笔记：VLM（视觉语言模型）推理比纯文本多一步"视觉编码"：图像先被切成 patch，送进视觉编码器（vision encoder，通常是个 ViT）得到视觉嵌入，再经过多模态投影层映射到与文本 embedding 同维的空间，最后和文本一起进 LLM。这一步计算量大且与文本生成无关——同一张图如果反复用，每次都重新编码就是浪费。预计算嵌入的思路就是"一次编码、多次复用"：把视觉编码从每次请求里挪出去，只把算好的特征喂给引擎。这就是推理引擎里常见的"算子拆分 + 结果缓存"优化，也是理解多模态推理性能的关键。
+</Note>
 
-## Querying Qwen2.5-VL Model
+下面的示例用 Qwen2.5-VL 和 Llama 4 两种模型分别演示这三种方式。
+
+## 查询 Qwen2.5-VL 模型
 
 ```python Example
 import nest_asyncio
@@ -68,7 +72,7 @@ print(f"\nImage size: {image.size}")
 image
 ```
 
-### Basic Offline Engine API Call
+### 基本离线引擎 API 调用
 
 ```python Example
 from sglang import Engine
@@ -82,9 +86,9 @@ print("Model response:")
 print(out["text"])
 ```
 
-### Call with Processor Output
+### 用 Processor 输出调用
 
-Using a HuggingFace processor to preprocess text and images, and passing the `processor_output` directly into `Engine.generate`.
+用 HuggingFace processor 预处理文本和图像，然后把 `processor_output` 直接传进 `Engine.generate`。
 
 ```python Example
 from transformers import AutoProcessor
@@ -102,9 +106,9 @@ print("Response using processor output:")
 print(out["text"])
 ```
 
-### Call with Precomputed Embeddings
+### 用预计算嵌入调用
 
-You can pre-calculate image features to avoid repeated visual encoding processes.
+你可以预先计算图像特征，避免重复的视觉编码过程。
 
 ```python Example
 from transformers import AutoProcessor
@@ -140,7 +144,7 @@ print(out["text"])
 llm.shutdown()
 ```
 
-## Querying Llama 4 Vision Model
+## 查询 Llama 4 视觉模型
 
 ```python Example
 model_path = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
@@ -167,9 +171,9 @@ print(f"Image size: {image.size}")
 image
 ```
 
-### Llama 4 Basic Call
+### Llama 4 基本调用
 
-Llama 4 requires more computational resources, so it's configured with multi-GPU parallelism (tp_size=4) and larger context length.
+Llama 4 需要更多算力资源，所以配置了多 GPU 并行（tp_size=4）和更大的上下文长度。
 
 ```python Example
 llm = Engine(
@@ -185,9 +189,9 @@ print("Llama 4 response:")
 print(out["text"])
 ```
 
-### Call with Processor Output
+### 用 Processor 输出调用
 
-Using HuggingFace processor to preprocess data can reduce computational overhead during inference.
+用 HuggingFace processor 预处理数据可以降低推理时的计算开销。
 
 ```python Example
 from transformers import AutoProcessor
@@ -205,7 +209,7 @@ print("Response using processor output:")
 print(out)
 ```
 
-### Call with Precomputed Embeddings
+### 用预计算嵌入调用
 
 ```python Example
 from transformers import AutoProcessor
@@ -247,3 +251,7 @@ out = llm.generate(input_ids=input_ids, image_data=[mm_item])
 print("Llama 4 precomputed embedding response:")
 print(out["text"])
 ```
+
+<Note>
+💡 AI Infra 学习笔记：预计算嵌入在工程上的实现路径是"把视觉编码器拆出来单独跑"——调用者自己加载模型权重，先跑 `vision`（视觉编码器）和 `multi_modal_projector`（多模态投影层），拿到 `feature` 后作为 `format="precomputed_embedding"` 传入，引擎就跳过整段视觉编码直接做 LLM 前向。代价是需要调用者自己准备 HF 模型、自行管理 `.cuda()` 和 dtype，所以它适合"同一批图像被反复查询"的离线/缓存场景；交互式单次查询用原始图像更省事。这也提示了一个通用优化思路：把重复的预处理从热路径里移出去。
+</Note>

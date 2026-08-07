@@ -1,44 +1,52 @@
 ---
-title: "Quantized KV Cache"
+title: "量化 KV 缓存"
 metatags:
-    description: "SGLang quantized KV cache: FP8 E4M3/E5M2 and FP4 E2M1 formats, memory savings up to 3.56x, scaling factors, accuracy benchmarks."
+    description: "SGLang 量化 KV 缓存：FP8 E4M3/E5M2 与 FP4 E2M1 格式、最高 3.56x 的显存节省、缩放因子、精度基准测试。"
 ---
-Quantized KV cache reduces the memory footprint of key-value cache storage by using lower-precision data types (FP8 or FP4) instead of the default model precision in BF16. During autoregressive generation, LLMs cache previously computed key-value pairs to avoid redundant calculations. The KV cache typically consumes a significant portion of GPU memory, especially for long sequences.
+量化 KV 缓存用更低精度的数据类型（FP8 或 FP4）取代默认的 BF16 模型精度来存储 key-value 缓存，从而降低 KV 缓存的显存占用。在自回归生成过程中，LLM 会缓存之前算好的 key-value 对，避免重复计算。KV 缓存通常会占掉很大一部分 GPU 显存，尤其是长序列场景。
 
-Quantized KV cache is a memory optimization technique that primarily benefits throughput by allowing more tokens to be cached, but may introduce minimal accuracy degradation depending on the quantization format used.
-
-<Warning>
-**Performance Warning**: When quantized KV cache must be dequantized before use in attention operations, performance can be extremely slow if dequantization is not fused with the attention kernel. Always verify that your chosen attention backend supports quantized KV cache. Backends without fused support may experience significant throughput degradation, potentially negating the memory benefits.
-
-**Backend Support**: Not all attention backends support quantized KV cache. Refer to [Attention Backend](./attention_backend) for which backends support it.
-</Warning>
-
-## Supported Formats
-
-SGLang supports the following quantized KV cache formats:
-
-### FP8 Format
-
-[OCP (Open Compute Project)](https://www.opencompute.org) specifies two common 8-bit floating point formats:
-
-- **E5M2** (5 exponent bits, 2 mantissa bits): Larger dynamic range (±57344.0), lower precision
-- **E4M3** (4 exponent bits, 3 mantissa bits): Higher precision, smaller dynamic range (±240.0)
-
-### FP4 Format
+量化 KV 缓存是一种显存优化技术，主要收益是吞吐量——同样的显存能缓存更多 token；不过根据所用量化格式的不同，可能带来少量精度损失。
 
 <Warning>
-FP4 quantization is currently experimental.
+**性能警告**：当量化 KV 缓存在注意力运算前必须先反量化时，如果反量化没有与注意力 kernel 融合，性能会极其缓慢。务必确认你选的 Attention 后端支持量化 KV 缓存。不支持融合反量化的后端可能出现明显的吞吐下降，把显存收益抵消掉。
+
+**后端支持**：并非所有 Attention 后端都支持量化 KV 缓存。各后端的支持情况参见 [Attention 后端](./attention_backend)。
 </Warning>
 
-[OCP (Open Compute Project)](https://www.opencompute.org) specifies MXFP4 (Microscaling FP4), a 4-bit floating-point format:
+<Note>
+💡 AI Infra 学习笔记：KV 缓存是推理引擎里最大的显存占用项之一——每个请求的每个 token 都要缓存它的 Key 和 Value 向量，长上下文下动辄几十 GB。它对吞吐量的影响在于：显存定了，能同时服务多少请求、每个请求能撑多长上下文也就定了。把 KV 缓存从 BF16 压到 FP8 能省一半显存，压到 FP4（MXFP4）能省约 3.56 倍，等于在同样的显存预算里多装几倍的并发请求或更长的上下文。代价是精度损失和 kernel 必须支持"融合反量化"，否则反量化开销反而拖慢推理。这也是推理引擎优化的核心矛盾之一：显存 vs 精度。
+</Note>
 
-- **E2M1** (1 sign bit, 2 exponent bits, 1 mantissa bit): Uses block-based microscaling where tensors are divided into blocks of consecutive elements, with each block sharing a single 8-bit exponential scaling factor. While OCP specifies blocks of 32 elements, SGLang's current implementation uses blocks of 16 elements for KV cache quantization.
+## 支持的格式
 
-## Usage
+SGLang 支持以下量化 KV 缓存格式：
 
-### Enabling Quantized KV Cache
+### FP8 格式
 
-To enable quantized KV cache, use the `--kv-cache-dtype` argument when launching the server:
+[OCP（开放计算项目）](https://www.opencompute.org) 定义了两种常见的 8 位浮点格式：
+
+- **E5M2**（5 位指数、2 位尾数）：动态范围更大（±57344.0），精度较低
+- **E4M3**（4 位指数、3 位尾数）：精度更高，动态范围较小（±240.0）
+
+<Note>
+💡 AI Infra 学习笔记：FP8 有 E4M3 和 E5M2 两种口味，区别在指数位和尾数位的分配：E4M3 尾数多一位、精度高但范围小（±240），适合值域本来就小的场景（比如权重和激活值）；E5M2 指数多一位、范围大但精度低，适合 KV 缓存这种值域容易波动的场景。量化格式选型就是在"动态范围"和"精度"之间权衡，这直接关系到量化后模型精度损失多少。
+</Note>
+
+### FP4 格式
+
+<Warning>
+FP4 量化目前处于实验阶段。
+</Warning>
+
+[OCP（开放计算项目）](https://www.opencompute.org) 定义了 MXFP4（Microscaling FP4，微缩放 FP4），一种 4 位浮点格式：
+
+- **E2M1**（1 位符号、2 位指数、1 位尾数）：采用基于块的微缩放——张量被分成若干连续元素组成的块，每个块共享一个 8 位指数缩放因子。OCP 规范规定块大小为 32 个元素，而 SGLang 当前的 KV 缓存量化实现使用 16 个元素一块。
+
+## 使用方法
+
+### 启用量化 KV 缓存
+
+启用量化 KV 缓存，在启动服务端时使用 `--kv-cache-dtype` 参数：
 
 ```bash Command
 # Enable FP8 E5M2 KV cache
@@ -62,20 +70,20 @@ python3 -m sglang.launch_server \
     --kv-cache-dtype fp4_mx_block16 \
 ```
 
-### Scaling Factors
+### 缩放因子
 
-FP8 quantization requires scaling factors to properly quantize and dequantize the KV cache.
+FP8 量化需要缩放因子来正确地量化/反量化 KV 缓存。
 
 <Note>
-Currently, only per-tensor (scalar) scaling factors are supported.
+目前只支持 per-tensor（标量）缩放因子。
 </Note>
 
-Scaling factors can be:
+缩放因子可以来自：
 
-- **Loaded from checkpoints**: Pre-quantized models (e.g., ModelOpt) may include `k_scale` and `v_scale` parameters that are automatically loaded
-- **Provided via JSON**: Supply scaling factors via `--quantization-param-path`.
+- **从检查点加载**：预量化模型（例如 ModelOpt）可能带有 `k_scale` 和 `v_scale` 参数，会被自动加载
+- **通过 JSON 提供**：用 `--quantization-param-path` 提供缩放因子。
 
-The JSON file should follow this format:
+JSON 文件格式如下：
 
 ```json Config
 {
@@ -91,42 +99,42 @@ The JSON file should follow this format:
 }
 ```
 
-Where the outer keys in `scaling_factor` are tensor parallel ranks and inner keys are layer indices.
+其中 `scaling_factor` 的外层键是张量并行 rank，内层键是层索引。
 
 <Warning>
-If scaling factors are not provided and not found in the checkpoint, it will default to 1.0, which may cause accuracy issues.
+如果既没有提供缩放因子、检查点里也没有，它会默认取 1.0，这可能导致精度问题。
 </Warning>
 
 <Tip>
-**FP4 (MXFP4)**: Unlike FP8, FP4 quantization handles scaling factors automatically on-the-fly during quantization and dequantization. No pre-quantized models or external scaling factor files are required—the block-based scaling factors are computed dynamically as needed.
+**FP4（MXFP4）**：与 FP8 不同，FP4 量化在量化/反量化过程中会自动即时处理缩放因子。不需要预量化模型或外部缩放因子文件——基于块的缩放因子会根据需要动态计算。
 </Tip>
 
-## Performance Considerations
+## 性能考量
 
-### Memory Savings
+### 显存节省
 
-Quantized KV cache provides significant memory savings:
-- **BF16 → FP4**: Supports approximately 3.56× more tokens than BF16 (accounting for scaling factor overhead)
+量化 KV 缓存能显著节省显存：
+- **BF16 → FP4**：相比 BF16 大约能多支撑 3.56 倍的 token（已计入缩放因子的开销）
 
 <Note>
-FP4 and FP8 quantization require additional memory for block-based scaling factors, which reduces the effective memory savings compared to the raw bit-width reduction. FP4 with block size 16 supports approximately 1.78× more tokens than FP8, and approximately 3.56× more tokens than BF16. The relative token capacity between FP8 and BF16 can be derived from these ratios.
+FP4 和 FP8 量化需要额外的显存来存基于块的缩放因子，这会削弱相对于原始位宽缩减的显存收益。块大小 16 的 FP4 大约比 FP8 多支撑 1.78 倍的 token，比 BF16 大约多支撑 3.56 倍。FP8 与 BF16 之间的相对 token 容量可以由这些比值推导出来。
 </Note>
 
-This enables longer context lengths or more concurrent requests within the same memory budget.
+这意味着在同样的显存预算内，可以支持更长的上下文，或更多并发请求。
 
-### Accuracy Impact
+### 精度影响
 
-#### FP8 Accuracy
+#### FP8 精度
 
-FP8 E4M3 quantization typically introduces minimal accuracy degradation. The impact depends on model architecture, sequence length, and quantization format (generally, E4M3 has better accuracy than E5M2).
+FP8 E4M3 量化通常只会带来很小的精度损失。影响取决于模型架构、序列长度和量化格式（一般来说，E4M3 的精度优于 E5M2）。
 
-#### FP4 Accuracy
+#### FP4 精度
 
-FP4 (MXFP4) quantization provides significant memory savings with varying accuracy impact depending on model size and dataset complexity. Preliminary accuracy test results from [PR #10078](https://github.com/sgl-project/sglang/pull/10078) (MLA) and [PR #12612](https://github.com/sgl-project/sglang/pull/12612) (MHA) show:
+FP4（MXFP4）量化能显著节省显存，但精度影响因模型大小和数据集复杂度而异。[PR #10078](https://github.com/sgl-project/sglang/pull/10078)（MLA）和 [PR #12612](https://github.com/sgl-project/sglang/pull/12612)（MHA）的初步精度测试结果显示：
 
-**Large Models (e.g., Qwen3-235B-A22B, DeepSeek-R1-0528)**
+**大模型（例如 Qwen3-235B-A22B、DeepSeek-R1-0528）**
 
-On large-scale models, FP4 maintains accuracy close to FP8/BF16, especially on simpler datasets:
+在大规模模型上，FP4 的精度接近 FP8/BF16，尤其是在较简单的数据集上：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -138,8 +146,8 @@ On large-scale models, FP4 maintains accuracy close to FP8/BF16, especially on s
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Dataset</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>数据集</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>KV16</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>KV8 (FP8 E4M3)</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>KV4 (FP4 E2M1)</th>
@@ -191,9 +199,9 @@ On large-scale models, FP4 maintains accuracy close to FP8/BF16, especially on s
   </tbody>
 </table>
 
-**Smaller Models (e.g., GPT-OSS-120B)**
+**较小的模型（例如 GPT-OSS-120B）**
 
-On smaller models, FP4 shows more pronounced accuracy drops, particularly on challenging datasets:
+在较小模型上，FP4 的精度下降更明显，尤其是在有挑战性的数据集上：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -205,8 +213,8 @@ On smaller models, FP4 shows more pronounced accuracy drops, particularly on cha
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Dataset</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>数据集</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>KV16</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>KV8 (FP8 E4M3)</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>KV4 (FP4 E2M1)</th>
@@ -237,25 +245,25 @@ On smaller models, FP4 shows more pronounced accuracy drops, particularly on cha
   </tbody>
 </table>
 
-**Key Observations:**
+**关键观察：**
 
-- **Simple datasets (e.g., gsm8k)**: FP4 maintains accuracy close to FP8/BF16 across model sizes
-- **Model size matters**: Large models (200B+ parameters) generally tolerate FP4 quantization better than smaller models
-- **Context length**: Accuracy degradation may be more pronounced in long-context scenarios, as the accumulation of the quantization error may become significant.
+- **简单数据集（如 gsm8k）**：FP4 在不同规模的模型上都保持了接近 FP8/BF16 的精度
+- **模型规模很重要**：大模型（200B+ 参数）通常比小模型更能容忍 FP4 量化
+- **上下文长度**：长上下文场景下精度损失可能更明显，因为量化误差会累积到显著程度。
 
 <Tip>
-Evaluate FP4 accuracy on your specific model and workload. Large models on simpler tasks typically show minimal degradation, while smaller models or complex reasoning tasks may require FP8 or BF16 for acceptable accuracy.
+请针对你的具体模型和工作负载评估 FP4 精度。大模型在简单任务上通常只有极小的精度损失，而小模型或复杂推理任务可能需要 FP8 或 BF16 才能获得可接受的精度。
 </Tip>
 
-## Best Practices
+## 最佳实践
 
-- **Use pre-quantized models**: Prefer models quantized offline with scaling factors included in the checkpoint.
-- **Choose the right format**: Use `fp8_e4m3` for better accuracy (recommended), `fp8_e5m2` for larger dynamic range, or `nvfp4` / `fp4_mx_block16` for maximum memory savings (experimental)
-- **Check backend compatibility**: Verify that your chosen attention backend supports quantized KV cache
+- **使用预量化模型**：优先选择离线量化且检查点里带缩放因子的模型。
+- **选择合适的格式**：精度优先用 `fp8_e4m3`（推荐），需要更大动态范围用 `fp8_e5m2`，追求最大显存节省用 `nvfp4` / `fp4_mx_block16`（实验性）
+- **检查后端兼容性**：确认你选的 Attention 后端支持量化 KV 缓存
 
 <Note>
-See also:
-- [Quantization](./quantization)
-- [Attention Backend](./attention_backend)
-- [Server Arguments](./server_arguments)
+参见：
+- [量化](./quantization)
+- [Attention 后端](./attention_backend)
+- [服务端参数](./server_arguments)
 </Note>

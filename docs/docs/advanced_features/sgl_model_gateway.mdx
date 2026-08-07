@@ -1,129 +1,132 @@
 ---
-title: "SGLang Model Gateway"
+title: "SGLang 模型网关"
 metatags:
-    description: "SGLang Model Gateway: load balancing, PD disaggregation, multi-model routing, gRPC support, MCP integration, Kubernetes service discovery."
+    description: "SGLang Model Gateway：负载均衡、PD 分离、多模型路由、gRPC 支持、MCP 集成、Kubernetes 服务发现。"
 ---
-SGLang Model Gateway is a high-performance model-routing gateway for large-scale LLM deployments. It centralizes worker lifecycle management, balances traffic across heterogeneous protocols (HTTP, gRPC, OpenAI-compatible), and provides enterprise-ready control over history storage, MCP tooling, and privacy-sensitive workflows. The gateway is deeply optimized for the SGLang serving runtime, but can route to any OpenAI-compatible backend.
+SGLang Model Gateway 是一个面向大规模 LLM 部署的高性能模型路由网关。它统一管理 worker 的生命周期，在异构协议（HTTP、gRPC、OpenAI 兼容）之间均衡流量，并为历史存储、MCP 工具和隐私敏感的工作流提供企业级控制能力。网关针对 SGLang 推理运行时做了深度优化，同时也能路由到任意 OpenAI 兼容后端。
 
 ***
-## Table of Contents
+## 目录
 
-1. [Overview](#overview)
-2. [Architecture](#architecture)
-   - [Control Plane](#control-plane)
-   - [Data Plane](#data-plane)
-   - [Storage and Privacy](#storage-and-privacy)
-3. [Installation](#installation)
-4. [Quick Start](#quick-start)
-5. [Deployment Modes](#deployment-modes)
-   - [Co-launch Router and Workers](#co-launch-router-and-workers)
-   - [Separate Launch (HTTP)](#separate-launch-http)
-   - [gRPC Launch](#grpc-launch)
-   - [Prefill-Decode Disaggregation](#prefill-decode-disaggregation)
-   - [OpenAI Backend Proxy](#openai-backend-proxy)
-   - [Multi-Model Inference Gateway](#multi-model-inference-gateway)
-6. [API Reference](#api-reference)
-   - [Inference Endpoints](#inference-endpoints)
-   - [Tokenization Endpoints](#tokenization-endpoints)
-   - [Parser Endpoints](#parser-endpoints)
-   - [Classification API](#classification-api)
-   - [Conversation and Response APIs](#conversation-and-response-apis)
-   - [Worker Management APIs](#worker-management-apis)
-   - [Admin and Health Endpoints](#admin-and-health-endpoints)
-7. [Load Balancing Policies](#load-balancing-policies)
-8. [Reliability and Flow Control](#reliability-and-flow-control)
-   - [Retries](#retries)
-   - [Circuit Breaker](#circuit-breaker)
-   - [Rate Limiting and Queuing](#rate-limiting-and-queuing)
-   - [Health Checks](#health-checks)
-9. [Reasoning Parser Integration](#reasoning-parser-integration)
-10. [Tool Call Parsing](#tool-call-parsing)
-11. [Tokenizer Management](#tokenizer-management)
-12. [MCP Integration](#mcp-integration)
-13. [Service Discovery (Kubernetes)](#service-discovery-kubernetes)
-14. [History and Data Connectors](#history-and-data-connectors)
-15. [WASM Middleware](#wasm-middleware)
-16. [Language Bindings](#language-bindings)
-17. [Security and Authentication](#security-and-authentication)
-    - [TLS (HTTPS) for Gateway Server](#tls-https-for-gateway-server)
-    - [mTLS for Worker Communication](#mtls-for-worker-communication)
-18. [Observability](#observability)
-    - [Prometheus Metrics](#prometheus-metrics)
-    - [OpenTelemetry Tracing](#opentelemetry-tracing)
-    - [Logging](#logging)
-19. [Production Recommendations](#production-recommendations)
-    - [Security Best Practices](#security-best-practices)
-    - [High Availability](#high-availability)
-    - [Performance](#performance)
-    - [Kubernetes Deployment](#kubernetes-deployment)
-    - [Monitoring with PromQL](#monitoring-with-promql)
-20. [Configuration Reference](#configuration-reference)
-21. [Troubleshooting](#troubleshooting)
-
-***
-## Overview
-
-- **Unified control plane** for registering, monitoring, and orchestrating regular, prefill, and decode workers across heterogeneous model fleets.
-- **Multi-protocol data plane** that routes traffic across HTTP, PD (prefill/decode), gRPC, and OpenAI-compatible backends with shared reliability primitives.
-- **Industry-first gRPC pipeline** with native Rust tokenization, reasoning parsers, and tool-call execution for high-throughput, OpenAI-compatible serving; supports both single-stage and PD topologies.
-- **Inference Gateway Mode (`--enable-igw`)** dynamically instantiates multiple router stacks (HTTP regular/PD, gRPC) and applies per-model policies for multi-tenant deployments.
-- **Conversation & responses connectors** centralize chat history inside the router so the same context can be reused across models and MCP loops without leaking data to upstream vendors (memory, none, Oracle ATP, PostgreSQL).
-- **Enterprise privacy**: agentic multi-turn `/v1/responses`, native MCP client (STDIO/HTTP/SSE/Streamable), and history storage all operate within the router boundary.
-- **Reliability core**: retries with jitter, worker-scoped circuit breakers, token-bucket rate limiting with queuing, background health checks, and cache-aware load monitoring.
-- **Comprehensive observability**: 40+ Prometheus metrics, OpenTelemetry distributed tracing, structured logging, and request ID propagation.
+1. [概览](#overview)
+2. [架构](#architecture)
+   - [控制面](#control-plane)
+   - [数据面](#data-plane)
+   - [存储与隐私](#storage-and-privacy)
+3. [安装](#installation)
+4. [快速上手](#quick-start)
+5. [部署模式](#deployment-modes)
+   - [路由与 Worker 同进程启动](#co-launch-router-and-workers)
+   - [分离启动（HTTP）](#separate-launch-http)
+   - [gRPC 启动](#grpc-launch)
+   - [Prefill-Decode 分离](#prefill-decode-disaggregation)
+   - [OpenAI 后端代理](#openai-backend-proxy)
+   - [多模型推理网关](#multi-model-inference-gateway)
+6. [API 参考](#api-reference)
+   - [推理端点](#inference-endpoints)
+   - [分词端点](#tokenization-endpoints)
+   - [解析器端点](#parser-endpoints)
+   - [分类 API](#classification-api)
+   - [对话与响应 API](#conversation-and-response-apis)
+   - [Worker 管理 API](#worker-management-apis)
+   - [管理与健康端点](#admin-and-health-endpoints)
+7. [负载均衡策略](#load-balancing-policies)
+8. [可靠性与流量控制](#reliability-and-flow-control)
+   - [重试](#retries)
+   - [熔断器](#circuit-breaker)
+   - [限流与排队](#rate-limiting-and-queuing)
+   - [健康检查](#health-checks)
+9. [推理解析器集成](#reasoning-parser-integration)
+10. [工具调用解析](#tool-call-parsing)
+11. [分词器管理](#tokenizer-management)
+12. [MCP 集成](#mcp-integration)
+13. [服务发现（Kubernetes）](#service-discovery-kubernetes)
+14. [历史与数据连接器](#history-and-data-connectors)
+15. [WASM 中间件](#wasm-middleware)
+16. [语言绑定](#language-bindings)
+17. [安全与认证](#security-and-authentication)
+    - [网关服务的 TLS（HTTPS）](#tls-https-for-gateway-server)
+    - [Worker 通信的 mTLS](#mtls-for-worker-communication)
+18. [可观测性](#observability)
+    - [Prometheus 指标](#prometheus-metrics)
+    - [OpenTelemetry 追踪](#opentelemetry-tracing)
+    - [日志](#logging)
+19. [生产环境建议](#production-recommendations)
+    - [安全最佳实践](#security-best-practices)
+    - [高可用](#high-availability)
+    - [性能](#performance)
+    - [Kubernetes 部署](#kubernetes-deployment)
+    - [用 PromQL 监控](#monitoring-with-promql)
+20. [配置参考](#configuration-reference)
+21. [故障排查](#troubleshooting)
 
 ***
-## Architecture
+## 概览
 
-### Control Plane
-
-- **Worker Manager** discovers capabilities (`/get_server_info`, `/get_model_info`), tracks load, and registers/removes workers in the shared registry.
-- **Job Queue** serializes add/remove requests and exposes status (`/workers/{worker_id}`) so clients can track onboarding progress.
-- **Load Monitor** feeds cache-aware and power-of-two policies with live worker load statistics.
-- **Health Checker** continuously probes workers and updates readiness, circuit breaker state, and router metrics.
-- **Tokenizer Registry** manages dynamically registered tokenizers with async loading from HuggingFace or local paths.
-
-### Data Plane
-
-- **HTTP routers** (regular & PD) implement `/generate`, `/v1/chat/completions`, `/v1/completions`, `/v1/responses`, `/v1/embeddings`, `/v1/rerank`, `/v1/classify`, `/v1/tokenize`, `/v1/detokenize`, and associated admin endpoints.
-- **gRPC router** streams tokenized requests directly to SRT gRPC workers, running fully in Rust—tokenizer, reasoning parser, and tool parser all reside in-process. Supports both single-stage and PD routing, including embeddings and classification.
-- **OpenAI router** proxies OpenAI-compatible endpoints to external vendors (OpenAI, xAI, etc.) while keeping chat history and multi-turn orchestration local.
-
-### Storage and Privacy
-
-- Conversation and response history is stored at the router tier (memory, none, Oracle ATP, or PostgreSQL). The same history can power multiple models or MCP loops without sending data to upstream vendors.
-- `/v1/responses` agentic flows, MCP sessions, and conversation APIs share the same storage layer, enabling compliance for regulated workloads.
+- **统一控制面**：跨异构模型集群注册、监控并编排 regular、prefill 与 decode 三种 worker。
+- **多协议数据面**：借助共享的可靠性原语，在 HTTP、PD（prefill/decode）、gRPC 与 OpenAI 兼容后端之间路由流量。
+- **业界首创的 gRPC 流水线**：原生 Rust 分词、推理解析器与工具调用执行，面向高吞吐、OpenAI 兼容的服务化；同时支持单阶段与 PD 拓扑。
+- **推理网关模式（`--enable-igw`）**：动态实例化多个路由栈（HTTP regular/PD、gRPC），并为多租户部署应用按模型生效的策略。
+- **对话与响应连接器**：把聊天历史集中存放在路由器内部，同一份上下文可在多个模型与 MCP 循环之间复用，且不会把数据泄露给上游厂商（支持 memory、none、Oracle ATP、PostgreSQL）。
+- **企业级隐私**：agentic 多轮 `/v1/responses`、原生 MCP 客户端（STDIO/HTTP/SSE/Streamable）以及历史存储都在路由器边界内运行。
+- **可靠性核心**：带抖动的重试、worker 粒度的熔断器、带排队的令牌桶限流、后台健康检查，以及感知缓存的负载监控。
+- **全面的可观测性**：40+ 项 Prometheus 指标、OpenTelemetry 分布式追踪、结构化日志与请求 ID 透传。
+<Note>
+💡 AI Infra 学习笔记：模型网关（Model Gateway）是推理服务架构中的统一流量入口，位于客户端与一组推理 worker 之间。它承担三件事——路由（把请求分发给合适的 worker）、多模型管理（同一入口服务多个模型）、以及可靠性控制（重试、熔断、限流）。理解网关层的关键在于它把「推理引擎的调度」与「服务层的流量治理」解耦：引擎专注算力，网关专注可用性与容量。这也是 vLLM router、TensorRT-LLM 等推理平台共同的架构思路。
+</Note>
 
 ***
-## Installation
+## 架构
+
+### 控制面
+
+- **Worker Manager**：发现 worker 的能力（`/get_server_info`、`/get_model_info`），跟踪负载，并在共享注册表中注册/移除 worker。
+- **Job Queue**：串行化添加/移除请求，并暴露状态（`/workers/{worker_id}`），让客户端可以跟踪接入进度。
+- **Load Monitor**：为 cache_aware 与 power_of_two 策略提供实时的 worker 负载统计。
+- **Health Checker**：持续探测 worker，并更新就绪状态、熔断器状态与路由器指标。
+- **Tokenizer Registry**：管理动态注册的分词器，支持从 HuggingFace 或本地路径异步加载。
+
+### 数据面
+
+- **HTTP 路由器**（regular 与 PD）：实现 `/generate`、`/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/embeddings`、`/v1/rerank`、`/v1/classify`、`/v1/tokenize`、`/v1/detokenize` 以及相关的管理端点。
+- **gRPC 路由器**：把已分词的请求直接流式转发给 SRT gRPC worker，整个链路完全用 Rust 实现——分词器、推理解析器与工具解析器都在进程内运行。同时支持单阶段与 PD 路由，包括嵌入与分类。
+- **OpenAI 路由器**：把 OpenAI 兼容端点代理到外部厂商（OpenAI、xAI 等），同时把聊天历史与多轮编排保留在本地。
+
+### 存储与隐私
+
+- 对话与响应历史存储在路由器层（支持 memory、none、Oracle ATP 或 PostgreSQL）。同一份历史可以为多个模型或 MCP 循环提供上下文，而无需把数据发送给上游厂商。
+- `/v1/responses` agentic 流程、MCP 会话与对话 API 共享同一套存储层，方便满足受监管负载的合规要求。
+
+***
+## 安装
 
 ### Docker
 
-Pre-built Docker images are available on Docker Hub with multi-architecture support (x86_64 and ARM64):
+预构建的 Docker 镜像已发布到 Docker Hub，支持多架构（x86_64 与 ARM64）：
 
 ```bash Command
 docker pull lmsysorg/sgl-model-gateway:latest
 ```
 
-### Prerequisites
+### 前置条件
 
-- **Rust and Cargo**
+- **Rust 与 Cargo**
   ```bash Command
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
   source "$HOME/.cargo/env"
   rustc --version
   cargo --version
   ```
-- **Python** with `pip` and virtualenv tooling available.
+- **Python**，需要可用的 `pip` 与 virtualenv 工具。
 
-### Rust Binary
+### Rust 二进制
 
 ```bash Command
 cd sgl-model-gateway
 cargo build --release
 ```
 
-### Python Package
+### Python 包
 
 ```bash Command
 pip install maturin
@@ -138,9 +141,9 @@ pip install --force-reinstall dist/*.whl
 ```
 
 ***
-## Quick Start
+## 快速上手
 
-### Regular HTTP Routing
+### 常规 HTTP 路由
 
 ```bash Command
 # Rust binary
@@ -154,7 +157,7 @@ python -m sglang_router.launch_router \
   --policy cache_aware
 ```
 
-### gRPC Routing
+### gRPC 路由
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -166,11 +169,11 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## Deployment Modes
+## 部署模式
 
-### Co-launch Router and Workers
+### 路由与 Worker 同进程启动
 
-Launch the router and a fleet of SGLang workers in one process:
+在一个进程内同时启动路由器与一批 SGLang worker：
 
 ```bash Command
 python -m sglang_router.launch_server \
@@ -180,7 +183,7 @@ python -m sglang_router.launch_server \
   --port 30000
 ```
 
-Comprehensive example with router arguments (prefixed with `--router-`):
+带路由参数（以 `--router-` 为前缀）的完整示例：
 
 ```bash Command
 python -m sglang_router.launch_server \
@@ -198,9 +201,9 @@ python -m sglang_router.launch_server \
   --router-log-level debug
 ```
 
-### Separate Launch (HTTP)
+### 分离启动（HTTP）
 
-Run workers independently and point the router at their HTTP endpoints:
+独立运行 worker，并让路由器指向它们的 HTTP 端点：
 
 ```bash Command
 # Worker nodes
@@ -214,9 +217,9 @@ python -m sglang_router.launch_router \
   --host 0.0.0.0 --port 30000
 ```
 
-### gRPC Launch
+### gRPC 启动
 
-Use SRT gRPC workers to unlock the highest throughput and access native reasoning/tool pipelines:
+使用 SRT gRPC worker 可获得最高吞吐量，并接入原生的推理/工具流水线：
 
 ```bash Command
 # Workers expose gRPC endpoints
@@ -234,11 +237,11 @@ python -m sglang_router.launch_router \
   --host 0.0.0.0 --port 8080
 ```
 
-The gRPC router supports both regular HTTP-equivalent serving and PD (prefill/decode) serving. Provide `--tokenizer-path` or `--model-path` (HuggingFace ID or local directory) whenever connection mode resolves to gRPC.
+gRPC 路由器同时支持与常规 HTTP 等价的推理服务，以及 PD（prefill/decode）推理服务。只要连接模式解析为 gRPC，就请提供 `--tokenizer-path` 或 `--model-path`（HuggingFace ID 或本地目录）。
 
-### Prefill-Decode Disaggregation
+### Prefill-Decode 分离
 
-Split prefill and decode workers for PD-aware caching and balancing:
+拆分 prefill 与 decode worker，实现 PD 感知的缓存与负载均衡：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -249,11 +252,14 @@ python -m sglang_router.launch_router \
   --decode-policy power_of_two
 ```
 
-Prefill entries accept an optional bootstrap port. PD mode merges prefill metadata with decode outputs and streams results back to the client.
+prefill 条目支持可选的 bootstrap 端口。PD 模式会把 prefill 的元数据与 decode 输出合并，并把结果流式返回给客户端。
+<Note>
+💡 AI Infra 学习笔记：Prefill-Decode 分离（PD 分离）是把一次生成拆成两段独立服务——prefill 阶段计算整个输入前缀的 KV 缓存（计算密集、并发低），decode 阶段逐 token 生成（访存密集、并发高）。两者负载特征差异很大，混跑会互相拖累；分离后可以各自扩缩容并独立做缓存，是长上下文与高吞吐场景的主流优化。网关在这里的作用，就是同时管理 prefill/decode 两类 worker 集群，并正确合并两阶段的输出。
+</Note>
 
-### OpenAI Backend Proxy
+### OpenAI 后端代理
 
-Proxy OpenAI-compatible endpoints while keeping history and MCP sessions local:
+代理 OpenAI 兼容端点，同时把历史与 MCP 会话保留在本地：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -262,11 +268,11 @@ python -m sglang_router.launch_router \
   --history-backend memory
 ```
 
-OpenAI backend mode expects exactly one `--worker-urls` entry per router instance.
+OpenAI 后端模式下，每个路由器实例恰好需要一个 `--worker-urls` 条目。
 
-### Multi-Model Inference Gateway
+### 多模型推理网关
 
-Enable IGW mode to route multiple models through a single router:
+启用 IGW 模式，让单个路由器路由多个模型：
 
 ```bash Command
 ./target/release/sgl-model-gateway \
@@ -286,9 +292,9 @@ curl -X POST http://localhost:30000/workers \
 ```
 
 ***
-## API Reference
+## API 参考
 
-### Inference Endpoints
+### 推理端点
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -298,48 +304,48 @@ curl -X POST http://localhost:30000/workers \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/generate`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang generate API</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang generate 接口</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/chat/completions`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI-compatible chat completions (streaming/tool calls)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI 兼容的聊天补全（流式/工具调用）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/completions`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI-compatible text completions</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>OpenAI 兼容的文本补全</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/embeddings`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Embedding generation (HTTP and gRPC)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>嵌入生成（HTTP 与 gRPC）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/rerank`, `/rerank`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Reranking requests</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>重排序请求</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/classify`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Text classification</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>文本分类</td>
     </tr>
   </tbody>
 </table>
 
-### Tokenization Endpoints
+### 分词端点
 
-The gateway provides HTTP endpoints for text tokenization with batch support, designed to mirror the SGLang Python tokenization API.
+网关提供支持批处理的 HTTP 文本分词端点，设计与 SGLang Python 分词 API 保持一致。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -349,51 +355,51 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenize`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Tokenize text to token IDs (single or batch)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>把文本分词为 token ID（单个或批量）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/detokenize`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Convert token IDs back to text (single or batch)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>把 token ID 还原为文本（单个或批量）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenizers`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Register a new tokenizer (async, returns job status)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>注册新的分词器（异步，返回任务状态）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenizers`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List all registered tokenizers</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出所有已注册的分词器</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenizers/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get tokenizer info by UUID</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>按 UUID 获取分词器信息</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenizers/{id}/status`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Check async tokenizer loading status</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>检查异步分词器加载状态</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/tokenizers/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Remove a tokenizer from the registry</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>从注册表中移除分词器</td>
     </tr>
   </tbody>
 </table>
 
-#### Tokenize Request
+#### 分词请求
 
 ```json Config
 {
@@ -402,7 +408,7 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
 }
 ```
 
-#### Batch Tokenize Request
+#### 批量分词请求
 
 ```json Config
 {
@@ -411,7 +417,7 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
 }
 ```
 
-#### Tokenize Response
+#### 分词响应
 
 ```json Config
 {
@@ -421,7 +427,7 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
 }
 ```
 
-#### Detokenize Request
+#### 反分词请求
 
 ```json Config
 {
@@ -431,7 +437,7 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
 }
 ```
 
-#### Detokenize Response
+#### 反分词响应
 
 ```json Config
 {
@@ -439,7 +445,7 @@ The gateway provides HTTP endpoints for text tokenization with batch support, de
 }
 ```
 
-#### Add Tokenizer (Async)
+#### 添加分词器（异步）
 
 ```bash Command
 curl -X POST http://localhost:30000/v1/tokenizers \
@@ -447,7 +453,7 @@ curl -X POST http://localhost:30000/v1/tokenizers \
   -d '{"name": "llama3", "source": "meta-llama/Llama-3.1-8B-Instruct"}'
 ```
 
-Response:
+响应：
 ```json Config
 {
   "id": "550e8400-e29b-41d4-a716-446655440000",
@@ -456,14 +462,14 @@ Response:
 }
 ```
 
-Check status:
+检查状态：
 ```bash Command
 curl http://localhost:30000/v1/tokenizers/550e8400-e29b-41d4-a716-446655440000/status
 ```
 
-### Parser Endpoints
+### 解析器端点
 
-The gateway provides admin endpoints for parsing reasoning content and function calls from LLM outputs.
+网关提供了从 LLM 输出中解析推理内容与函数调用的管理端点。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -473,26 +479,26 @@ The gateway provides admin endpoints for parsing reasoning content and function 
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/parse/reasoning`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Separate reasoning (`&lt;think&gt;`) from normal text</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>把推理内容（`&lt;think&gt;`）从普通文本中分离</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/parse/function_call`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Parse function/tool calls from text</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>从文本中解析函数/工具调用</td>
     </tr>
   </tbody>
 </table>
 
-#### Separate Reasoning Request
+#### 独立推理请求
 
 ```json Config
 {
@@ -501,7 +507,7 @@ The gateway provides admin endpoints for parsing reasoning content and function 
 }
 ```
 
-#### Response
+#### 响应
 
 ```json Config
 {
@@ -510,7 +516,7 @@ The gateway provides admin endpoints for parsing reasoning content and function 
 }
 ```
 
-#### Function Call Parsing
+#### 函数调用解析
 
 ```json Config
 {
@@ -519,11 +525,11 @@ The gateway provides admin endpoints for parsing reasoning content and function 
 }
 ```
 
-### Classification API
+### 分类 API
 
-The `/v1/classify` endpoint provides text classification using sequence classification models (e.g., `Qwen2ForSequenceClassification`, `BertForSequenceClassification`).
+`/v1/classify` 端点使用序列分类模型（例如 `Qwen2ForSequenceClassification`、`BertForSequenceClassification`）提供文本分类能力。
 
-#### Request
+#### 请求
 
 ```bash Command
 curl http://localhost:30000/v1/classify \
@@ -534,7 +540,7 @@ curl http://localhost:30000/v1/classify \
   }'
 ```
 
-#### Response
+#### 响应
 
 ```json Config
 {
@@ -558,7 +564,7 @@ curl http://localhost:30000/v1/classify \
 }
 ```
 
-#### Response Fields
+#### 响应字段
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -567,33 +573,33 @@ curl http://localhost:30000/v1/classify \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Field</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>字段</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`label`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Predicted class label (from model's `id2label` config, or `LABEL_N` fallback)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>预测的类别标签（来自模型的 `id2label` 配置，或回退到 `LABEL_N`）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`probs`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Probability distribution over all classes (softmax of logits)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>所有类别上的概率分布（logits 经 softmax）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`num_classes`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Number of classification classes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>分类的类别数量</td>
     </tr>
   </tbody>
 </table>
 
-#### Notes
+#### 说明
 
-- Classification reuses the embedding backend—the scheduler returns logits which are converted to probabilities via softmax
-- Labels come from the model's HuggingFace config (`id2label` field); models without this mapping use generic labels (`LABEL_0`, `LABEL_1`, etc.)
-- Both HTTP and gRPC routers support classification
+- 分类复用嵌入后端——调度器返回 logits，再经 softmax 转换为概率
+- 标签来自模型的 HuggingFace 配置（`id2label` 字段）；没有该映射的模型使用通用标签（`LABEL_0`、`LABEL_1` 等）
+- HTTP 与 gRPC 路由器都支持分类
 
-### Conversation and Response APIs
+### 对话与响应 API
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -603,81 +609,81 @@ curl http://localhost:30000/v1/classify \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/responses`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Create background responses (agentic loops)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>创建后台响应（agentic 循环）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/responses/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Retrieve stored response</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取已存储的响应</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/responses/{id}/cancel`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Cancel background response</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>取消后台响应</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/responses/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Delete response</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>删除响应</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/responses/{id}/input_items`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List response input items</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出响应输入项</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Create conversation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>创建对话</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get conversation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取对话</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Update conversation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>更新对话</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Delete conversation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>删除对话</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}/items`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List conversation items</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出对话条目</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}/items`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Add items to conversation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>向对话添加条目</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}/items/{item_id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get conversation item</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取对话条目</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/conversations/{id}/items/{item_id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Delete conversation item</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>删除对话条目</td>
     </tr>
   </tbody>
 </table>
 
-### Worker Management APIs
+### Worker 管理 API
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -687,41 +693,41 @@ curl http://localhost:30000/v1/classify \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/workers`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Queue worker registration (returns 202 Accepted)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>排队 worker 注册（返回 202 Accepted）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/workers`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List workers with health, load, and policy metadata</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出 worker，包含健康、负载与策略元数据</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/workers/{worker_id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Inspect specific worker or job queue entry</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>查看指定 worker 或任务队列条目</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`PUT`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/workers/{worker_id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Queue worker update</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>排队 worker 更新</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/workers/{worker_id}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Queue worker removal</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>排队 worker 移除</td>
     </tr>
   </tbody>
 </table>
 
-#### Add Worker
+#### 添加 Worker
 
 ```bash Command
 curl -X POST http://localhost:30000/workers \
@@ -729,13 +735,13 @@ curl -X POST http://localhost:30000/workers \
   -d '{"url":"grpc://0.0.0.0:31000","worker_type":"regular"}'
 ```
 
-#### List Workers
+#### 列出 Worker
 
 ```bash Command
 curl http://localhost:30000/workers
 ```
 
-Response:
+响应：
 ```json Config
 {
   "workers": [
@@ -760,7 +766,7 @@ Response:
 }
 ```
 
-### Admin and Health Endpoints
+### 管理与健康端点
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -770,82 +776,85 @@ Response:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Path</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>路径</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/liveness`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Health check (always returns OK)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>健康检查（始终返回 OK）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/readiness`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Readiness check (checks healthy worker availability)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>就绪检查（检查是否有健康 worker 可用）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/health`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Alias for liveness</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>liveness 的别名</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/health_generate`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Health generate test</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>健康 generate 测试</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/engine_metrics`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Engine-level metrics from workers</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>来自 worker 的引擎级指标</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/v1/models`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List available models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出可用模型</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/get_model_info`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get model information</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取模型信息</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/get_server_info`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get server information</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取服务器信息</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/flush_cache`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Clear all caches</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>清空所有缓存</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/get_loads`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Get all worker loads</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>获取所有 worker 的负载</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`POST`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/wasm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Upload WASM module</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>上传 WASM 模块</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`GET`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/wasm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>List WASM modules</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>列出 WASM 模块</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`DELETE`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`/wasm/{module_uuid}`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Remove WASM module</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>移除 WASM 模块</td>
     </tr>
   </tbody>
 </table>
 
 ***
-## Load Balancing Policies
+## 负载均衡策略
+<Note>
+💡 AI Infra 学习笔记：cache-aware 路由是网关层最能体现「缓存即性能」的策略——RadixAttention 的 KV 缓存命中率取决于同一前缀是否落在同一 worker 上。若请求被随机分发到不同 worker，缓存全部不命中，TTFT 会明显变差；cache-aware 策略会把前缀相似的请求尽量导向已缓存该前缀的 worker，用路由的「局部性」换取更低的 TTFT。这也是为什么网关不仅要懂负载均衡，还要感知每个 worker 的缓存状态。
+</Note>
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -855,41 +864,41 @@ Response:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Policy</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Usage</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>策略</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>用法</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`random`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Uniform random selection</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>均匀随机选择</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy random`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`round_robin`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Cycles through workers in order</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>按顺序轮询 worker</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy round_robin`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`power_of_two`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Samples two workers and picks the lighter one</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>随机采样两个 worker，选择负载较轻的一个</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy power_of_two`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`cache_aware`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Combines cache locality with load balancing (default)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>结合缓存局部性与负载均衡（默认）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy cache_aware`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`bucket`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Divides workers into load buckets with dynamic boundaries</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>把 worker 划分为动态边界的负载桶</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy bucket`</td>
     </tr>
   </tbody>
 </table>
 
-### Cache-Aware Policy Tuning
+### Cache-Aware 策略调优
 
 ```bash Command
 --cache-threshold 0.5 \
@@ -907,46 +916,46 @@ Response:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--cache-threshold`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>0.3</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Minimum prefix match ratio for cache hit</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>判定缓存命中的最小前缀匹配比例</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--balance-abs-threshold`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>64</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Absolute load difference before rebalancing</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>触发再平衡的负载绝对差值</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--balance-rel-threshold`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1.5</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Relative load ratio before rebalancing</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>触发再平衡的负载相对比例</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--eviction-interval-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>120</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Cache eviction cadence in seconds</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>缓存淘汰周期（秒）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--max-tree-size`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>67108864</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum nodes in cache tree</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>缓存树的最大节点数</td>
     </tr>
   </tbody>
 </table>
 
 ***
-## Reliability and Flow Control
+## 可靠性与流量控制
 
-### HTTP Client
+### HTTP 客户端
 
-Configure upstream HTTP client connection settings:
+配置上游 HTTP 客户端的连接参数：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -956,38 +965,38 @@ Configure upstream HTTP client connection settings:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--pool-idle-timeout-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>50</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Idle timeout in seconds for pooled upstream HTTP connections. Can also be set with `SMG_POOL_IDLE_TIMEOUT_SECS`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>池化上游 HTTP 连接的空闲超时（秒）。也可以通过 `SMG_POOL_IDLE_TIMEOUT_SECS` 设置。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--connect-timeout-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>10</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Timeout in seconds for new upstream HTTP connections. Can also be set with `SMG_CONNECT_TIMEOUT_SECS`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>新建上游 HTTP 连接的超时（秒）。也可以通过 `SMG_CONNECT_TIMEOUT_SECS` 设置。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--pool-max-idle-per-host`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>500</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum idle upstream HTTP connections to keep per host. Can also be set with `SMG_POOL_MAX_IDLE_PER_HOST`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个主机保留的最大空闲上游 HTTP 连接数。也可以通过 `SMG_POOL_MAX_IDLE_PER_HOST` 设置。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tcp-keepalive-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>30</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>TCP keepalive idle time in seconds for upstream HTTP connections. Can also be set with `SMG_TCP_KEEPALIVE_SECS`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>上游 HTTP 连接的 TCP keepalive 空闲时间（秒）。也可以通过 `SMG_TCP_KEEPALIVE_SECS` 设置。</td>
     </tr>
   </tbody>
 </table>
 
-### Retries
+### 重试
 
-Configure exponential backoff retries:
+配置指数退避重试：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1007,50 +1016,50 @@ python -m sglang_router.launch_router \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--retry-max-retries`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>5</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum retry attempts</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>最大重试次数</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--retry-initial-backoff-ms`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>50</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Initial backoff duration (ms)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>初始退避时长（毫秒）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--retry-max-backoff-ms`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>5000</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum backoff duration (ms)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>最大退避时长（毫秒）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--retry-backoff-multiplier`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>2.0</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Exponential backoff multiplier</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>指数退避倍数</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--retry-jitter-factor`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>0.1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Random jitter factor (0.0-1.0)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>随机抖动因子（0.0-1.0）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--disable-retries`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>false</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Disable retries entirely</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>完全禁用重试</td>
     </tr>
   </tbody>
 </table>
 
-**Retryable Status Codes:** 408, 429, 500, 502, 503, 504
+**可重试状态码：** 408、429、500、502、503、504
 
-### Circuit Breaker
+### 熔断器
 
-Per-worker circuit breakers prevent cascading failures:
+按 worker 粒度配置熔断器，防止故障级联扩散：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1069,46 +1078,46 @@ python -m sglang_router.launch_router \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--cb-failure-threshold`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>5</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Consecutive failures to open circuit</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>连续失败次数达到该值后熔断打开</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--cb-success-threshold`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>2</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Successes to close from half-open</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>半开状态下成功次数达到该值后闭合</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--cb-timeout-duration-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>30</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Time before half-open attempt</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>进入半开探测前的等待时间</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--cb-window-duration-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>60</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Failure counting window</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>失败计数窗口</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--disable-circuit-breaker`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>false</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Disable circuit breaker</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>禁用熔断器</td>
     </tr>
   </tbody>
 </table>
 
-**Circuit Breaker States:**
-- **Closed**: Normal operation, requests allowed
-- **Open**: Failing, requests rejected immediately
-- **Half-Open**: Testing recovery, limited requests allowed
+**熔断器状态：**
+- **Closed（闭合）**：正常运行，允许请求通过
+- **Open（打开）**：正在故障中，请求被立即拒绝
+- **Half-Open（半开）**：探测恢复，只允许少量请求
 
-### Rate Limiting and Queuing
+### 限流与排队
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1119,11 +1128,11 @@ python -m sglang_router.launch_router \
   --queue-timeout-secs 30
 ```
 
-Requests beyond the concurrency limit wait in a FIFO queue. Returns:
-- `429 Too Many Requests` when queue is full
-- `408 Request Timeout` when queue timeout expires
+超过并发限制的请求会进入 FIFO 队列等待。返回结果：
+- 队列已满时返回 `429 Too Many Requests`
+- 队列等待超时时返回 `408 Request Timeout`
 
-### Health Checks
+### 健康检查
 
 ```bash Command
 --health-check-interval-secs 30 \
@@ -1134,11 +1143,11 @@ Requests beyond the concurrency limit wait in a FIFO queue. Returns:
 ```
 
 ***
-## Reasoning Parser Integration
+## 推理解析器集成
 
-The gateway includes built-in reasoning parsers for models that use Chain-of-Thought (CoT) reasoning with explicit thinking blocks.
+网关内置了推理解析器，用于处理使用显式思考块的思维链（CoT）推理模型。
 
-### Supported Parsers
+### 支持的解析器
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1148,16 +1157,16 @@ The gateway includes built-in reasoning parsers for models that use Chain-of-Tho
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parser ID</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Think Tokens</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>解析器 ID</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>模型家族</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>思考 token</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseek-r1`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-R1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`&lt;think&gt;...&lt;/think&gt;` (initial reasoning)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`&lt;think&gt;...&lt;/think&gt;`（初始推理）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3`</td>
@@ -1167,12 +1176,12 @@ The gateway includes built-in reasoning parsers for models that use Chain-of-Tho
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3-thinking`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Qwen-3 Thinking</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`&lt;think&gt;...&lt;/think&gt;` (initial reasoning)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`&lt;think&gt;...&lt;/think&gt;`（初始推理）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`kimi`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Kimi K2</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Unicode think tokens</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Unicode 思考 token</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`glm45`</td>
@@ -1192,7 +1201,7 @@ The gateway includes built-in reasoning parsers for models that use Chain-of-Tho
   </tbody>
 </table>
 
-### Usage
+### 用法
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1201,18 +1210,18 @@ python -m sglang_router.launch_router \
   --reasoning-parser deepseek-r1
 ```
 
-The gRPC router automatically:
-1. Detects reasoning blocks in streaming output
-2. Separates reasoning content from normal text
-3. Applies incremental streaming parsing with buffer management
-4. Handles partial token detection for correct streaming behavior
+gRPC 路由器会自动：
+1. 在流式输出中检测推理块
+2. 把推理内容与普通文本分离
+3. 通过缓冲区管理实现增量式流式解析
+4. 处理不完整 token 的检测，保证流式行为正确
 
 ***
-## Tool Call Parsing
+## 工具调用解析
 
-The gateway supports parsing function/tool calls from LLM outputs in multiple formats.
+网关支持从 LLM 输出中以多种格式解析函数/工具调用。
 
-### Supported Formats
+### 支持的格式
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1222,31 +1231,31 @@ The gateway supports parsing function/tool calls from LLM outputs in multiple fo
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parser</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Format</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>解析器</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>格式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`json`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>JSON</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Standard JSON tool calls</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>标准 JSON 工具调用</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`python`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Pythonic</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Python function call syntax</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Python 风格</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Python 函数调用语法</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`xml`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>XML</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>XML-formatted tool calls</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>XML 格式的工具调用</td>
     </tr>
   </tbody>
 </table>
 
-### Usage
+### 用法
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1256,16 +1265,16 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## Tokenizer Management
+## 分词器管理
 
-### Tokenizer Sources
+### 分词器来源
 
-The gateway supports multiple tokenizer backends:
-- **HuggingFace**: Load from HuggingFace Hub by model ID
-- **Local**: Load from local `tokenizer.json` or directory
-- **Tiktoken**: Auto-detect OpenAI GPT models (gpt-4, davinci, etc.)
+网关支持多种分词器后端：
+- **HuggingFace**：按模型 ID 从 HuggingFace Hub 加载
+- **本地**：从本地 `tokenizer.json` 或目录加载
+- **Tiktoken**：自动识别 OpenAI GPT 模型（gpt-4、davinci 等）
 
-### Configuration
+### 配置
 
 ```bash Command
 # HuggingFace model
@@ -1278,9 +1287,9 @@ The gateway supports multiple tokenizer backends:
 --chat-template /path/to/template.jinja
 ```
 
-### Tokenizer Caching
+### 分词器缓存
 
-Two-level caching for optimal performance:
+两级缓存以取得最优性能：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1290,21 +1299,21 @@ Two-level caching for optimal performance:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Cache</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>缓存层</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>L0</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Exact match</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Whole-string caching for repeated prompts</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>精确匹配</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>对重复提示词做整串缓存</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>L1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefix match</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Prefix boundary matching for incremental prompts</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>前缀匹配</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>对增量提示词做前缀边界匹配</td>
     </tr>
   </tbody>
 </table>
@@ -1317,11 +1326,11 @@ Two-level caching for optimal performance:
 ```
 
 ***
-## MCP Integration
+## MCP 集成
 
-The gateway provides native Model Context Protocol (MCP) client integration for tool execution.
+网关原生集成了模型上下文协议（MCP）客户端，用于工具执行。
 
-### Supported Transports
+### 支持的传输方式
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1330,27 +1339,27 @@ The gateway provides native Model Context Protocol (MCP) client integration for 
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Transport</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>传输方式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>STDIO</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Local process execution</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>本地进程执行</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SSE</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Server-Sent Events (HTTP)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务器发送事件（HTTP）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Streamable</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Bidirectional streaming</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>双向流式</td>
     </tr>
   </tbody>
 </table>
 
-### Configuration
+### 配置
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1358,7 +1367,7 @@ python -m sglang_router.launch_router \
   --worker-urls http://worker1:8000
 ```
 
-### MCP Configuration File
+### MCP 配置文件
 
 ```yaml Config
 servers:
@@ -1395,9 +1404,9 @@ inventory:
 ```
 
 ***
-## Service Discovery (Kubernetes)
+## 服务发现（Kubernetes）
 
-Enable automatic worker discovery via Kubernetes pod selectors:
+通过 Kubernetes pod 选择器启用 worker 自动发现：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1407,7 +1416,7 @@ python -m sglang_router.launch_router \
   --service-discovery-port 8000
 ```
 
-### PD Mode Discovery
+### PD 模式发现
 
 ```bash Command
 --pd-disaggregation \
@@ -1416,10 +1425,10 @@ python -m sglang_router.launch_router \
 --service-discovery
 ```
 
-Prefill pods can expose bootstrap ports via the `sglang.ai/bootstrap-port` annotation. RBAC must allow `get`, `list`, and `watch` on pods.
+prefill pod 可以通过 `sglang.ai/bootstrap-port` 注解暴露 bootstrap 端口。RBAC 需要允许对 pod 执行 `get`、`list` 和 `watch`。
 
 ***
-## History and Data Connectors
+## 历史与数据连接器
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1429,20 +1438,20 @@ Prefill pods can expose bootstrap ports via the `sglang.ai/bootstrap-port` annot
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Usage</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>用法</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`memory`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>In-memory storage (default)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>内存存储（默认）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--history-backend memory`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`none`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No persistence</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>不持久化</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--history-backend none`</td>
     </tr>
     <tr>
@@ -1452,7 +1461,7 @@ Prefill pods can expose bootstrap ports via the `sglang.ai/bootstrap-port` annot
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`postgres`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>PostgreSQL Database</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>PostgreSQL 数据库</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`--history-backend postgres`</td>
     </tr>
     <tr>
@@ -1463,7 +1472,7 @@ Prefill pods can expose bootstrap ports via the `sglang.ai/bootstrap-port` annot
   </tbody>
 </table>
 
-### Oracle Configuration
+### Oracle 配置
 
 ```bash Command
 # Connection descriptor
@@ -1485,7 +1494,7 @@ python -m sglang_router.launch_router \
   --history-backend oracle
 ```
 
-### PostgreSQL Configuration
+### PostgreSQL 配置
 
 ```bash Command
 export POSTGRES_DB_URL="postgres://user:password@host:5432/dbname"
@@ -1496,7 +1505,7 @@ python -m sglang_router.launch_router \
   --history-backend postgres
 ```
 
-### Redis Configuration
+### Redis 配置
 
 ```bash Command
 export REDIS_URL="redis://localhost:6379"
@@ -1510,16 +1519,16 @@ python -m sglang_router.launch_router \
   --redis-retention-days 30
 ```
 
-Use `--redis-retention-days -1` for persistent storage (default is 30 days).
+使用 `--redis-retention-days -1` 可永久存储（默认 30 天）。
 
 ***
-## WASM Middleware
+## WASM 中间件
 
-The gateway supports WebAssembly (WASM) middleware modules for custom request/response processing. This enables organization-specific logic for authentication, rate limiting, billing, logging, and more—without modifying or recompiling the gateway.
+网关支持 WebAssembly（WASM）中间件模块，用于自定义请求/响应处理。这样可以实现组织特定的认证、限流、计费、日志等逻辑，而无需修改或重新编译网关。
 
-### Overview
+### 概览
 
-WASM middleware runs in a sandboxed environment with memory isolation, no network/filesystem access, and configurable resource limits.
+WASM 中间件运行在沙箱环境中，具备内存隔离，无法访问网络/文件系统，并支持可配置的资源限制。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1529,21 +1538,21 @@ WASM middleware runs in a sandboxed environment with memory isolation, no networ
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Attach Point</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>When Executed</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Use Cases</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>挂载点</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>执行时机</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>典型用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`OnRequest`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Before forwarding to workers</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Auth, rate limiting, request modification</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>在转发给 worker 之前</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>认证、限流、请求改写</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`OnResponse`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>After receiving worker response</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Logging, response modification, error handling</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>收到 worker 响应之后</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>日志、响应改写、错误处理</td>
     </tr>
   </tbody>
 </table>
@@ -1555,29 +1564,29 @@ WASM middleware runs in a sandboxed environment with memory isolation, no networ
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Action</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>动作</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`Continue`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Proceed without modification</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>不做修改，继续处理</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`Reject(status)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Reject request with HTTP status code</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>以 HTTP 状态码拒绝请求</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`Modify(...)`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Modify headers, body, or status</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>修改请求头、请求体或状态</td>
     </tr>
   </tbody>
 </table>
 
-### Examples
+### 示例
 
-Complete working examples are available in `examples/wasm/`:
+`examples/wasm/` 目录下提供了完整的可运行示例：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1586,29 +1595,29 @@ Complete working examples are available in `examples/wasm/`:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Example</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>示例</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`auth/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>API key authentication for protected routes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>对受保护路由做 API 密钥认证</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`rate_limit/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Per-client rate limiting (requests/minute)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>按客户端限流（每分钟请求数）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`logging/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Request tracking headers and response modification</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>请求追踪头与响应改写</td>
     </tr>
   </tbody>
 </table>
 
-The interface definition is located at `src/wasm/interface`.
+接口定义位于 `src/wasm/interface`。
 
-### Building Modules
+### 构建模块
 
 ```bash Command
 # Prerequisites
@@ -1624,7 +1633,7 @@ wasm-tools component new \
   -o my_middleware.component.wasm
 ```
 
-### Deploying Modules
+### 部署模块
 
 ```bash Command
 # Enable WASM support
@@ -1651,7 +1660,7 @@ curl http://localhost:30000/wasm
 curl -X DELETE http://localhost:30000/wasm/{module_uuid}
 ```
 
-### Runtime Configuration
+### 运行时配置
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1661,47 +1670,47 @@ curl -X DELETE http://localhost:30000/wasm/{module_uuid}
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`max_memory_pages`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1024 (64MB)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum WASM memory</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>WASM 内存上限</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`max_execution_time_ms`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1000</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Execution timeout</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>执行超时</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`max_stack_size`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1MB</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Stack size limit</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>栈大小上限</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`module_cache_size`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>10</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Cached modules per worker</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个 worker 缓存的模块数</td>
     </tr>
   </tbody>
 </table>
 
-**Note:** Rate limiting state is per-worker thread and not shared across gateway replicas. For production, consider implementing rate limiting at a shared layer (e.g., Redis)
+**注意：** 限流状态按 worker 线程维护，不会在网关副本之间共享。生产环境建议在共享层（例如 Redis）实现限流。
 
 ***
-## Language Bindings
+## 语言绑定
 
-SGLang Model Gateway provides official language bindings for Python and Go, enabling integration with different technology stacks and organizational requirements.
+SGLang Model Gateway 为 Python 与 Go 提供了官方语言绑定，方便接入不同的技术栈并满足不同组织的要求。
 
-### Python Bindings
+### Python 绑定
 
-The Python bindings provide a PyO3-based wrapper around the Rust gateway library. This is a straightforward binding that calls the gateway server startup from Python.
+Python 绑定是基于 PyO3 对 Rust 网关库的封装。它是一个简单的绑定，用于从 Python 调用网关服务端的启动逻辑。
 
-#### Installation
+#### 安装
 
 ```bash Command
 # From PyPI
@@ -1712,24 +1721,24 @@ cd sgl-model-gateway/bindings/python
 pip install maturin && maturin develop --features vendored-openssl
 ```
 
-#### Usage
+#### 用法
 
-The Python bindings are used throughout this documentation. See the [Quick Start](#quick-start) and [Deployment Modes](#deployment-modes) sections for detailed examples.
+本页面各处的示例都使用了 Python 绑定。详细示例请参考[快速上手](#quick-start)与[部署模式](#deployment-modes)两节。
 
-Key components:
-- `RouterArgs` dataclass with 50+ configuration options
-- `Router.from_args()` for programmatic startup
-- CLI commands: `smg launch`, `smg server`, `python -m sglang_router.launch_router`
+核心组件：
+- `RouterArgs` 数据类，提供 50+ 个配置项
+- `Router.from_args()`，用于以编程方式启动
+- CLI 命令：`smg launch`、`smg server`、`python -m sglang_router.launch_router`
 
-### Go Bindings
+### Go 绑定
 
-The Go bindings provide a high-performance gRPC client library for organizations with Go-based infrastructure. This is ideal for:
+Go 绑定为基于 Go 基础设施的组织提供高性能的 gRPC 客户端库，特别适合：
 
-- Integration with internal Go services and tooling
-- High-performance client applications
-- Building custom OpenAI-compatible proxy servers
+- 与内部 Go 服务及工具集成
+- 高性能客户端应用
+- 构建自定义的 OpenAI 兼容代理服务器
 
-#### Architecture
+#### 架构
 
 ```text Output
 +-------------------------------------------+
@@ -1743,13 +1752,13 @@ The Go bindings provide a high-performance gRPC client library for organizations
 +-------------------------------------------+
 ```
 
-**Key Features:**
-- Native Rust tokenization via FFI (thread-safe, lock-free)
-- Full streaming support with context cancellation
-- Configurable channel buffer sizes for high concurrency
-- Built-in tool call parsing and chat template application
+**关键特性：**
+- 通过 FFI 调用原生 Rust 分词（线程安全、无锁）
+- 完整支持流式，并支持上下文取消
+- 可配置的通道缓冲区大小，支持高并发
+- 内置工具调用解析与对话模板应用
 
-#### Installation
+#### 安装
 
 ```bash Command
 # Build the FFI library first
@@ -1760,11 +1769,11 @@ make build && make lib
 go get github.com/sgl-project/sgl-go-sdk
 ```
 
-**Requirements:** Go 1.24+, Rust toolchain
+**要求：** Go 1.24+、Rust 工具链
 
-#### Examples
+#### 示例
 
-Complete working examples are available in `bindings/golang/examples/`:
+`bindings/golang/examples/` 目录下提供了完整的可运行示例：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1773,22 +1782,22 @@ Complete working examples are available in `bindings/golang/examples/`:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Example</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>示例</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`simple/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Non-streaming chat completion</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>非流式聊天补全</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`streaming/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Streaming chat completion with SSE</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>基于 SSE 的流式聊天补全</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`oai_server/`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Full OpenAI-compatible HTTP server</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>完整的 OpenAI 兼容 HTTP 服务器</td>
     </tr>
   </tbody>
 </table>
@@ -1800,7 +1809,7 @@ cd sgl-model-gateway/bindings/golang/examples/streaming && ./run.sh
 cd sgl-model-gateway/bindings/golang/examples/oai_server && ./run.sh
 ```
 
-#### Testing
+#### 测试
 
 ```bash Command
 cd sgl-model-gateway/bindings/golang
@@ -1814,7 +1823,7 @@ export SGL_TOKENIZER_PATH=/path/to/tokenizer
 go test -tags=integration -v ./...
 ```
 
-### Comparison
+### 对比
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1824,43 +1833,43 @@ go test -tags=integration -v ./...
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Feature</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>特性</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Python</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Go</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Primary Use**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Gateway server launcher</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>gRPC client library</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**主要用途**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>网关服务端启动器</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>gRPC 客户端库</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**CLI Support**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Full CLI (smg, sglang-router)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Library only</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**CLI 支持**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>完整 CLI（smg、sglang-router）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>仅库形式</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**K8s Discovery**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Native support</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>N/A (client library)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**K8s 发现**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>原生支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>不适用（客户端库）</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**PD Mode**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Built-in</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>N/A (client library)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**PD 模式**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>内置</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>不适用（客户端库）</td>
     </tr>
   </tbody>
 </table>
 
-**When to Use Python:** Launching and managing the gateway server, service discovery, PD disaggregation.
+**何时用 Python：** 启动与管理网关服务端、服务发现、PD 分离。
 
-**When to Use Go:** Building custom client applications, integration with Go microservices, OpenAI-compatible proxy servers
+**何时用 Go：** 构建自定义客户端应用、与 Go 微服务集成、OpenAI 兼容代理服务器
 
 ***
-## Security and Authentication
+## 安全与认证
 
-### Router API Key
+### 路由器 API 密钥
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1868,9 +1877,9 @@ python -m sglang_router.launch_router \
   --worker-urls http://worker1:8000
 ```
 
-Clients must supply `Authorization: Bearer <key>` for protected endpoints.
+客户端访问受保护端点时必须提供 `Authorization: Bearer <key>`。
 
-### Worker API Keys
+### Worker API 密钥
 
 ```bash Command
 # Add worker with explicit key
@@ -1880,16 +1889,16 @@ curl -H "Authorization: Bearer router-key" \
   -d '{"url":"http://worker:8000","api_key":"worker-key"}'
 ```
 
-### Security Configurations
+### 安全配置
 
-1. **No Authentication** (default): Use only in trusted environments
-2. **Router-only Authentication**: Clients authenticate to router
-3. **Worker-only Authentication**: Router open, workers require keys
-4. **Full Authentication**: Both router and workers protected
+1. **无认证**（默认）：仅限可信环境使用
+2. **仅路由器认证**：客户端向路由器认证
+3. **仅 Worker 认证**：路由器开放，worker 需要密钥
+4. **完整认证**：路由器与 worker 都受保护
 
-### TLS (HTTPS) for Gateway Server
+### 网关服务的 TLS（HTTPS）
 
-Enable TLS to serve the gateway over HTTPS:
+启用 TLS，让网关通过 HTTPS 提供服务：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1905,27 +1914,27 @@ python -m sglang_router.launch_router \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tls-cert-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to server certificate (PEM format)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务器证书路径（PEM 格式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tls-key-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to server private key (PEM format)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务器私钥路径（PEM 格式）</td>
     </tr>
   </tbody>
 </table>
 
-Both parameters must be provided together. The gateway uses rustls with the ring crypto provider for TLS termination. If TLS is not configured, the gateway falls back to plain HTTP.
+这两个参数必须同时提供。网关使用 rustls（ring 加密提供方）做 TLS 终止。如果没有配置 TLS，网关会回退为明文 HTTP。
 
-### mTLS for Worker Communication
+### Worker 通信的 mTLS
 
-Enable mutual TLS (mTLS) for secure communication with workers in HTTP mode:
+在 HTTP 模式下启用双向 TLS（mTLS），与 worker 安全通信：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1942,36 +1951,36 @@ python -m sglang_router.launch_router \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--client-cert-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to client certificate for mTLS (PEM format)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于 mTLS 的客户端证书路径（PEM 格式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--client-key-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to client private key for mTLS (PEM format)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于 mTLS 的客户端私钥路径（PEM 格式）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--ca-cert-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to CA certificate for verifying worker TLS (PEM format, repeatable)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于校验 worker TLS 的 CA 证书路径（PEM 格式，可重复）</td>
     </tr>
   </tbody>
 </table>
 
-**Key Points:**
-- Client certificate and key must be provided together
-- Multiple CA certificates can be added with multiple `--ca-cert-path` flags
-- Uses rustls backend when TLS is configured
-- Single HTTP client is created for all workers (assumes single security domain)
-- TCP keepalive (30 seconds) is enabled for long-lived connections
+**要点：**
+- 客户端证书与私钥必须同时提供
+- 可以通过多个 `--ca-cert-path` 参数添加多个 CA 证书
+- 配置 TLS 后使用 rustls 后端
+- 所有 worker 共用一个 HTTP 客户端（假定处于同一安全域）
+- 为长连接启用了 TCP keepalive（30 秒）
 
-### Full TLS Configuration Example
+### 完整 TLS 配置示例
 
-Gateway HTTPS + Worker mTLS + API Key authentication:
+网关 HTTPS + Worker mTLS + API 密钥认证：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1986,13 +1995,13 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## Observability
+## 可观测性
 
-### Prometheus Metrics
+### Prometheus 指标
 
-Enable with `--prometheus-host`/`--prometheus-port` (defaults to `0.0.0.0:29000`).
+通过 `--prometheus-host`/`--prometheus-port` 启用（默认 `0.0.0.0:29000`）。
 
-#### Metric Categories (40+ metrics)
+#### 指标类别（40+ 项指标）
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2002,9 +2011,9 @@ Enable with `--prometheus-host`/`--prometheus-port` (defaults to `0.0.0.0:29000`
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Layer</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefix</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Metrics</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>层次</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>前缀</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>指标</th>
     </tr>
   </thead>
   <tbody>
@@ -2029,17 +2038,17 @@ Enable with `--prometheus-host`/`--prometheus-port` (defaults to `0.0.0.0:29000`
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`pool_size`, `connections_active`, `requests_active`, `health_checks_total`, `selection_total`, `errors_total`</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Circuit Breaker</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>熔断器</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`smg_worker_cb_*`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`state`, `transitions_total`, `outcomes_total`, `consecutive_failures`, `consecutive_successes`</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Retry</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>重试</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`smg_worker_*`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`retries_total`, `retries_exhausted_total`, `retry_backoff_seconds`</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Discovery</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>发现</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`smg_discovery_*`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`registrations_total`, `deregistrations_total`, `sync_duration_seconds`, `workers_discovered`</td>
     </tr>
@@ -2049,14 +2058,14 @@ Enable with `--prometheus-host`/`--prometheus-port` (defaults to `0.0.0.0:29000`
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`tool_calls_total`, `tool_duration_seconds`, `servers_active`, `tool_iterations_total`</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Database</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>数据库</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`smg_db_*`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`operations_total`, `operation_duration_seconds`, `connections_active`, `items_stored`</td>
     </tr>
   </tbody>
 </table>
 
-#### Key Inference Metrics (gRPC mode)
+#### 关键推理指标（gRPC 模式）
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2066,42 +2075,42 @@ Enable with `--prometheus-host`/`--prometheus-port` (defaults to `0.0.0.0:29000`
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Metric</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>指标</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`smg_router_ttft_seconds`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Histogram</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Time to first token</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>首 token 时间</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`smg_router_tpot_seconds`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Histogram</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Time per output token</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个输出 token 的时间</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`smg_router_tokens_total`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Counter</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Total tokens (input/output)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>token 总数（输入/输出）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`smg_router_generation_duration_seconds`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Histogram</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>End-to-end generation time</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>端到端生成时间</td>
     </tr>
   </tbody>
 </table>
 
-#### Duration Buckets
+#### 时长桶
 
 1ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, 15s, 30s, 45s, 60s, 90s, 120s, 180s, 240s
 
-### OpenTelemetry Tracing
+### OpenTelemetry 追踪
 
-Enable distributed tracing with OTLP export:
+启用分布式追踪，并通过 OTLP 导出：
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -2110,16 +2119,16 @@ python -m sglang_router.launch_router \
   --otlp-traces-endpoint localhost:4317
 ```
 
-#### Features
+#### 特性
 
-- OTLP/gRPC exporter (default port 4317)
-- W3C Trace Context propagation for HTTP and gRPC
-- Batch span processing (500ms delay, 64 span batch size)
-- Custom filtering to reduce noise
-- Trace context injection into upstream worker requests
-- Service name: `sgl-router`
+- OTLP/gRPC 导出器（默认端口 4317）
+- 支持 HTTP 与 gRPC 的 W3C Trace Context 传播
+- 批量 span 处理（500ms 延迟，每批 64 个 span）
+- 自定义过滤以减少噪声
+- 向上游 worker 请求注入 trace 上下文
+- 服务名：`sgl-router`
 
-### Logging
+### 日志
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -2128,24 +2137,24 @@ python -m sglang_router.launch_router \
   --log-dir ./router_logs
 ```
 
-Structured tracing with optional file sink. Log levels: `debug`, `info`, `warn`, `error`.
+结构化追踪，可选文件输出。日志级别：`debug`、`info`、`warn`、`error`。
 
-### Request ID Propagation
+### 请求 ID 透传
 
 ```bash Command
 --request-id-headers x-request-id x-trace-id x-correlation-id
 ```
 
-Responses include `x-request-id` header for correlation.
+响应中会包含 `x-request-id` 头，用于关联追踪。
 
 ***
-## Production Recommendations
+## 生产环境建议
 
-This section provides guidance for deploying SGLang Model Gateway in production environments.
+本节给出在生产环境中部署 SGLang Model Gateway 的指导。
 
-### Security Best Practices
+### 安全最佳实践
 
-**Always enable TLS in production:**
+**生产环境务必启用 TLS：**
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -2158,19 +2167,19 @@ python -m sglang_router.launch_router \
   --api-key "${ROUTER_API_KEY}"
 ```
 
-**Security Checklist:**
-- Enable TLS for gateway HTTPS termination
-- Enable mTLS for worker communication when workers are on untrusted networks
-- Set `--api-key` to protect router endpoints
-- Use Kubernetes Secrets or a secrets manager for credentials
-- Rotate certificates and API keys periodically
-- Restrict network access with firewalls or network policies
+**安全清单：**
+- 为网关启用 TLS，做 HTTPS 终止
+- 当 worker 处于不可信网络时，为 worker 通信启用 mTLS
+- 设置 `--api-key` 保护路由器端点
+- 用 Kubernetes Secrets 或密钥管理器存放凭据
+- 定期轮换证书与 API 密钥
+- 用防火墙或网络策略限制网络访问
 
-### High Availability
+### 高可用
 
-**Scaling Strategy:**
+**扩缩容策略：**
 
-The gateway supports running multiple replicas behind a load balancer for high availability. However, there are important considerations:
+网关支持在负载均衡器后面运行多个副本以实现高可用，但有几个重要事项需要注意：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2180,43 +2189,43 @@ The gateway supports running multiple replicas behind a load balancer for high a
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Component</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Shared Across Replicas</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Impact</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>组件</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>副本间共享</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>影响</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Worker Registry</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No (independent)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Each replica discovers workers independently</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Worker 注册表</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否（独立）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个副本独立发现 worker</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Radix Cache Tree</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No (independent)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Cache hits may decrease by 10-20%</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Radix 缓存树</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否（独立）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>缓存命中率可能下降 10-20%</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Circuit Breaker State</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No (independent)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Each replica tracks failures independently</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>熔断器状态</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否（独立）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>每个副本独立跟踪失败</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Rate Limiting</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No (independent)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Limits apply per-replica, not globally</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>限流</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否（独立）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>限流按副本生效，而非全局</td>
     </tr>
   </tbody>
 </table>
 
-**Recommendations:**
+**建议：**
 
-1. **Prefer horizontal scaling over vertical scaling**: Deploy multiple smaller gateway replicas rather than one large instance with excessive CPU and memory. This provides:
-   - Better fault tolerance (single replica failure doesn't take down the gateway)
-   - More predictable resource usage
-   - Easier capacity planning
+1. **优先水平扩展而非垂直扩展**：部署多个较小的网关副本，而不是单个 CPU 和内存过剩的大实例。这样做的好处：
+   - 更好的容错性（单个副本故障不会拖垮整个网关）
+   - 资源使用更可预测
+   - 容量规划更简单
 
-2. **Use Kubernetes Service Discovery**: Let the gateway automatically discover and manage workers:
+2. **使用 Kubernetes 服务发现**：让网关自动发现并管理 worker：
    ```bash Command
    python -m sglang_router.launch_router \
      --service-discovery \
@@ -2224,15 +2233,15 @@ The gateway supports running multiple replicas behind a load balancer for high a
      --service-discovery-namespace production
    ```
 
-3. **Accept cache efficiency trade-off**: With multiple replicas, the cache-aware routing policy's radix tree is not synchronized across replicas. This means:
-   - Each replica builds its own cache tree
-   - Requests from the same user may hit different replicas
-   - Expected cache hit rate reduction: **10-20%**
-   - This is often acceptable given the HA benefits
+3. **接受缓存效率的取舍**：多副本部署时，cache-aware 路由策略的 radix 树不会在副本间同步。这意味着：
+   - 每个副本构建自己的缓存树
+   - 同一用户的请求可能落到不同副本
+   - 预期缓存命中率下降：**10-20%**
+   - 考虑到高可用带来的收益，这一损失通常可以接受
 
-4. **Configure session affinity (optional)**: If cache efficiency is critical, configure your load balancer for session affinity based on a consistent hash of the request (e.g., user ID or API key).
+4. **配置会话亲和性（可选）**：如果缓存效率至关重要，可以基于请求的一致性哈希（例如用户 ID 或 API 密钥）为负载均衡器配置会话亲和性。
 
-**Example HA Architecture:**
+**高可用架构示例：**
 ```text Output
                     +-------------------+
                     |   Load Balancer   |
@@ -2258,11 +2267,11 @@ The gateway supports running multiple replicas behind a load balancer for high a
     +-----------+       +-----------+       +-----------+
 ```
 
-### Performance
+### 性能
 
-**Use gRPC mode for high throughput:**
+**高吞吐请使用 gRPC 模式：**
 
-gRPC mode provides the highest performance for SGLang workers:
+gRPC 模式能为 SGLang worker 提供最高性能：
 
 ```bash Command
 # Start workers in gRPC mode
@@ -2278,14 +2287,14 @@ python -m sglang_router.launch_router \
   --policy cache_aware
 ```
 
-**Performance Benefits of gRPC:**
-- Native Rust tokenization (no Python overhead)
-- Streaming with lower latency
-- Built-in reasoning parser execution
-- Tool call parsing in the gateway
-- Reduced serialization overhead
+**gRPC 的性能优势：**
+- 原生 Rust 分词（无 Python 开销）
+- 流式传输延迟更低
+- 内置推理解析器执行
+- 网关内完成工具调用解析
+- 序列化开销更小
 
-**Tuning Recommendations:**
+**调优建议：**
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2295,40 +2304,40 @@ python -m sglang_router.launch_router \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Recommendation</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Reason</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>建议</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>理由</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`cache_aware`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Best for repeated prompts, ~30% latency reduction</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>最适合重复提示词，延迟约降低 30%</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--max-concurrent-requests`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>2-4x worker count</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Prevent overload while maximizing throughput</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>在最大化吞吐的同时防止过载</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--queue-size`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>2x max-concurrent</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Buffer for burst traffic</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>为突发流量提供缓冲</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--request-timeout-secs`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Based on max generation length</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Prevent stuck requests</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>基于最大生成长度</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>防止请求卡死</td>
     </tr>
   </tbody>
 </table>
 
-### Kubernetes Deployment
+### Kubernetes 部署
 
-**Pod Labeling for Service Discovery:**
+**为服务发现给 Pod 打标签：**
 
-For the gateway to discover workers automatically, label your worker pods consistently:
+要让网关自动发现 worker，需要为 worker pod 打一致的标签：
 
 ```yaml Config
 # Worker Deployment (Regular Mode)
@@ -2360,7 +2369,7 @@ spec:
           name: grpc
 ```
 
-**Gateway configuration for discovery:**
+**用于发现的网关配置：**
 ```bash Command
 python -m sglang_router.launch_router \
   --service-discovery \
@@ -2369,7 +2378,7 @@ python -m sglang_router.launch_router \
   --service-discovery-port 8000
 ```
 
-**PD (Prefill/Decode) Mode Labeling:**
+**PD（Prefill/Decode）模式打标签：**
 
 ```yaml Config
 # Prefill Worker
@@ -2387,7 +2396,7 @@ metadata:
     component: decode
 ```
 
-**Gateway configuration for PD discovery:**
+**用于 PD 发现的网关配置：**
 ```bash Command
 python -m sglang_router.launch_router \
   --service-discovery \
@@ -2397,9 +2406,9 @@ python -m sglang_router.launch_router \
   --service-discovery-namespace production
 ```
 
-**RBAC Requirements:**
+**RBAC 要求：**
 
-The gateway needs permissions to watch pods:
+网关需要 watch pod 的权限：
 
 ```yaml Config
 apiVersion: rbac.authorization.k8s.io/v1
@@ -2427,13 +2436,13 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-### Monitoring with PromQL
+### 用 PromQL 监控
 
-Configure Prometheus to scrape the gateway metrics endpoint (default: `:29000/metrics`).
+配置 Prometheus 抓取网关的指标端点（默认 `:29000/metrics`）。
 
-**Essential Dashboards:**
+**常用仪表盘：**
 
-**1. Request Rate and Latency:**
+**1. 请求速率与延迟：**
 ```sql Example
 # Request rate by endpoint
 sum(rate(smg_http_requests_total[5m])) by (path, method)
@@ -2448,7 +2457,7 @@ histogram_quantile(0.99, sum(rate(smg_http_request_duration_seconds_bucket[5m]))
 sum(rate(smg_http_responses_total{status=~"5.."}[5m])) / sum(rate(smg_http_responses_total[5m]))
 ```
 
-**2. Worker Health:**
+**2. Worker 健康：**
 ```sql Example
 # Healthy workers
 sum(smg_worker_pool_size)
@@ -2460,7 +2469,7 @@ smg_worker_connections_active
 sum(rate(smg_worker_health_checks_total{result="failure"}[5m])) by (worker_id)
 ```
 
-**3. Circuit Breaker Status:**
+**3. 熔断器状态：**
 ```sql Example
 # Circuit breaker states (0=closed, 1=open, 2=half-open)
 smg_worker_cb_state
@@ -2472,7 +2481,7 @@ sum(rate(smg_worker_cb_transitions_total[5m])) by (worker_id, from_state, to_sta
 count(smg_worker_cb_state == 1)
 ```
 
-**4. Inference Performance (gRPC mode):**
+**4. 推理性能（gRPC 模式）：**
 ```sql Example
 # Time to first token (P50)
 histogram_quantile(0.50, sum(rate(smg_router_ttft_seconds_bucket[5m])) by (le, model))
@@ -2487,7 +2496,7 @@ sum(rate(smg_router_tokens_total[5m])) by (model, direction)
 histogram_quantile(0.95, sum(rate(smg_router_generation_duration_seconds_bucket[5m])) by (le))
 ```
 
-**5. Rate Limiting and Queuing:**
+**5. 限流与排队：**
 ```sql Example
 # Rate limit rejections
 sum(rate(smg_http_rate_limit_total{decision="rejected"}[5m]))
@@ -2502,7 +2511,7 @@ sum(rate(smg_worker_retries_total[5m])) by (worker_id)
 sum(rate(smg_worker_retries_exhausted_total[5m]))
 ```
 
-**6. MCP Tool Execution:**
+**6. MCP 工具执行：**
 ```sql Example
 # Tool call rate
 sum(rate(smg_mcp_tool_calls_total[5m])) by (server, tool)
@@ -2514,7 +2523,7 @@ histogram_quantile(0.95, sum(rate(smg_mcp_tool_duration_seconds_bucket[5m])) by 
 smg_mcp_servers_active
 ```
 
-**Alerting Rules Example:**
+**告警规则示例：**
 
 ```yaml Config
 groups:
@@ -2557,9 +2566,9 @@ groups:
 ```
 
 ***
-## Configuration Reference
+## 配置参考
 
-### Core Settings
+### 核心设置
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2570,10 +2579,10 @@ groups:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
@@ -2581,43 +2590,43 @@ groups:
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--host`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>127.0.0.1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Router host</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>路由器主机</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--port`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>30000</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Router port</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>路由器端口</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--worker-urls`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[]</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Worker URLs (HTTP or gRPC)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Worker URL（HTTP 或 gRPC）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--policy`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>cache_aware</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Routing policy</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>路由策略</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--max-concurrent-requests`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>-1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Concurrency limit (-1 disables)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>并发上限（-1 表示禁用）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--request-timeout-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>600</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Request timeout</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>请求超时</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--max-payload-size`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>256MB</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum request payload</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最大请求体大小</td>
     </tr>
   </tbody>
 </table>
@@ -2633,10 +2642,10 @@ groups:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
@@ -2644,42 +2653,42 @@ groups:
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--pd-disaggregation`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>flag</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>false</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Enable PD mode</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>启用 PD 模式</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--prefill`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[]</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefill URLs + optional bootstrap ports</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefill URL + 可选的 bootstrap 端口</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--decode`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>[]</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Decode URLs</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Decode URL</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--prefill-policy`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>None</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Override policy for prefill nodes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>覆盖 prefill 节点的策略</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--decode-policy`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>None</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Override policy for decode nodes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>覆盖 decode 节点的策略</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--worker-startup-timeout-secs`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>600</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Worker init timeout</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Worker 初始化超时</td>
     </tr>
   </tbody>
 </table>
 
-### Kubernetes Discovery
+### Kubernetes 发现
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2689,46 +2698,46 @@ groups:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--service-discovery`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>flag</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Enable discovery</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>启用发现</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--selector`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Label selectors (key=value)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>标签选择器（key=value）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--prefill-selector` / `--decode-selector`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>PD mode selectors</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>PD 模式选择器</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--service-discovery-namespace`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Namespace to watch</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>要 watch 的命名空间</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--service-discovery-port`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Worker port (default 80)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Worker 端口（默认 80）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--bootstrap-port-annotation`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Annotation for bootstrap ports</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>bootstrap 端口的注解键</td>
     </tr>
   </tbody>
 </table>
 
-### TLS Configuration
+### TLS 配置
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -2738,64 +2747,64 @@ groups:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tls-cert-path`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Server certificate for gateway HTTPS (PEM)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>网关 HTTPS 的服务器证书（PEM）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tls-key-path`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Server private key for gateway HTTPS (PEM)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>网关 HTTPS 的服务器私钥（PEM）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--client-cert-path`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Client certificate for worker mTLS (PEM)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>worker mTLS 的客户端证书（PEM）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--client-key-path`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Client private key for worker mTLS (PEM)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>worker mTLS 的客户端私钥（PEM）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--ca-cert-path`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>str</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>CA certificate for verifying workers (PEM, repeatable)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>用于校验 worker 的 CA 证书（PEM，可重复）</td>
     </tr>
   </tbody>
 </table>
 
 ***
-## Troubleshooting
+## 故障排查
 
-### Workers Never Ready
+### Worker 永远不就绪
 
-Increase `--worker-startup-timeout-secs` or ensure health probes respond before router startup.
+调大 `--worker-startup-timeout-secs`，或确保健康探测在路由器启动前就能响应。
 
-### Load Imbalance / Hot Workers
+### 负载不均衡 / 热点 Worker
 
-Inspect `smg_router_requests_total` by worker and tune cache-aware thresholds (`--balance-*`, `--cache-threshold`).
+按 worker 查看 `smg_router_requests_total`，并调优 cache-aware 阈值（`--balance-*`、`--cache-threshold`）。
 
-### Circuit Breaker Flapping
+### 熔断器频繁抖动
 
-Increase `--cb-failure-threshold` or extend the timeout/window durations. Consider temporarily disabling retries.
+调大 `--cb-failure-threshold`，或延长超时/窗口时长。也可以考虑临时禁用重试。
 
-### Queue Overflow (429)
+### 队列溢出（429）
 
-Increase `--queue-size` or reduce client concurrency. Ensure `--max-concurrent-requests` matches downstream capacity.
+调大 `--queue-size`，或降低客户端并发。确保 `--max-concurrent-requests` 与下游容量匹配。
 
-### Memory Growth
+### 内存持续增长
 
-Reduce `--max-tree-size` or lower `--eviction-interval-secs` for more aggressive cache pruning.
+调小 `--max-tree-size`，或调低 `--eviction-interval-secs`，更激进地清理缓存。
 
-### Debugging
+### 调试
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -2804,13 +2813,13 @@ python -m sglang_router.launch_router \
   --log-dir ./router_logs
 ```
 
-### gRPC Connection Issues
+### gRPC 连接问题
 
-Ensure workers are started with `--grpc-mode` and verify `--model-path` or `--tokenizer-path` is provided to the router.
+确保 worker 使用 `--grpc-mode` 启动，并确认已向路由器提供 `--model-path` 或 `--tokenizer-path`。
 
-### Tokenizer Loading Failures
+### 分词器加载失败
 
-Check HuggingFace Hub credentials (`HF_TOKEN` environment variable) for private models. Verify local paths are accessible.
+对于私有模型，请检查 HuggingFace Hub 凭据（`HF_TOKEN` 环境变量）。确认本地路径可以访问。
 
 ***
-SGLang Model Gateway continues to evolve alongside the SGLang runtime. Keep CLI flags, integrations, and documentation aligned when adopting new features or contributing improvements.
+SGLang Model Gateway 会随 SGLang 运行时一起持续演进。在采用新特性或贡献改进时，请保持 CLI 参数、集成与文档的一致性。

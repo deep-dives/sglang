@@ -1,25 +1,29 @@
 ---
-title: "Model Forward Hooks"
+title: "模型前向钩子"
 metatags:
-    description: "SGLang forward hooks: attach PyTorch hooks to model submodules via JSON config. Log activations, debug internals, export hidden states."
+    description: "SGLang 前向钩子：通过 JSON 配置给模型子模块挂载 PyTorch 钩子。记录激活值、调试模型内部、导出隐藏状态。"
 ---
 
-## Model Hooks
+## 模型钩子
 
-SGLang supports attaching PyTorch forward hooks to specific submodules in the loaded model, configured entirely via `server_args` JSON.
+SGLang 支持给已加载模型中的特定子模块挂载 PyTorch 前向钩子，完全通过 `server_args` 的 JSON 配置实现。
 
-This is useful for:
+它的用途包括：
 
-* Logging intermediate activations
-* Debugging model internals
-* Exporting hidden states to external tooling
+* 记录中间激活值
+* 调试模型内部
+* 把隐藏状态导出到外部工具
 
-Hooks are attached once during `ModelRunner.initialize` and run on every forward pass.
+钩子在 `ModelRunner.initialize` 时挂载一次，之后的每次前向传播都会执行。
+
+<Note>
+💡 AI Infra 学习笔记：前向钩子（forward hook）是 PyTorch 提供的"观察/拦截"机制——在某个子模块的前向计算结束后自动调用你注册的回调，参数是 `(module, inputs, output)`，你可以记录中间张量的 shape/数值，甚至替换输出。对推理引擎来说，这是"零侵入观测模型内部"的重要手段：不需要改模型代码，就能拿到每一层/每个子模块的激活值、hidden state，用于调试、诊断、或对接外部可解释性工具。理解它能帮你回答"推理引擎里如何观测中间结果"这类工程问题。
+</Note>
 
 ***
-### Configuration overview
+### 配置概览
 
-Hooks are configured via a `ServerArgs` field:
+钩子通过一个 `ServerArgs` 字段配置：
 
 ```python Example
 class ServerArgs:
@@ -28,7 +32,7 @@ class ServerArgs:
     forward_hooks: Optional[List[dict[str, Any]]] = None
 ````
 
-In JSON form, a minimal configuration looks like:
+用 JSON 表示时，一个最小配置长这样：
 
 ```jsonc Example
 {
@@ -45,19 +49,19 @@ In JSON form, a minimal configuration looks like:
 }
 ```
 
-#### Top-level fields
+#### 顶层字段
 
-* `forward_hooks` (optional list of objects)
-  Each element is a hook spec describing:
+* `forward_hooks`（可选的对象列表）
+  每个元素是一个钩子描述，说明：
 
-  * Which modules to target
-  * Which Python factory to call
-  * What configuration to pass into that factory
+  * 要挂到哪些模块上
+  * 要调用哪个 Python 工厂函数
+  * 给该工厂函数传什么配置
 
 ***
-### Hook spec schema
+### 钩子描述 schema
 
-Each entry in `forward_hooks` is a JSON object with the following shape:
+`forward_hooks` 里的每一项都是一个 JSON 对象，形状如下：
 
 ```jsonc Example
 {
@@ -70,40 +74,40 @@ Each entry in `forward_hooks` is a JSON object with the following shape:
 }
 ```
 
-#### `name` (optional)
+#### `name`（可选）
 
-* Human-readable name for logging.
-* Used only in log messages such as:
+* 用于日志的可读名称。
+* 只出现在日志消息里，例如：
 
   ```text Output
   Registered forward hook 'outer_linear_hooks' on outer.0
   ```
 
-#### `target_modules` (required)
+#### `target_modules`（必填）
 
-* List of **module name patterns** used to match entries in `model.named_modules()`.
-* Patterns are matched using `fnmatch.fnmatch`, so:
+* 一组**模块名模式**，用来匹配 `model.named_modules()` 里的条目。
+* 模式用 `fnmatch.fnmatch` 匹配，所以：
 
-  * `"outer.0"` matches exactly `"outer.0"`.
-  * `"outer.*"` matches `"outer.0"`, `"outer.1"`, `"outer.inner"`, etc.
-  * `"outer.inner.*"` matches children under `outer.inner`.
+  * `"outer.0"` 精确匹配 `"outer.0"`。
+  * `"outer.*"` 匹配 `"outer.0"`、`"outer.1"`、`"outer.inner"` 等。
+  * `"outer.inner.*"` 匹配 `outer.inner` 下的子模块。
 
-> If no modules match the given patterns, hook registration does **not** fail.
-> Instead, SGLang logs a warning and continues:
+> 如果没有模块匹配给定模式，钩子注册**不会失败**。
+> 而是记录一条警告并继续：
 >
 > ```text
 > No modules matched hook spec 'name' patterns=['...']
 > ```
 
-#### `hook_factory` (required)
+#### `hook_factory`（必填）
 
-* String path to the Python factory function that creates the hook.
-* Supported formats:
+* 指向创建钩子的 Python 工厂函数的字符串路径。
+* 支持的格式：
 
   * `"package.module:factory_name"`
   * `"package.module.submodule.factory_name"`
 
-The path is resolved via:
+路径通过以下方式解析：
 
 ```python Example
 def resolve_callable(path: Optional[str]) -> Optional[Callable]:
@@ -132,31 +136,31 @@ def resolve_callable(path: Optional[str]) -> Optional[Callable]:
         ) from e
 ```
 
-**Failure modes**:
+**失败模式**：
 
-* If the path is malformed (not enough dots and no `:`), a `ValueError` is raised at startup.
-* If the module imports but the attribute is missing, an `AttributeError` is raised with a clear error message.
-* If the hook factory returns `None`, a warning is logged and no hook is registered for that spec (initialization continues).
+* 路径格式错误（点不够且没有 `:`），启动时会抛出 `ValueError`。
+* 模块能导入但属性不存在，会抛出带清晰错误信息的 `AttributeError`。
+* 钩子工厂返回 `None`，会记录一条警告，并且该描述不注册钩子（初始化继续）。
 
-The first two cause initialization to fail fast with a descriptive error; the last one is non-fatal.
+前两种情况会让初始化带明确的错误信息快速失败；最后一种不致命。
 
-#### `config` (optional)
+#### `config`（可选）
 
-* Arbitrary JSON object.
-* Passed directly to the hook factory as a Python `dict`.
-* This lets you parameterize hook behavior from config (e.g. tags, log levels, sampling rates, etc.).
+* 任意 JSON 对象。
+* 作为 Python `dict` 直接传给钩子工厂。
+* 这让你能从配置里参数化钩子的行为（例如标签、日志级别、采样率等）。
 
 ***
-### Hook lifecycle and behavior
+### 钩子的生命周期与行为
 
-Hooks are registered in `ModelRunner.initialize()`:
+钩子在 `ModelRunner.initialize()` 里注册：
 
 ```python Example
 if server_args.forward_hooks:
     register_forward_hooks(self.model, server_args.forward_hooks)
 ```
 
-The actual registration logic is implemented by `register_forward_hooks`:
+实际注册逻辑由 `register_forward_hooks` 实现：
 
 ```python Example
 def register_forward_hooks(model: nn.Module, hook_specs: List[dict[str, Any]]) -> None:
@@ -215,23 +219,23 @@ def register_forward_hooks(model: nn.Module, hook_specs: List[dict[str, Any]]) -
                 )
 ```
 
-Key points:
+关键点：
 
-* Hooks are **forward hooks only** (via `module.register_forward_hook`).
-* They are attached once at initialization.
-* Hook handles are currently not stored on `ModelRunner` (they cannot be removed later via this API).
-* Failure to match any modules is non-fatal; a warning is logged instead.
-* If a hook factory returns `None`, a warning is logged and that spec is skipped.
+* 钩子**只支持前向钩子**（通过 `module.register_forward_hook`）。
+* 初始化时挂载一次。
+* 钩子句柄目前不存储在 `ModelRunner` 上（之后无法通过这个 API 移除）。
+* 没有匹配到任何模块不致命；只记录一条警告。
+* 钩子工厂返回 `None` 时记录警告，并跳过该描述。
 
 ***
-### Writing a hook factory
+### 编写钩子工厂
 
-A hook factory is a regular Python function:
+钩子工厂是一个普通的 Python 函数：
 
-* Takes a `config: dict` (from JSON)
-* Returns a forward hook function with signature `(module, inputs, output)`
+* 接收 `config: dict`（来自 JSON）
+* 返回一个签名为 `(module, inputs, output)` 的前向钩子函数
 
-Example:
+示例：
 
 ```python Example
 HOOK_CALLS = []
@@ -253,7 +257,7 @@ def dummy_hook_factory(config):
     return hook
 ```
 
-In JSON:
+在 JSON 中：
 
 ```jsonc Example
 {
@@ -270,29 +274,29 @@ In JSON:
 }
 ```
 
-This will:
+这会：
 
-* Resolve `my_project.hooks:dummy_hook_factory` to a Python callable.
-* Call it with `config = {"tag": "outer"}`.
-* Use the returned hook for all modules matching `outer.0` and `outer.1`.
-* Append metadata about each call to `HOOK_CALLS`.
+* 把 `my_project.hooks:dummy_hook_factory` 解析成一个 Python 可调用对象。
+* 用 `config = {"tag": "outer"}` 调用它。
+* 把返回的钩子用到所有匹配 `outer.0` 和 `outer.1` 的模块上。
+* 把每次调用的元数据追加到 `HOOK_CALLS`。
 
 ***
-### Summary
+### 总结
 
-* Define `forward_hooks` as a list of specs in `ServerArgs` to turn on the feature.
+* 在 `ServerArgs` 里把 `forward_hooks` 定义成描述列表即可开启该特性。
 
-* Each spec:
+* 每个描述：
 
-  * selects modules via `target_modules` (glob patterns over `model.named_modules()`),
-  * points to a hook factory via `hook_factory`,
-  * passes arbitrary `config` into that factory.
+  * 通过 `target_modules`（对 `model.named_modules()` 的 glob 模式）选择模块，
+  * 通过 `hook_factory` 指向一个钩子工厂，
+  * 把任意 `config` 传进该工厂。
 
-* Hook factories are resolved via `resolve_callable`, which supports `module:factory` and `module.submodule.factory`.
+* 钩子工厂通过 `resolve_callable` 解析，支持 `module:factory` 和 `module.submodule.factory` 两种格式。
 
-* Hooks are standard PyTorch forward hooks, attached once at startup and invoked on every forward pass.
+* 钩子是标准的 PyTorch 前向钩子，启动时挂载一次，之后每次前向传播都会执行。
 
-* Misconfiguration is either:
+* 配置错误要么是：
 
-  * **fatal and explicit** (bad path / missing attribute), or
-  * **non-fatal with clear warnings** (no targets matched, or factory returned `None`).
+  * **致命且明确的**（路径错误 / 属性缺失），要么是
+  * **非致命但有清晰警告的**（没有目标匹配，或工厂返回 `None`）。

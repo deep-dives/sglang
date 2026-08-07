@@ -1,68 +1,71 @@
 ---
-title: "HiCache System Design and Optimization"
+title: "HiCache 系统设计与优化"
 metatags:
-    description: "HiCache architecture: HiRadixTree metadata, L1/L2/L3 workflow, prefetch strategies, write-back policies, zero-copy transfers, multi-rank sync."
+    description: "HiCache 架构：HiRadixTree 元数据、L1/L2/L3 工作流、预取策略、写回策略、零拷贝传输、多 rank 同步。"
 ---
-This document provides a comprehensive overview of SGLang HiCache, covering its system architecture, workflow and key components. It also details configuration parameters, optimization techniques, and integration with various L3 storage backends, serving as a complete reference for users and developers to understand and tune HiCache for efficient LLM inference.
+本文全面介绍 SGLang HiCache，涵盖其系统架构、工作流与关键组件，并详细说明配置参数、优化技术以及各类 L3 存储后端的集成方式。无论你是想理解还是调优 HiCache，本文都可作为完整的参考手册，帮助你高效地运行 LLM 推理。
 
-## Why and What is HiCache?
+## HiCache 是什么？为什么要用 HiCache？
 
-In large language model inference, the prefill phase is often time-consuming: input sequences need to be first converted into Key-Value cache (KV cache) for subsequent decoding. When multiple requests share the same prefix, the KV cache for that prefix is identical. By caching and reusing these shared KV caches, redundant computation can be avoided. To address this, SGLang introduced RadixAttention, which leverages idle GPU memory to cache and reuse prefix KV caches, and **HiCache**, which extends this idea to host memory and distributed storage.
+在大语言模型推理中，预填充（prefill）阶段往往很耗时：输入序列需要先转换成 Key-Value 缓存（KV cache），供后续解码使用。当多个请求共享相同前缀时，该前缀的 KV 缓存是相同的。通过缓存并复用这些共享的 KV 缓存，可以避免重复计算。为此，SGLang 引入了 RadixAttention——利用空闲 GPU 显存来缓存并复用前缀 KV 缓存，而 **HiCache** 则把这个思路进一步扩展到主机内存和分布式存储。
 
-Inspired by the classic three-level cache design of modern CPUs, HiCache organizes GPU memory as L1, host memory as L2, and distributed storage as L3. This hierarchy enables HiCache to fully exploit the "idle" storage space of GPUs and CPUs, while integrating distributed cache systems such as Mooncake, 3FS, NIXL, and AIBrix KVCache for global KV cache storage and scheduling. As a result, HiCache significantly expands KV cache capacity while maintaining strong read performance—especially in workloads such as multi-QA and long-context inference, where KV cache reuse is frequent. For detailed benchmark results, see [this blog](https://lmsys.org/blog/2025-09-10-sglang-hicache/).
+受现代 CPU 经典三级缓存设计的启发，HiCache 把 GPU 显存组织为 L1、主机内存组织为 L2、分布式存储组织为 L3。这种层次结构让 HiCache 能充分利用 GPU 与 CPU 的"闲置"存储空间，同时接入 Mooncake、3FS、NIXL、AIBrix KVCache 等分布式缓存系统做全局 KV 缓存存储与调度。因此，HiCache 在保持强劲读性能的同时显著扩大了 KV 缓存容量——尤其是在多问答、长上下文推理这类 KV 复用频繁的负载中。详细的基准测试结果见[这篇博客](https://lmsys.org/blog/2025-09-10-sglang-hicache/)。
 
+<Note>
+💡 AI Infra 学习笔记：HiCache 借用了 CPU 缓存的经典思想——容量与速度不可兼得，就用层次换：L1（GPU 显存）最快但最小，L3（分布式存储）最慢但容量近乎无限。推理引擎的调优思路也是一样：把最热门的 KV 留在最快的层次，冷数据逐级下沉。理解"命中率 × 容量"的权衡，比记一堆参数名更有价值。
+</Note>
 
-## System Design
+## 系统设计
 
-### Overall Architecture
+### 整体架构
 
-In many modern CPU architectures, the small but fast L1 and L2 caches are private to each core, enabling rapid access to the hottest data, while the larger L3 cache is shared across all cores to significantly reduce redundancy within the cache. Similarly, in HiCache, the L1 and L2 KV caches are private to each inference instance, whereas the L3 KV cache is shared among all inference instances within the cluster.
+在许多现代 CPU 架构中，容量小但速度快的 L1、L2 缓存是每个核心私有的，用于快速访问最热的数据；而更大的 L3 缓存被所有核心共享，以显著降低缓存内的冗余。类似地，在 HiCache 中，L1 和 L2 KV 缓存对每个推理实例是私有的，而 L3 KV 缓存被集群内所有推理实例共享。
 
-### HiRadixTree: Metadata Organization in HiCache
+### HiRadixTree：HiCache 中的元数据组织
 
-For KV cache data organization, HiCache builds upon the RadixTree structure introduced in RadixAttention and proposes HiRadixTree. In RadixAttention, each node of the RadixTree corresponds to the KV cache of a consecutive span of tokens in GPU memory. A path from the root to a leaf node represents the prefix of a request, and shared prefixes across multiple requests can reuse the same nodes, thereby avoiding redundant storage.
+在 KV 缓存数据组织方面，HiCache 基于 RadixAttention 引入的 RadixTree 结构，提出了 HiRadixTree。在 RadixAttention 中，RadixTree 的每个节点对应 GPU 显存中一段连续 token 的 KV 缓存。从根到叶子节点的路径表示一个请求的前缀，多个请求的共享前缀可以复用相同节点，从而避免冗余存储。
 
-HiRadixTree extends this idea: each node corresponds to the KV cache of a span of consecutive tokens and records where that KV cache is stored—whether in local GPU memory, CPU memory, L3 storage, or multiple of these tiers. If stored locally, HiRadixTree maintains precise metadata, including the exact storage address. However, to reduce overhead, HiRadixTree does not store or continuously synchronize metadata for L3 KV cache. Instead, when accessing L3 data, it queries the backend in real time to retrieve the necessary metadata, such as whether the data exists and on which server and location it resides.
+HiRadixTree 扩展了这一思路：每个节点对应一段连续 token 的 KV 缓存，并记录这段 KV 缓存放到了哪里——本地 GPU 显存、CPU 内存、L3 存储，或其中多个层次。如果数据存在本地，HiRadixTree 会维护精确的元数据，包括确切的存储地址。但为了降低开销，HiRadixTree 不保存、也不持续同步 L3 KV 缓存的元数据；相反，访问 L3 数据时会实时向后端查询所需元数据，例如数据是否存在、位于哪台服务器、具体在什么位置。
 
-### Overall Workflow
+### 整体工作流
 
-The workflow of HiCache mainly involves three key operations: **local match**, **prefetch** and **write-back**. When the system receives a new request, it first searches the local L1 and L2 caches for matching KV caches. For parts not found locally, it attempts to prefetch from L3. After prefetching, all required KV caches are loaded into the GPU for computation. Once the prefill computation is complete, the system considers storing the newly generated data into L2 or L3.
+HiCache 的工作流主要包含三个关键操作：**本地匹配（local match）**、**预取（prefetch）** 和**写回（write-back）**。系统收到新请求时，先在本地的 L1、L2 缓存中查找匹配的 KV 缓存；本地没有的部分，则尝试从 L3 预取。预取完成后，所有需要的 KV 缓存都加载到 GPU 上参与计算。预填充计算结束后，系统会考虑把新生成的数据写入 L2 或 L3。
 
 <Frame>
   <img src="https://lmsys.org/images/blog/hicache/hicache_overview.png" alt="HiCache Workflow"/>
 </Frame>
 
-### Local Match
+### 本地匹配
 
-Local matching is the first step in HiCache's workflow, where incoming request tokens are matched against the HiRadixTree to locate cached KV data in local memory tiers (L1 GPU memory and L2 host memory).
+本地匹配是 HiCache 工作流的第一步：把进入的请求 token 与 HiRadixTree 比对，在本地内存层次（L1 GPU 显存和 L2 主机内存）中找到已缓存的 KV 数据。
 
-The matching algorithm traverses the HiRadixTree from the root node, following child nodes that match the token sequence prefix. At each node, the incoming token sequence is compared with the node’s stored token sequence. When `page_size > 1`, matching is performed at the page granularity to optimize memory access patterns. If a match terminates within a node’s stored sequence, the node is automatically split to create an exact boundary, improving the efficiency of future matches.
+匹配算法从根节点开始遍历 HiRadixTree，沿着与 token 序列前缀匹配的子节点前进。在每个节点处，把进入的 token 序列与该节点存储的 token 序列比较。当 `page_size > 1` 时，匹配以页为粒度进行，以优化内存访问模式。如果匹配在某个节点的存储序列内部结束，该节点会被自动拆分以形成精确边界，提高后续匹配的效率。
 
-The algorithm returns a continuous prefix of the request, with the first part residing in L1 and the latter part in L2.
+算法返回请求的一个连续前缀，其中前面部分位于 L1，后面部分位于 L2。
 
-Since the process only requires traversing the local HiRadixTree and does not involve any actual data copying, local matching is extremely fast.
+由于这个过程只需遍历本地的 HiRadixTree，不涉及任何实际数据拷贝，本地匹配的速度极快。
 
-### Prefetch from L3
+### 从 L3 预取 {#prefetch-from-l3}
 
-Data prefetching is one of HiCache’s core optimization techniques, designed to proactively load KV caches from L3 storage into local L2 memory, thereby reducing access latency during subsequent operations.
+数据预取是 HiCache 的核心优化技术之一，目的是主动把 KV 缓存从 L3 存储加载到本地 L2 内存，从而降低后续操作的访问延迟。
 
-**Prefetch Trigger Conditions**:
-After local matching, for the parts not found in L1 or L2, the system queries L3 to retrieve metadata for the next continuous matching KV caches. If the length of hit cache in L3 exceeds a threshold (default: 256 tokens, configurable), a prefetch operation is triggered.
+**预取触发条件**：
+本地匹配之后，对于 L1 或 L2 中没有找到的部分，系统会查询 L3 获取下一段连续匹配 KV 缓存的元数据。如果 L3 中命中的缓存长度超过阈值（默认 256 个 token，可配置），就会触发一次预取操作。
 
-**Prefetch Strategies**: HiCache provides three different prefetch termination strategies to address different scenario needs:
-- **best_effort**: Terminates immediately when GPU can execute prefill computation, with no waiting time, suitable for scenarios extremely sensitive to latency.
-- **wait_complete**: Must wait for all prefetch operations to complete, suitable for scenarios requiring high cache hit rates.
-- **timeout**: Terminates after specified time or when complete, balancing latency and cache hit rate needs.
+**预取策略**：HiCache 提供三种不同的预取终止策略，以应对不同的场景需求：
+- **best_effort**：GPU 可以执行预填充计算时立即终止，无需等待，适合对延迟极度敏感的场景。
+- **wait_complete**：必须等所有预取操作完成，适合对缓存命中率要求高的场景。
+- **timeout**：在指定时间后或完成后终止，在延迟与缓存命中率需求之间取得平衡。
 
-After prefetching stops, the data already fetched is used together with the local data for the prefill computation.
+预取停止后，已拉取的数据会与本地数据一起参与预填充计算。
 
-For **timeout** strategy, HiCache introduces three configuration parameters to support fine-grained control over prefetch timeout conditions:
+对于 **timeout** 策略，HiCache 引入了三个配置参数，用于对预取超时条件做细粒度控制：
 
-* `prefetch_timeout_base`: the base timeout, representing overhead unrelated to the number of tokens (e.g., scheduling and synchronization). Default: `2` seconds.
-* `prefetch_timeout_per_ki_token`: the incremental timeout per thousand tokens. Default: `0.1` seconds per 1024 tokens.
-* `prefetch_timeout_max`: the upper bound applied to the linear timeout, preventing very long prompts from waiting unboundedly. Default: `30` seconds.
+* `prefetch_timeout_base`：基础超时，表示与 token 数量无关的开销（例如调度与同步）。默认 `2` 秒。
+* `prefetch_timeout_per_ki_token`：每千个 token 的增量超时。默认每 1024 个 token 增加 `0.1` 秒。
+* `prefetch_timeout_max`：线性超时的上限，防止超长提示词无上限地等待。默认 `30` 秒。
 
-The timeout is computed as:
+超时按如下公式计算：
 
 ```python Example
 timeout = min(
@@ -71,100 +74,104 @@ timeout = min(
 )
 ```
 
-### Data Write-back
+<Note>
+💡 AI Infra 学习笔记：预取的本质是用"异步搬数据"来掩盖存储访问延迟——计算还没开始，先把需要的 KV 拉近。但拉多少、等多久需要权衡：等太久拖慢首 token（TTFT），不等又浪费命中机会。三种策略（best_effort / wait_complete / timeout）分别对应"要延迟、要命中、要平衡"，而 timeout 公式中的三个参数正是对这种权衡的显式建模。
+</Note>
 
-The write-back mechanism is responsible for moving frequently accessed KV caches from L1 to L2 and L3, enabling larger and longer-term storage as well as cache sharing across instances.
+### 数据写回 {#data-write-back}
 
-**Configurable Write-back Policies**: HiCache supports three write-back strategies:
+写回机制负责把频繁访问的 KV 缓存从 L1 搬到 L2 和 L3，从而支持更大容量、更长期的存储以及实例间的缓存共享。
 
-* **write_through**: Every access is immediately written back to the next level. When bandwidth is sufficient, this strategy provides the strongest caching benefit.
-* **write_through_selective**: Data is written back only after the access frequency exceeds a threshold. This strategy backs up only hot data, reducing I/O overhead.
-* **write_back**: Data is written back to the next level only when it is evicted from the upper level. This strategy alleviates storage pressure and is suitable for scenarios where storage capacity is limited but memory utilization must be maximized.
+**可配置的写回策略**：HiCache 支持三种写回策略：
 
-**Cross-instance Sharing**: When data is written back from L2 to L3, only data not already present in L3 is transferred. KV caches stored in L3 can then be shared across all SGLang instances in the cluster (depending on the L3 backend implementation), significantly improving cache hit rates within the same memory budget.
+* **write_through**：每次访问都立即写回到下一层。带宽充足时，这种策略能提供最强的缓存收益。
+* **write_through_selective**：只有当访问频率超过阈值时才写回。这种策略只备份热点数据，减少 I/O 开销。
+* **write_back**：只有当数据从上一层被驱逐时才写回到下一层。这种策略能缓解存储压力，适合存储容量有限、但需要最大化内存利用率 的场景。
 
-### Multi-Rank Synchronization
+**跨实例共享**：当数据从 L2 写回 L3 时，只传输 L3 中尚不存在的数据。存储在 L3 中的 KV 缓存可以在集群内所有 SGLang 实例之间共享（取决于 L3 后端实现），在相同内存预算下显著提高缓存命中率。
 
-During multi-GPU parallel computation, such as tensor parallelism (TP), HiCache must ensure consistent states across different ranks. Therefore, critical computation steps require the use of `all_reduce` for state synchronization.
+### 多 Rank 同步
 
-For example, during prefetching, `all_reduce(op=min)` is used to ensure that all ranks obtain the same number of L3 hits, preventing inconsistent judgments about whether the prefetch threshold has been reached. Similarly, after prefetching completes or terminates, `all_reduce(op=min)` is again required to guarantee consensus among ranks on the prefix length of the successfully retrieved KV cache.
+在多 GPU 并行计算（例如张量并行 TP）期间，HiCache 必须保证各 rank 之间的状态一致。因此，关键计算步骤需要使用 `all_reduce` 做状态同步。
 
-### Data Transfer Optimization
+例如，预取过程中使用 `all_reduce(op=min)` 确保所有 rank 获得相同的 L3 命中数量，避免对"是否达到预取阈值"产生不一致的判断。同样，预取完成或终止后，还需要一次 `all_reduce(op=min)` 来保证各 rank 对成功取回的 KV 缓存前缀长度达成一致。
 
-**Zero-Copy Data Transfers**: Both prefetching and write-back involve substantial data movement. Minimizing the number of data copies can significantly improve system performance. HiCache supports passing memory addresses and sizes directly when transferring data from L2 memory to an L3 backend.
+### 数据传输优化 {#data-transfer-optimization}
 
-**“Batch-Oriented” Data Organization**: The granularity of data reads and writes has a major impact on performance. To address this, HiCache L3 stores and transfers KV cache data at the granularity of **pages** and supports different data layouts beyond the existing `layer first` scheme, including `page first` and `page first direct`. Under the `page first` and `page first direct` layouts, all KV cache data belonging to the same page is placed in contiguous memory, allowing it to be passed as a single object to L3 using zero-copy transfers.
+**零拷贝数据传输**：预取与写回都涉及大量数据搬运，尽量减少数据拷贝次数能显著提升系统性能。HiCache 支持在把数据从 L2 内存传给 L3 后端时，直接传递内存地址和大小。
+
+**"面向批"的数据组织**：数据读写的粒度对性能影响很大。为此，HiCache 的 L3 以**页**为粒度存储和传输 KV 缓存数据，并在现有的 `layer first` 布局之外支持 `page first` 与 `page first direct` 等不同布局。在 `page first` 与 `page first direct` 布局下，同一页的所有 KV 缓存数据连续存放，可以作为单一对象用零拷贝传输传给 L3。
 
 <Frame>
   <img src="https://lmsys.org/images/blog/hicache/hicache_layout.png" alt="HiCache L2 MEM layout"/>
 </Frame>
 
-However, because GPU KV computation is naturally performed layer by layer, the GPU inherently operates in a `layer first` layout. When transferring `page first` data from L2 to the GPU, data must be transferred at the granularity of one token per layer. The `page first direct` layout mitigates this issue by grouping together all tokens of a given layer within a page, allowing transfers from L2 to GPU to be aggregated at the page-layer level.
+不过，GPU 的 KV 计算天然按层进行，因此 GPU 本身使用 `layer first` 布局。把 `page first` 数据从 L2 传到 GPU 时，需要按"每层每 token"的粒度传输。`page first direct` 布局缓解了这个问题：它把页面内某一层的所有 token 聚合在一起，使 L2 到 GPU 的传输可以在页-层级别聚合进行。
 
-**CPU-to-GPU Transfer Optimizations**: In HiCache, moving data from CPU memory to GPU is as performance-critical as prefetching data from L3 to L2. HiCache employs several optimizations for this process:
+**CPU 到 GPU 的传输优化**：在 HiCache 中，把数据从 CPU 内存搬到 GPU，其性能重要性不亚于从 L3 预取到 L2。HiCache 对这一过程做了多项优化：
 
-* **Compute-Transfer Overlap**: During the prefill phase, when transferring data from CPU to GPU, HiCache overlaps layers by concurrently loading the KV cache of layer N+1 while computing layer N. This effectively hides data transfer latency.
-* **GPU-assisted I/O Kernels**: On top of `cudaMemcpyAsync`, HiCache implements a set of GPU-assisted I/O kernels specifically optimized for KV cache transfers between CPU and GPU. Compared to the baseline approach, these kernels achieve up to 3x higher transfer speed.
+* **计算与传输重叠**：预填充阶段从 CPU 向 GPU 传输数据时，HiCache 按层重叠——在计算第 N 层的同时并发加载第 N+1 层的 KV 缓存。这能有效隐藏数据传输延迟。
+* **GPU 辅助 I/O kernel**：在 `cudaMemcpyAsync` 基础上，HiCache 实现了一组专门针对 CPU 与 GPU 之间 KV 缓存传输优化的 GPU 辅助 I/O kernel。与基准方案相比，这些 kernel 的传输速度最高可提升 3 倍。
 
-**Write-back Optimization for MLA**: For MHA (Multi-Head Attention) models under multi-TP, each rank holds `1/tp_size` of a token’s KV data. In contrast, for MLA (Multi-Layer Attention) models, all ranks hold the complete and identical KV data for each token. HiCache includes a dedicated optimization for MLA: only one rank initiates the write-back operation, ensuring that data is not redundantly stored across ranks.
+**针对 MLA 的写回优化**：对于多 TP 下的 MHA（Multi-Head Attention）模型，每个 rank 持有单个 token KV 数据的 `1/tp_size`。相比之下，对于 MLA（Multi-Layer Attention）模型，所有 rank 都持有每个 token 完整且相同的 KV 数据。HiCache 为 MLA 提供了一项专门优化：只让一个 rank 发起写回操作，确保数据不会在多个 rank 间被冗余存储。
 
-### Integration with PD-Disaggregation Deployment Mode
+### 与 PD 分离部署模式的集成
 
-SGLang supports a PD (Prefill-Decode) disaggregation deployment mode through the Mooncake TransferEngine (for details, see [this doc](./pd_disaggregation)). In the PD-disaggregation deployment mode, HiCache can be enabled on both the prefill nodes and decode nodes to optimize prefill performance. If enabled on decode nodes, the decode output will also be written back to L3.
+SGLang 通过 Mooncake TransferEngine 支持 PD（Prefill-Decode）分离部署模式（细节见[这篇文档](./pd_disaggregation)）。在 PD 分离部署模式下，HiCache 可以同时在 prefill 节点和 decode 节点上启用，以优化预填充性能。如果在 decode 节点上启用，解码输出也会写回 L3。
 
-### Unified Interfaces and Rich L3 Storage Backends
+### 统一接口与丰富的 L3 存储后端 {#unified-interfaces-and-rich-l3-storage-backends}
 
-HiCache encapsulates all read, write, and query operations on L3 backends within the `class HiCacheStorage(ABC)`, exposing a set of simple and consistent interfaces. This design supports a wide range of L3 storage backends and allows users to select the one that best fits their specific use cases.
+HiCache 把对 L3 后端的读、写、查询等所有操作封装在 `class HiCacheStorage(ABC)` 中，暴露出一组简单一致的接口。这种设计支持多种 L3 存储后端，让用户可以根据自身场景选择最合适的方案。
 
-- **Mooncake**: Mooncake is a high-performance caching system for LLM inference that leverages RDMA and multi-NIC resources to enable zero-copy, ultra-fast data transfers. Try Mooncake [here](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/mooncake_store).
+- **Mooncake**：面向 LLM 推理的高性能缓存系统，利用 RDMA 与多网卡资源实现零拷贝、超高速数据传输。在这里[试用 Mooncake](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/mooncake_store)。
 
-- **DeepSeek 3FS (HF3FS)**: HF3FS is a Kubernetes-native distributed storage solution with operator-based deployment. Try HF3FS [here](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/hf3fs).
+- **DeepSeek 3FS（HF3FS）**：基于 Kubernetes 原生、通过 operator 部署的分布式存储方案。在这里[试用 HF3FS](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/hf3fs)。
 
-- **NIXL**: NIXL provides a unified API for accessing various storage plugins, including but not limited to DeepSeek's 3FS, GPU Direct Storage (GDS) and Amazon S3-compatible object storage. Try NIXL [here](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/nixl).
+- **NIXL**：提供统一 API 访问各类存储插件，包括但不限于 DeepSeek 的 3FS、GPU Direct Storage（GDS）和兼容 Amazon S3 的对象存储。在这里[试用 NIXL](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/nixl)。
 
-- **AIBrix KVCache**: AIBrix KVCache is a production-ready KVCache Offloading Framework, which enables efficient memory tiering and low-overhead cross-engine reuse. Try AIBrix KVCache [here](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/aibrix_kvcache).
+- **AIBrix KVCache**：生产就绪的 KVCache 卸载框架，支持高效的内存分层与低开销的跨引擎复用。在这里[试用 AIBrix KVCache](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/aibrix_kvcache)。
 
-- **HiCacheFile**: A simple file-based storage backend for demonstration purposes.
+- **HiCacheFile**：基于文件的简单存储后端，用于演示目的。
 
-Specifically, **LMCache**, an efficient KV cache layer for enterprise-scale LLM inference, provides an alternative solution to HiCache. Try LMCache [here](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/lmcache).
+另外，**LMCache** 作为面向企业级 LLM 推理的高效 KV 缓存层，是 HiCache 的一种替代方案。在这里[试用 LMCache](https://github.com/sgl-project/sglang/tree/main/python/sglang/srt/mem_cache/storage/lmcache)。
 
-## Related Parameters
+## 相关参数
 
-- **`--enable-hierarchical-cache`**: Enable hierarchical cache functionality. This is required to use HiCache.
+- **`--enable-hierarchical-cache`**：启用分层缓存功能。使用 HiCache 必须开启此参数。
 
-- **`--hicache-ratio HICACHE_RATIO`**: The ratio of the size of host KV cache memory pool to the size of device pool. For example, a value of 2 means the host memory pool is twice as large as the device memory pool. The value of this parameter must be greater than 1, as the current implementation requires the host memory allocated for the KV cache to be larger than the device memory allocated for the KV cache.
+- **`--hicache-ratio HICACHE_RATIO`**：主机 KV 缓存内存池与设备内存池的大小比例。例如取值为 2 表示主机内存池是设备内存池的两倍。该参数必须大于 1，因为当前实现要求分配给 KV 缓存的主机内存大于分配给 KV 缓存的设备内存。
 
-- **`--hicache-size HICACHE_SIZE`**: The size of host KV cache memory pool in gigabytes. This parameter overrides `hicache-ratio` if set. For example, `--hicache-size 30` allocates 30GB (1GB = 1e9 bytes) for the host memory pool **for each rank**. If there are 8 ranks, then the total memory size is 240GB. Just like `hicache-ratio`, the value of this parameter must be larger than the size of device memory allocated for KV cache.
+- **`--hicache-size HICACHE_SIZE`**：主机 KV 缓存内存池的大小（GB）。设置后该参数会覆盖 `hicache-ratio`。例如 `--hicache-size 30` 会为**每个 rank** 分配 30GB（1GB = 1e9 字节）主机内存池。如果有 8 个 rank，总内存为 240GB。与 `hicache-ratio` 一样，该参数的值必须大于为 KV 缓存分配的设备内存大小。
 
-**Note**: `--hicache-ratio` and `--hicache-size` are two critical parameters. In general, a larger HiCache size leads to a higher cache hit rate, which improves prefill performance. However, the relationship between cache size and hit rate is not linear. Once most reusable KV data—especially hot tokens—are already cached, further increasing the size may yield only marginal performance gains. Users can set these parameters based on their workload characteristics and performance requirements.
+**注意**：`--hicache-ratio` 与 `--hicache-size` 是两个关键参数。一般来说，HiCache 容量越大，缓存命中率越高，预填充性能越好。但缓存大小与命中率之间并非线性关系——一旦大部分可复用 KV 数据（尤其是热点 token）已被缓存，继续增大容量可能只会带来边际收益。你可以根据自己的工作负载特征和性能要求来设置这些参数。
 
-- **`--page-size PAGE_SIZE`**: The number of tokens per page. This parameter determines the granularity of KV cache storage and retrieval. Larger page sizes reduce metadata overhead and improve I/O efficiency for storage backends, but may lower the cache hit rate when only part of a page matches the stored KV cache. For workloads with long common prefixes, larger pages can improve performance, while workloads with more diverse prefixes may benefit from smaller pages. See [Data Transfer Optimization](#data-transfer-optimization) for how page granularity affects I/O performance.
+- **`--page-size PAGE_SIZE`**：每页的 token 数量。该参数决定 KV 缓存存储与检索的粒度。较大的页大小能减少元数据开销、提升存储后端的 I/O 效率，但当只有部分页与存储的 KV 缓存匹配时可能降低命中率。对于长公共前缀的负载，大页能提升性能；而前缀更多样化的负载可能从小页中受益。页粒度如何影响 I/O 性能，见[数据传输优化](#data-transfer-optimization)。
 
-- **`--hicache-storage-prefetch-policy {best_effort,wait_complete,timeout}`**: Controls when prefetching from storage should stop. See [Prefetch from L3](#prefetch-from-l3) for details.
-  - `best_effort`: Prefetch as much as possible without blocking
-  - `wait_complete`: Wait for prefetch to complete before proceeding
-  - `timeout`: Terminates after specified time or when complete (Recommended for production environments, as setting an appropriate timeout helps the system meet required SLOs)
+- **`--hicache-storage-prefetch-policy {best_effort,wait_complete,timeout}`**：控制何时停止从存储预取。细节见[从 L3 预取](#prefetch-from-l3)。
+  - `best_effort`：在不阻塞的情况下尽可能多地预取
+  - `wait_complete`：等待预取完成后再继续
+  - `timeout`：在指定时间后或完成后终止（生产环境推荐，设置合适的超时有助于系统满足所需的 SLO）
 
-- **`--hicache-write-policy {write_back,write_through,write_through_selective}`**: Controls how data is written from faster to slower memory tiers. See [Data Write-back](#data-write-back) for details.
-  - `write_through`: Immediately writes data to all tiers (strongest caching benefits)
-  - `write_through_selective`: Uses hit-count tracking to back up only frequently accessed data
-  - `write_back`: Writes data back to slower tiers only when eviction is needed (reduces I/O load)
+- **`--hicache-write-policy {write_back,write_through,write_through_selective}`**：控制数据如何从较快的内存层次写到较慢的层次。细节见[数据写回](#data-write-back)。
+  - `write_through`：立即把数据写入所有层次（缓存收益最强）
+  - `write_through_selective`：通过命中计数跟踪，只备份频繁访问的数据
+  - `write_back`：仅在需要驱逐时才把数据写回较慢的层次（减少 I/O 负载）
 
-- **`--hicache-io-backend {direct,kernel}`**: Choose the I/O backend for KV cache transfer between CPU and GPU. See [Data Transfer Optimization](#data-transfer-optimization) for details.
-  - `direct`: Standard CUDA memory copy operations
-  - `kernel`: GPU-assisted I/O kernels (recommended for better performance)
+- **`--hicache-io-backend {direct,kernel}`**：选择 CPU 与 GPU 之间 KV 缓存传输的 I/O 后端。细节见[数据传输优化](#data-transfer-optimization)。
+  - `direct`：标准 CUDA 内存拷贝操作
+  - `kernel`：GPU 辅助 I/O kernel（性能更佳，推荐）
 
-- **`--hicache-mem-layout {layer_first,page_first,page_first_direct}`**: Memory layout for the host memory pool. See [Data Transfer Optimization](#data-transfer-optimization) for details.
-  - `layer_first`: Compatible with GPU computation kernels (default for GPU memory)
-  - `page_first`: Optimized for I/O efficiency
-  - `page_first_direct`: Groups all tokens of a given layer within a page, allowing transfers from L2 to GPU to be aggregated at the page-layer level
+- **`--hicache-mem-layout {layer_first,page_first,page_first_direct}`**：主机内存池的内存布局。细节见[数据传输优化](#data-transfer-optimization)。
+  - `layer_first`：与 GPU 计算 kernel 兼容（GPU 内存的默认布局）
+  - `page_first`：针对 I/O 效率优化
+  - `page_first_direct`：把页面内某一层的所有 token 聚合在一起，使 L2 到 GPU 的传输可以在页-层级别聚合
 
-- **`--hicache-storage-backend {file,mooncake,hf3fs,nixl,aibrix,dynamic}`**: Choose the storage backend for the L3 tier. Built-in backends: file, mooncake, hf3fs, nixl, aibrix. For dynamic backend, use --hicache-storage-backend-extra-config to specify: `backend_name` (custom name), `module_path` (Python module path), `class_name` (backend class name). See [Unified Interfaces and Rich L3 Storage Backends](#unified-interfaces-and-rich-l3-storage-backends) for available backends.
+- **`--hicache-storage-backend {file,mooncake,hf3fs,nixl,aibrix,dynamic}`**：选择 L3 层的存储后端。内置后端：file、mooncake、hf3fs、nixl、aibrix。对于 dynamic 后端，用 --hicache-storage-backend-extra-config 指定：`backend_name`（自定义名称）、`module_path`（Python 模块路径）、`class_name`（后端类名）。可用的后端见[统一接口与丰富的 L3 存储后端](#unified-interfaces-and-rich-l3-storage-backends)。
 
-- **`--enable-lmcache`**: Using LMCache as an alternative hierarchical cache solution.
+- **`--enable-lmcache`**：使用 LMCache 作为替代的分层缓存方案。
 
-- **`--lmcache-config-file`**: Path to the LMCache YAML configuration file.
+- **`--lmcache-config-file`**：LMCache YAML 配置文件的路径。
 
-- **`--hicache-storage-backend-extra-config HICACHE_STORAGE_BACKEND_EXTRA_CONFIG`**: the extra config can be either
-  - a JSON string containing extra configuration for the storage backend, e.g., `--hicache-storage-backend-extra-config '{"prefetch_threshold":512, "prefetch_timeout_base": 0.5, "prefetch_timeout_per_ki_token": 0.25}' `, or
-  - a TOML or JSON or YAML file specifying the extra configuration for the storage backend (to differentiate from the JSON string input, prepend a `@` in front of the file name), e.g., `--hicache-storage-backend-extra-config "@config.toml"` where `config.toml` is the config file containing the complex configurations. This can be useful when the configuration consists of many or complex key-value pairs (for instance, it is preferred to use a config file for NIXL backend as its configurations can be complex).
+- **`--hicache-storage-backend-extra-config HICACHE_STORAGE_BACKEND_EXTRA_CONFIG`**：额外配置可以是
+  - 一个包含存储后端额外配置的 JSON 字符串，例如 `--hicache-storage-backend-extra-config '{"prefetch_threshold":512, "prefetch_timeout_base": 0.5, "prefetch_timeout_per_ki_token": 0.25}' `，或
+  - 一个指定存储后端额外配置的 TOML、JSON 或 YAML 文件（要与 JSON 字符串输入区分，请在文件名前加 `@`），例如 `--hicache-storage-backend-extra-config "@config.toml"`，其中 `config.toml` 是包含复杂配置的配置文件。当配置包含大量或复杂的键值对时这种方式很有用（例如 NIXL 后端的配置可能很复杂，建议使用配置文件）。

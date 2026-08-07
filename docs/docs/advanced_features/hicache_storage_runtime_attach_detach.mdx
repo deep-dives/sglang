@@ -1,83 +1,91 @@
 ---
-title: "Runtime Attach/Detach HiCache Storage Backend (No Restart)"
+title: "HiCache 存储后端运行时挂载/卸载（无需重启）"
 metatags:
-    description: "Dynamically attach/detach HiCache L3 storage backends at runtime via HTTP API. No restart required, idle-state safety checks."
+    description: "通过 HTTP API 在运行时动态挂载/卸载 HiCache L3 存储后端。无需重启，带空闲状态安全检查。"
 ---
-This document explains how to **dynamically attach/detach the HiCache L3 storage backend at runtime** (e.g., `mooncake` / `hf3fs` / `nixl` / `file` / `aibrix` / `eic`) while **SGLang is already running and serving traffic**, without restarting the process.
+本文说明如何在 **SGLang 已在运行并正处理流量** 的情况下，**在运行时动态挂载/卸载 HiCache L3 存储后端**（例如 `mooncake` / `hf3fs` / `nixl` / `file` / `aibrix` / `eic`），而无需重启进程。
 
-For safety and consistency, the current implementation **strictly requires** these operations to happen only when the service is **idle**:
+出于安全与一致性考虑，当前实现**严格要求**这些操作只能在服务处于**空闲**状态时进行：
 
-- **No running requests**
-- **No waiting/queued requests**
+- **没有正在执行的请求**
+- **没有等待/排队的请求**
 
-If the idle condition is not met, the API will fail fast (HTTP 400) and **will not modify** the current service state.
+如果不满足空闲条件，API 会快速失败（HTTP 400），并且**不会修改**当前服务状态。
 
-***
-## 1. Background and implementation overview
-
-### 1.1 Architecture / control path
-
-The control path is:
-
-1. **HTTP Server** (`python/sglang/srt/entrypoints/http_server.py`)
-   - Exposes `PUT /hicache/storage-backend`, `DELETE /hicache/storage-backend`, `GET /hicache/storage-backend`
-2. **TokenizerManager** (`python/sglang/srt/managers/tokenizer_control_mixin.py`)
-   - Sends the request to the Scheduler via `FanOutCommunicator`
-3. **Scheduler** (`python/sglang/srt/managers/scheduler.py`)
-   - Performs a **strict idle check**
-   - Calls `tree_cache.attach_storage_backend(...)` / `detach_storage_backend(...)`
-4. **HiRadixCache** (`python/sglang/srt/mem_cache/hiradix_cache.py`)
-   - Parses `hicache_storage_backend_extra_config_json` (supports both backend config and prefetch knobs)
-   - Calls `cache_controller.attach_storage_backend(...)` / `detach_storage_backend(...)`
-5. **HiCacheController** (`python/sglang/srt/managers/cache_controller.py`)
-   - Creates/destroys the storage backend instance (via `StorageBackendFactory`)
-   - Starts/stops backend background threads at runtime (prefetch/backup)
+<Note>
+💡 AI Infra 学习笔记：为什么必须空闲才能切换存储后端？因为 KV 缓存被替换/断开时，正在计算的请求可能会读到不一致的缓存状态，导致错误结果甚至崩溃。这是典型的"一致性优先于可用性"取舍——宁可拒绝切换，也不能破坏正在服务的流量。生产环境要做此类变更时，先用网关把上游流量摘掉，等队列排空再操作。
+</Note>
 
 ***
-## 2. Idle-state requirement (strict)
+## 1. 背景与实现概览
 
-The Scheduler uses `is_fully_idle()` which checks:
+### 1.1 架构 / 控制路径
 
-- No running batches (including chunked prefill, overlap, pipeline-parallel, and disaggregation paths)
-- No waiting requests in any queue (waiting, grammar, disagg bootstrap/prealloc/transfer/inflight)
-- No DLLM staging requests
+控制路径如下：
 
-If the condition is not met, attach/detach returns an error like:
+1. **HTTP Server**（`python/sglang/srt/entrypoints/http_server.py`）
+   - 暴露 `PUT /hicache/storage-backend`、`DELETE /hicache/storage-backend`、`GET /hicache/storage-backend`
+2. **TokenizerManager**（`python/sglang/srt/managers/tokenizer_control_mixin.py`）
+   - 通过 `FanOutCommunicator` 把请求发给 Scheduler
+3. **Scheduler**（`python/sglang/srt/managers/scheduler.py`）
+   - 执行**严格空闲检查**
+   - 调用 `tree_cache.attach_storage_backend(...)` / `detach_storage_backend(...)`
+4. **HiRadixCache**（`python/sglang/srt/mem_cache/hiradix_cache.py`）
+   - 解析 `hicache_storage_backend_extra_config_json`（同时支持后端配置与预取参数）
+   - 调用 `cache_controller.attach_storage_backend(...)` / `detach_storage_backend(...)`
+5. **HiCacheController**（`python/sglang/srt/managers/cache_controller.py`）
+   - 创建/销毁存储后端实例（通过 `StorageBackendFactory`）
+   - 在运行时启动/停止后端的后台线程（预取/备份）
+
+***
+## 2. 空闲状态要求（严格）
+
+Scheduler 使用 `is_fully_idle()` 检查：
+
+- 没有正在运行的批（包括分块预填充、重叠、流水线并行与分离部署路径）
+- 任何队列中都没有等待的请求（等待、语法、disagg 引导/预分配/传输/执行中）
+- 没有 DLLM 暂存请求
+
+如果不满足条件，挂载/卸载会返回类似下面的错误：
 
 - `Reject attach: scheduler is not idle. #queue-req=... #running-req=...`
 
 <Tip>
-before switching, drain upstream traffic and wait for the server to become idle, then call attach/detach.
+切换之前，先让上游流量排空并等服务端进入空闲状态，然后再调用挂载/卸载。
 </Tip>
 
-### 2.1 DP (data parallel) semantics
+### 2.1 DP（数据并行）语义
 
-When `dp_size > 1`, the tokenizer dispatches the request to **all DP scheduler instances** and aggregates their responses:
+当 `dp_size > 1` 时，tokenizer 会把请求分发给**所有 DP scheduler 实例**并汇总它们的响应：
 
-- The final `success` is **true only if all DP ranks return success**
-- The final `message` concatenates messages from all DP ranks
+- 最终 `success` **只有当所有 DP rank 都返回成功时才为 true**
+- 最终 `message` 会拼接所有 DP rank 的消息
 
-This is intended to prevent “silent partial success”, but it also means you may see:
+这是为了防止"静默的部分成功"，但这也意味着你可能看到：
 
-- Overall **failure** even though **some ranks already succeeded**
+- 即使**某些 rank 已经成功**，整体结果仍是**失败**
 
-Currently there is **no automatic partial rollback** across DP ranks (see TODO in code). Operationally:
+目前跨 DP rank **没有自动的部分回滚机制**（见代码中的 TODO）。操作上建议：
 
-- Prefer to keep backend config identical across ranks
-- If attach fails, immediately call detach (best-effort/idempotent), fix config, then retry attach
+- 尽量让各 rank 的后端配置保持一致
+- 如果挂载失败，立即调用卸载（尽力而为/幂等），修正配置后重试挂载
+
+<Note>
+💡 AI Infra 学习笔记：数据并行（DP）下每个 rank 各自维护一份 KV 缓存状态，跨 rank 操作天然面临"部分成功"的难题——有的 rank 换好了、有的没换好。这里选择"全成功才算成功"，宁可整体失败，也不让系统处于 rank 间状态不一致的隐患中。这类"所有副本必须一致"的语义在多副本系统里很常见。
+</Note>
 
 ***
-## 3. How to use (HTTP Admin API)
+## 3. 使用方法（HTTP 管理 API）
 
-The examples below assume your SGLang HTTP server is at `http://127.0.0.1:30000`.
+下面的示例假设你的 SGLang HTTP 服务端在 `http://127.0.0.1:30000`。
 
-### 3.1 Query current storage backend status
+### 3.1 查询当前存储后端状态
 
 ```bash Command
 curl -s http://127.0.0.1:30000/hicache/storage-backend
 ```
 
-Example response:
+示例响应：
 
 ```json Config
 {
@@ -86,7 +94,7 @@ Example response:
 }
 ```
 
-### 3.2 Attach (enable) a storage backend
+### 3.2 挂载（启用）存储后端
 ```bash Command
 curl -s -X PUT http://127.0.0.1:30000/hicache/storage-backend \
   -H 'Content-Type: application/json' \
@@ -105,29 +113,29 @@ curl -s -X PUT http://127.0.0.1:30000/hicache/storage-backend \
   }'
 ```
 
-Notes:
+注意事项：
 
-- `hicache_storage_backend_extra_config_json` can include both:
-  - **Backend configuration** (e.g., Mooncake master/metadata/protocol, etc.)
-  - **Prefetch configuration** (`prefetch_threshold`, `prefetch_timeout_base`, `prefetch_timeout_per_ki_token`, `prefetch_timeout_max`, `hicache_storage_pass_prefix_keys`)
+- `hicache_storage_backend_extra_config_json` 可以同时包含：
+  - **后端配置**（例如 Mooncake 的 master/metadata/protocol 等）
+  - **预取配置**（`prefetch_threshold`、`prefetch_timeout_base`、`prefetch_timeout_per_ki_token`、`prefetch_timeout_max`、`hicache_storage_pass_prefix_keys`）
 
-### 3.3 Detach (disable) the storage backend
+### 3.3 卸载（禁用）存储后端
 
 ```bash Command
 curl -s -X DELETE http://127.0.0.1:30000/hicache/storage-backend
 ```
 
-Notes:
+注意事项：
 
-- Detach only makes SGLang **stop using** the L3 storage backend and stops prefetch/backup threads
-- It **does not automatically delete** data stored in Mooncake/HF3FS (or other remote backends)
+- 卸载只是让 SGLang **停止使用** L3 存储后端，并停止预取/备份线程
+- 它**不会自动删除** Mooncake/HF3FS（或其他远程后端）中已存储的数据
 
 ***
-## 4. Behavior and caveats
+## 4. 行为与注意事项
 
-- **No restart required**: attach/detach switches in-process at runtime
-- **Must be idle**: otherwise the request is rejected to avoid consistency issues
-- **Host KV layout constraints still apply**: for example, Mooncake still requires layouts like `page_first/page_first_direct/page_head`; if the server's HiCache host-memory layout does not satisfy the backend requirements, attach will fail with an error
-- **Observability**:
-  - After attach, `server_args.hicache_storage_backend*` is updated on both the tokenizer and scheduler sides
-  - If metrics are enabled, attach will create a storage metrics collector in `HiRadixCache` on demand
+- **无需重启**：挂载/卸载在运行时进程内切换
+- **必须空闲**：否则请求会被拒绝，以避免一致性问题
+- **主机 KV 布局约束仍然适用**：例如 Mooncake 仍要求使用 `page_first/page_first_direct/page_head` 之类的布局；如果服务端 HiCache 的主机内存布局不满足后端要求，挂载会报错失败
+- **可观测性**：
+  - 挂载后，tokenizer 与 scheduler 两侧的 `server_args.hicache_storage_backend*` 都会被更新
+  - 如果启用了指标，挂载时会在 `HiRadixCache` 中按需创建存储指标收集器

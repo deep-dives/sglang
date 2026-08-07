@@ -1,22 +1,26 @@
 ---
-title: "Attention Backend"
+title: "Attention 后端"
 metatags:
-    description: "SGLang attention backend guide: FlashInfer, FA3, FA4, Triton, FlashMLA, TRTLLM MLA, hybrid attention. Support matrix for MHA and MLA models."
+    description: "SGLang Attention 后端指南：FlashInfer、FA3、FA4、Triton、FlashMLA、TRTLLM MLA、混合注意力。MHA 与 MLA 模型的支持矩阵。"
 ---
-SGLang supports a large variety of attention backends. Each of them has different pros and cons.
-You can test them according to your needs.
+SGLang 支持种类丰富的 Attention 后端，它们各有优劣。
+你可以按需测试后自行选择。
 
 <Warning>
-Selecting an optimal attention backend is crucial for maximizing your performance. Different backends excel in various scenarios, so choose based on your model, hardware, and use case. Not all backends are supported on all platforms and model architectures.
+选择合适的 Attention 后端对最大化性能至关重要。不同后端各有擅长的场景，请根据你的模型、硬件和使用场景来选。并非所有后端都支持所有平台和模型架构。
 
-If you don't specify `--attention-backend`, SGLang makes a best effort to automatically select the most performant backend based on your hardware and model architecture.
+如果你不指定 `--attention-backend`，SGLang 会根据你的硬件和模型架构尽力自动选择性能最佳的后端。
 </Warning>
 
-## Support Matrix
+<Note>
+💡 AI Infra 学习笔记：Attention 后端是推理引擎中最核心的性能组件之一——注意力计算占解码阶段的大部分时间，不同后端（FlashInfer、FA3/FA4、Triton 等）在页大小、量化 KV 缓存、滑动窗口、投机解码等特性上支持各不相同，选错后端可能带来数倍性能差异。这也是推理引擎性能优化面试的高频考点。
+</Note>
 
-The support matrix is split into two parts: MHA (standard attention) and MLA (multi-head latent attention). For an explanation of the key differences between MHA and MLA, please see the [SGLang documentation on DeepSeek MLA](/cookbook/autoregressive/DeepSeek/DeepSeek-V3#4-2-4-mla-optimizations) and the original [DeepSeek MLA paper](https://arxiv.org/pdf/2405.04434).
+## 支持矩阵
 
-### MHA Backends
+支持矩阵分为两部分：MHA（标准注意力）和 MLA（多头潜在注意力，multi-head latent attention）。关于 MHA 与 MLA 关键区别的说明，请参阅 [SGLang 的 DeepSeek MLA 文档](/cookbook/autoregressive/DeepSeek/DeepSeek-V3#4-2-4-mla-optimizations) 和原始的 [DeepSeek MLA 论文](https://arxiv.org/pdf/2405.04434)。
+
+### MHA 后端
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -31,14 +35,14 @@ The support matrix is split into two parts: MHA (standard attention) and MLA (mu
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Backend**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**Page Size > 1 (native)**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**FP8 KV Cache**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**FP4 KV Cache**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Spec topk=1**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**Spec topk>1**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Sliding Window**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**MultiModal**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**后端**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**页大小 > 1（原生）**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**FP8 KV 缓存**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**FP4 KV 缓存**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**投机 topk=1**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**投机 topk>1**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**滑动窗口**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**多模态**</th>
     </tr>
   </thead>
   <tbody>
@@ -185,7 +189,7 @@ The support matrix is split into two parts: MHA (standard attention) and MLA (mu
   </tbody>
 </table>
 
-### MLA Backends
+### MLA 后端
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -199,13 +203,13 @@ The support matrix is split into two parts: MHA (standard attention) and MLA (mu
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Backend**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**Native Page Sizes**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**FP8 KV Cache**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**FP4 KV Cache**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Chunked Prefix Cache**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**Spec topk=1**</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**Spec topk>1**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**后端**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**原生页大小**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**FP8 KV 缓存**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**FP4 KV 缓存**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**分块前缀缓存**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>**投机 topk=1**</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>**投机 topk>1**</th>
     </tr>
   </thead>
   <tbody>
@@ -303,42 +307,47 @@ The support matrix is split into two parts: MHA (standard attention) and MLA (mu
 </table>
 
 <Note>
-Multimodal attention is selected by `--mm-attention-backend`. The "MultiModal" column indicates whether a corresponding multimodal implementation exists for that backend family.
+多模态注意力通过 `--mm-attention-backend` 选择。"多模态"列表示该后端家族是否存在对应的多模态实现。
 </Note>
 
 <Note>
-- DSA is specifically designed for [DeepSeek V3.2](https://lmsys.org/blog/2025-09-29-deepseek-V32/). See the [DSA Attention Backend](#dsa-attention-backend) section and [DeepSeek V3.2 deployment guide](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2) for details.
+- DSA 专为 [DeepSeek V3.2](https://lmsys.org/blog/2025-09-29-deepseek-V32/) 设计。详见 [DSA Attention 后端](#dsa-attention-backend) 一节与 [DeepSeek V3.2 部署指南](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2)。
 </Note>
 
 <Note>
-For the KV4 FA4 scenario, FA4 requires using a different --decode-attention-backend to run. Except for trtllm_mha being incompatible with FA4, all other decode backends behave as shown in the table.
+在 KV4/FA4 场景下，FA4 需要使用不同的 `--decode-attention-backend` 才能运行。除 `trtllm_mha` 与 FA4 不兼容外，其余解码后端的表现与表中所示一致。
 </Note>
 
 <Tip>
-Speculative decoding topk: `topk` is the number of draft tokens sampled per step from the draft model. `topk = 1` follows classic EAGLE; `topk > 1` explores multiple branches and requires backend support in both draft and verification paths.
+投机解码 topk：`topk` 是每步从草稿模型采样出的草稿 token 数量。`topk = 1` 遵循经典 EAGLE；`topk > 1` 会探索多个分支，需要草稿与验证两条路径都得到后端支持。
 </Tip>
 
 <Tip>
-Page size controls how many tokens are grouped into a KV cache block. For the prefix cache to take effect, the number of tokens must fill at least one complete page. For example, if your prompt is only 32 tokens and `page_size = 64`, it won't fill a complete page and cannot be matched in the prefix cache (pages cannot be padded). With 65 tokens and `page_size = 64`, only the first page of 64 tokens will be cached and matched; the remaining 1 token is discarded. Use `page_size = 1` for maximum prefix reuse (token-level matching). Note that higher page sizes generally improve attention kernel performance, so prefer `page_size > 1` when prefix cache reuse is not critical.
+页大小控制把多少个 token 分到同一个 KV 缓存块中。要让前缀缓存生效，token 数量必须至少填满一个完整的页。例如，如果你的提示词只有 32 个 token，而 `page_size = 64`，它无法填满一页，也就无法在前缀缓存中匹配（页不能被填充）。当有 65 个 token、`page_size = 64` 时，只有第一页的 64 个 token 会被缓存并匹配，剩下 1 个 token 会被丢弃。想要最大化前缀复用（按 token 粒度匹配），请使用 `page_size = 1`。注意，更大的页大小通常能提升注意力 kernel 的性能，所以当前缀缓存复用不是关键时，优先用 `page_size > 1`。
 </Tip>
 
-Many backends that do not natively operate on pages can emulate `page_size > 1` at the wrapper layer by expanding page tables to per-token indices. The "Page Size > 1 (native)" column indicates true in-kernel paging. Some backends require fixed native page sizes and cannot be reduced/emulated differently: TRTLLM MHA (16/32/64), TRTLLM MLA (32/64), CuteDSL MLA (32/64), FlashMLA (64), Cutlass MLA (128), Ascend (128), HPC-Ops (64).
+<Note>
+💡 AI Infra 学习笔记：页大小（page size）与前缀缓存是一对需要权衡的配置。页越大，注意力 kernel 的访存越规整、性能越好；但前缀缓存按整页匹配，页越大能命中的前缀粒度越粗（比如 `page_size = 64` 时，小于 64 token 的共享前缀完全无法复用）。批量对话、共享系统提示词等场景看重缓存命中，通常更倾向小页甚至 `page_size = 1`。
+</Note>
 
-MLA page-size constraints:
-- FlashInfer MLA: page_size = 1.
-- FlashMLA: page_size = 64.
-- Cutlass MLA: page_size = 128.
-- TRTLLM MLA: page_size ∈ &#123;32, 64&#125;.
-- CuteDSL MLA: page_size ∈ &#123;32, 64&#125; (decode-only; prefill falls back to `trtllm_mla` when unset).
-- TokenSpeed MLA: page_size ∈ &#123;32, 64&#125; (Blackwell SM100/SM12x only; requires `--kv-cache-dtype fp8_e4m3`).
 
-### GDN Attention Backends
+许多不原生操作页的后端可以在包装层把页表展开为逐 token 索引，从而模拟 `page_size > 1`。"页大小 > 1（原生）"列表示真正的 kernel 内分页。有些后端要求固定的原生页大小，无法按其他方式缩小或模拟：TRTLLM MHA（16/32/64）、TRTLLM MLA（32/64）、CuteDSL MLA（32/64）、FlashMLA（64）、Cutlass MLA（128）、Ascend（128）、HPC-Ops（64）。
 
-GDN (Gated Delta Network) is a linear attention mechanism with O(n) complexity, used in hybrid models that alternate GDN linear attention layers with standard full attention layers. GDN is **not** selected via `--attention-backend`; it is automatically activated when the model architecture requires it (e.g., Qwen 3.5, Qwen 3 Next, Jet Nemotron, Jet VLM).
+MLA 页大小约束：
+- FlashInfer MLA：page_size = 1。
+- FlashMLA：page_size = 64。
+- Cutlass MLA：page_size = 128。
+- TRTLLM MLA：page_size ∈ &#123;32, 64&#125;。
+- CuteDSL MLA：page_size ∈ &#123;32, 64&#125;（仅解码；未设置时预填充回退到 `trtllm_mla`）。
+- TokenSpeed MLA：page_size ∈ &#123;32, 64&#125;（仅 Blackwell SM100/SM12x；需要 `--kv-cache-dtype fp8_e4m3`）。
 
-The GDN linear attention layers have their own kernel backends, selected via `--linear-attn-backend` (default: `triton`). You can override the kernel per phase with `--linear-attn-decode-backend` and `--linear-attn-prefill-backend`.
+### GDN Attention 后端
 
-On SM100/SM103 with CUDA 13+, SGLang automatically selects FlashInfer for GDN prefill when the per-phase override is unset, the base linear-attention backend is Triton, recurrent state is BF16, key/value head dimensions are 128, dynamic chunking and page-major KV layout are disabled, and `--chunked-prefill-size` is between 1 and 8192. Radix caching may be disabled or use `no_buffer`, `extra_buffer`, or `extra_buffer_lazy`; the extra-buffer paths use state checkpoints.
+GDN（Gated Delta Network，门控增量网络）是一种复杂度为 O(n) 的线性注意力机制，用于混合模型——这类模型在标准全注意力层之间交替穿插 GDN 线性注意力层。GDN **并不**通过 `--attention-backend` 选择；当模型架构需要时（例如 Qwen 3.5、Qwen 3 Next、Jet Nemotron、Jet VLM），它会自动激活。
+
+GDN 线性注意力层有自己独立的 kernel 后端，通过 `--linear-attn-backend` 选择（默认：`triton`）。你也可以用 `--linear-attn-decode-backend` 和 `--linear-attn-prefill-backend` 按阶段覆盖 kernel 选择。
+
+在 SM100/SM103 与 CUDA 13+ 环境下，当满足以下条件时，SGLang 会自动为 GDN 预填充选择 FlashInfer：未设置按阶段覆盖、基础线性注意力后端为 Triton、循环状态为 BF16、键/值头维度为 128、动态分块与 page-major KV 布局被禁用，且 `--chunked-prefill-size` 在 1 到 8192 之间。Radix 缓存可以禁用，或使用 `no_buffer`、`extra_buffer`、`extra_buffer_lazy`；extra-buffer 路径会使用状态检查点。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -349,10 +358,10 @@ On SM100/SM103 with CUDA 13+, SGLang automatically selects FlashInfer for GDN pr
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Decode</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Prefill / Extend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Spec Decoding (Target Verify)</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>解码</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>预填充 / 扩展</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>投机解码（目标验证）</th>
     </tr>
   </thead>
   <tbody>
@@ -390,25 +399,25 @@ On SM100/SM103 with CUDA 13+, SGLang automatically selects FlashInfer for GDN pr
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>FlashInfer (CUDA, SM90/SM100/SM103)</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ linear chain; tree falls back to Triton</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 线性链；树形路径回退到 Triton</td>
     </tr>
   </tbody>
 </table>
 
 <Warning>
-GDN models are hybrid: the full-attention layers still require a standard `--attention-backend`. Platform constraints for the full-attention backend on hybrid GDN models:
-- **Blackwell SM120 (e.g., RTX PRO 6000 Blackwell)**: `triton` or `flashinfer` for prefill/full attention; `trtllm_mha` is supported for `--decode-attention-backend` only.
-- **Other Blackwell variants (including SM100 B200/GB200)**: `triton`, `trtllm_mha`, or `fa4` only.
-- **NPU (Ascend)**: `ascend` only.
-- **AMD (ROCm)**: `triton` recommended.
-- **Other CUDA (Hopper, Ampere, etc.)**: auto-selection works; no special constraints.
+GDN 模型是混合模型：全注意力层仍然需要标准的 `--attention-backend`。混合 GDN 模型上全注意力后端的平台约束如下：
+- **Blackwell SM120（如 RTX PRO 6000 Blackwell）**：预填充/全注意力使用 `triton` 或 `flashinfer`；`trtllm_mha` 仅支持作为 `--decode-attention-backend`。
+- **其他 Blackwell 变体（包括 SM100 B200/GB200）**：仅支持 `triton`、`trtllm_mha` 或 `fa4`。
+- **NPU（Ascend）**：仅 `ascend`。
+- **AMD（ROCm）**：推荐 `triton`。
+- **其他 CUDA（Hopper、Ampere 等）**：自动选择即可，无特殊约束。
 </Warning>
 
-### DSA Attention Backend
+### DSA Attention 后端
 
-DSA (DeepSeek Sparse Attention) is a native sparse attention mechanism used by [DeepSeek V3.2](https://lmsys.org/blog/2025-09-29-deepseek-V32/). It is activated automatically when the model architecture requires it and is selected via `--attention-backend dsa` (deprecated alias: `nsa`).
+DSA（DeepSeek Sparse Attention，DeepSeek 稀疏注意力）是 [DeepSeek V3.2](https://lmsys.org/blog/2025-09-29-deepseek-V32/) 使用的原生稀疏注意力机制。当模型架构需要时它会自动激活，并通过 `--attention-backend dsa` 选择（已弃用的别名：`nsa`）。
 
-Internally, the DSA backend dispatches to different sub-backends for prefill and decode phases. You can override these with `--dsa-prefill-backend` and `--dsa-decode-backend`:
+在内部，DSA 后端会在预填充与解码阶段分发到不同的子后端。你可以用 `--dsa-prefill-backend` 和 `--dsa-decode-backend` 覆盖这些选择：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -419,10 +428,10 @@ Internally, the DSA backend dispatches to different sub-backends for prefill and
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Sub-backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Prefill</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Decode</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>子后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>预填充</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>解码</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
@@ -430,62 +439,62 @@ Internally, the DSA backend dispatches to different sub-backends for prefill and
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>flashmla_sparse</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default prefill on Hopper and Blackwell (BF16)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hopper 和 Blackwell 上预填充的默认选择（BF16）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>flashmla_sparse_q8</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>❌</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Native FP8 (q8×kv8) sparse prefill on Hopper (SM90); requires <code>--kv-cache-dtype fp8_e4m3</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hopper（SM90）上的原生 FP8（q8×kv8）稀疏预填充；需要 <code>--kv-cache-dtype fp8_e4m3</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>flashmla_kv</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default for FP8 on Hopper (prefill + decode)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hopper 上 FP8 的默认选择（预填充 + 解码）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>flashmla_auto</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>❌</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Picks flashmla_sparse or flashmla_kv by KV cache dtype</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>根据 KV 缓存 dtype 在 flashmla_sparse 与 flashmla_kv 之间选择</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>fa3</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default decode on Hopper (BF16)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hopper 上解码的默认选择（BF16）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>trtllm</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default decode on Blackwell (BF16); default for FP8 on Blackwell (prefill + decode)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Blackwell 上解码的默认选择（BF16）；Blackwell 上 FP8 的默认选择（预填充 + 解码）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>tilelang</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default on AMD (ROCm)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>AMD（ROCm）上的默认选择</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>aiter</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>AMD-specific kernel library (requires aiter package)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>AMD 专用 kernel 库（需要 aiter 包）</td>
     </tr>
   </tbody>
 </table>
 
-For deployment examples, see the [DeepSeek V3.2 deployment guide](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2).
+部署示例请参见 [DeepSeek V3.2 部署指南](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2)。
 
-### Hybrid attention (different backends for prefill vs decode) (Experimental)
+### 混合注意力（预填充与解码使用不同后端）（实验性）
 
 <Warning>
-Hybrid attention is an experimental feature.
+混合注意力是实验性功能。
 </Warning>
 
-You can mix-and-match attention backends for prefill and decode. This is useful when one backend excels at prefill and another excels at decode. For the implementation details, please see `python/sglang/srt/layers/attention/hybrid_attn_backend.py`.
+你可以为预填充和解码自由搭配 Attention 后端。当某个后端擅长预填充、另一个擅长解码时，这种做法很实用。实现细节请参见 `python/sglang/srt/layers/attention/hybrid_attn_backend.py`。
 
 ```bash Command
 # Example: Prefill with FA4, Decode with TRTLLM MLA (Blackwell)
@@ -498,47 +507,51 @@ python3 -m sglang.launch_server \
   --prefill-attention-backend fa4
 ```
 
-#### Speculative decoding with hybrid attention
+#### 混合注意力下的投机解码
 
-Hybrid attention also works with speculative decoding. The backend used for draft decoding and target verification depends on `--speculative-attention-mode`:
+混合注意力同样可用于投机解码。草稿解码与目标验证所用的后端取决于 `--speculative-attention-mode`：
 
-- `--speculative-attention-mode decode` (recommended): draft/verify use the decode backend.
-- `--speculative-attention-mode prefill` (default): draft/verify use the prefill backend.
+- `--speculative-attention-mode decode`（推荐）：草稿/验证使用解码后端。
+- `--speculative-attention-mode prefill`（默认）：草稿/验证使用预填充后端。
 
-Constraints when combining hybrid attention with speculative decoding:
+将混合注意力与投机解码组合时的约束：
 
-- If any attention backend is `trtllm_mha`, speculative decoding supports only `--speculative-eagle-topk 1`.
-- For paged MHA backends with `--page-size > 1` and `--speculative-eagle-topk > 1`, only `flashinfer` is supported.
-- CUDA Graph: the decode backend is always captured; the prefill backend is captured only when `--speculative-attention-mode prefill`.
+- 如果任一 Attention 后端是 `trtllm_mha`，投机解码只支持 `--speculative-eagle-topk 1`。
+- 对于 `--page-size > 1` 且 `--speculative-eagle-topk > 1` 的分页 MHA 后端，仅支持 `flashinfer`。
+- CUDA 图：解码后端始终会被捕获；预填充后端仅在 `--speculative-attention-mode prefill` 时才会被捕获。
 
 
 <Tip>
-If you set only one of `--prefill-attention-backend` or `--decode-attention-backend`, the unspecified phase inherits `--attention-backend`.
-If both are specified and differ, SGLang automatically enables a hybrid wrapper to dispatch to the chosen backend per phase.
+如果你只设置了 `--prefill-attention-backend` 或 `--decode-attention-backend` 中的一项，未指定的阶段会继承 `--attention-backend`。
+如果两者都指定且不同，SGLang 会自动启用混合包装器，按阶段分发到所选后端。
 </Tip>
 
-## Attention Backend Selection Guide (CUDA)
+<Note>
+💡 AI Infra 学习笔记：自动选择逻辑体现了硬件代际的演进规律——Hopper（H100/H200）默认用 FA3、Blackwell（B200）默认用 TRTLLM、老架构默认 FlashInfer/Triton。理解这套逻辑能帮你判断「该换后端还是该换机器」：同一型号 GPU 上性能瓶颈往往在后端特性（如页大小、KV 量化、投机解码支持），跨代 GPU 则要优先考虑为新一代硬件专门优化的 kernel。
+</Note>
 
-If the `--attention-backend` argument is not specified, SGLang automatically selects the best backend based on the hardware (CUDA) and model architecture.
+## Attention 后端选择指南（CUDA）
 
-### Automatic Selection Logic
+如果未指定 `--attention-backend` 参数，SGLang 会根据硬件（CUDA）和模型架构自动选择最佳后端。
 
-**1. MHA Models (e.g., Llama, Qwen)**
-- **Hopper (e.g., H100, H200)**: Defaults to `fa3` if using CUDA 12.3+ and the model configuration is supported.
-- **Blackwell (e.g., B200)**: Defaults to `trtllm_mha`, unless using speculative decoding with `topk > 1`.
-- **Other Architectures (Ampere, Ada, etc.)**: Defaults to `flashinfer` if available; otherwise falls back to `triton`.
+### 自动选择逻辑
 
-**2. MLA Models (e.g., DeepSeek V3)**
-- **Hopper**: Defaults to `fa3` (requires CUDA 12.3+).
-- **Blackwell**: Defaults to `flashinfer`; `trtllm_mla` is auto-selected for DeepSeek V3 models specifically.
-- **Other Architectures**: Defaults to `triton`.
+**1. MHA 模型（如 Llama、Qwen）**
+- **Hopper（如 H100、H200）**：使用 CUDA 12.3+ 且模型配置受支持时，默认 `fa3`。
+- **Blackwell（如 B200）**：默认 `trtllm_mha`，除非使用 `topk > 1` 的投机解码。
+- **其他架构（Ampere、Ada 等）**：可用时默认 `flashinfer`，否则回退到 `triton`。
+
+**2. MLA 模型（如 DeepSeek V3）**
+- **Hopper**：默认 `fa3`（需要 CUDA 12.3+）。
+- **Blackwell**：默认 `flashinfer`；DeepSeek V3 模型会专门自动选择 `trtllm_mla`。
+- **其他架构**：默认 `triton`。
 
 
-## User Guide
+## 用户指南
 
-### Launch Command for Different Attention Backends
+### 不同 Attention 后端的启动命令
 
-- FlashInfer (Default for Non-Hopper Machines, e.g., A100, A40)
+- FlashInfer（非 Hopper 机器的默认选择，如 A100、A40）
 ```bash Command
 python3 -m sglang.launch_server \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
@@ -550,7 +563,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- FlashAttention 3 (Default for Hopper Machines, e.g., H100, H200, H20)
+- FlashAttention 3（Hopper 机器的默认选择，如 H100、H200、H20）
 ```bash Command
 python3 -m sglang.launch_server \
   --model meta-llama/Meta-Llama-3.1-8B-Instruct \
@@ -589,7 +602,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- TRTLLM MLA (Optimized for Blackwell Architecture, e.g., B200)
+- TRTLLM MLA（为 Blackwell 架构优化，如 B200）
 ```bash Command
 python3 -m sglang.launch_server \
   --tp 8 \
@@ -598,7 +611,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- TRTLLM MLA with FP8 KV Cache (Higher concurrency, lower memory footprint)
+- 带 FP8 KV 缓存的 TRTLLM MLA（更高并发、更低内存占用）
 ```bash Command
 python3 -m sglang.launch_server \
   --tp 8 \
@@ -608,7 +621,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- TRTLLM MHA (Optimized for Blackwell Architecture, e.g., B200)
+- TRTLLM MHA（为 Blackwell 架构优化，如 B200）
 ```bash Command
 python3 -m sglang.launch_server \
   --tp 4 \
@@ -617,8 +630,8 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- TRTLLM MHA (XQA backend) (Optimized for SM90 and SM120, e.g., H20, H200, 5090)
-  Note that TRTLLM XQA backend only works well for pagesize 64.
+- TRTLLM MHA（XQA 后端）（为 SM90 和 SM120 优化，如 H20、H200、5090）
+  注意 TRTLLM XQA 后端仅在页大小为 64 时表现良好。
 ```bash Command
 python3 -m sglang.launch_server \
   --tp 4 \
@@ -627,7 +640,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- HPC-Ops (MHA kernels from [HPC-Ops](https://github.com/Tencent/hpc-ops) by the Tencent Hunyuan AI Infra team; Hopper (SM90) only, requires installing the `hpc` package from source, page size 64, bf16 or fp8_e4m3 KV cache, head_dim 128, q/kv head group 4 or 8)
+- HPC-Ops（腾讯混元 AI Infra 团队 [HPC-Ops](https://github.com/Tencent/hpc-ops) 的 MHA kernel；仅 Hopper（SM90），需要从源码安装 `hpc` 包，页大小 64，bf16 或 fp8_e4m3 KV 缓存，head_dim 128，q/kv 头分组 4 或 8）
 ```bash Command
 python3 -m sglang.launch_server \
   --model Qwen/Qwen3-30B-A3B-Instruct-2507-FP8 \
@@ -648,7 +661,7 @@ python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- FlashAttention 4 (MHA & MLA)
+- FlashAttention 4（MHA 与 MLA）
 ```bash Command
 # FA4 for both prefill and decode on SM90/SM100
 python3 -m sglang.launch_server \
@@ -715,33 +728,33 @@ python3 -m sglang.launch_server \
   --attention-backend torch_native
 ```
 
-## Steps to add a new attention backend
-To add a new attention backend, you can learn from the existing backends
-(`python/sglang/srt/layers/attention/triton_backend.py`, `python/sglang/srt/layers/attention/flashattention_backend.py`)
-and follow the steps below.
+## 新增 Attention 后端的步骤
+要新增一个 Attention 后端，你可以参考现有后端
+（`python/sglang/srt/layers/attention/triton_backend.py`、`python/sglang/srt/layers/attention/flashattention_backend.py`）
+并按照以下步骤进行。
 
 <Note>
-Linear attention kernel backends (GDN, KDA) follow a different pattern. They implement `LinearAttnKernelBase` in `python/sglang/srt/layers/attention/linear/kernels/` and are dispatched by `GDNKernelDispatcher` / `KDAKernelDispatcher` rather than registered via `@register_attention_backend`.
+线性注意力 kernel 后端（GDN、KDA）采用不同的模式。它们在 `python/sglang/srt/layers/attention/linear/kernels/` 中实现 `LinearAttnKernelBase`，并由 `GDNKernelDispatcher` / `KDAKernelDispatcher` 分发，而不是通过 `@register_attention_backend` 注册。
 </Note>
 
-1. Run without cuda graph. Support the two forward functions
+1. 先在无 CUDA 图的情况下运行，支持两个前向函数
     - forward_extend
-        - Will be used for prefill, prefill with KV cache, and target verification
-        - It will be called once per layer
+        - 用于预填充、带 KV 缓存的预填充，以及目标验证
+        - 每层调用一次
     - forward_decode
-        - Will be used for normal decode, and draft decode
-        - It will be called once per layer
+        - 用于常规解码和草稿解码
+        - 每层调用一次
     - init_forward_metadata
-        - Initialize the class and common metadata shared by all layers
-        - Call the plan function for optimizations like split_kv
-        - It will be called once per forward
-2. Run with cuda graph. It has two phases (capture and replay) and you need to implement three functions
+        - 初始化类与所有层共享的公共元数据
+        - 调用 plan 函数以支持 split_kv 等优化
+        - 每次前向调用一次
+2. 再在 CUDA 图模式下运行。它分为两个阶段（捕获与回放），你需要实现三个函数
     - init_cuda_graph_state
-        - It will be called once during life time
-        - Create all common shared buffers
+        - 在生命周期内只调用一次
+        - 创建所有公共共享缓冲区
     - init_forward_metadata_capture_cuda_graph
-        - It will be called before capturing a cuda graph
-        - It is similar to init_forward_metadata but write the medatada to some pre-defined buffers
+        - 在捕获 CUDA 图之前调用
+        - 与 init_forward_metadata 类似，但把元数据写入预定义的缓冲区
     - init_forward_metadata_replay_cuda_graph
-        - It will be called before replaying a cuda graph
-        - This function is in the critical path and needs to be fast
+        - 在回放 CUDA 图之前调用
+        - 该函数位于关键路径上，必须足够快

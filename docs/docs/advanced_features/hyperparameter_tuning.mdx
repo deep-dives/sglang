@@ -1,82 +1,94 @@
 ---
-title: "Hyperparameter Tuning"
+title: "超参数调优"
 metatags:
-    description: "SGLang performance tuning: batch size, token usage, mem-fraction-static, chunked-prefill-size, CUDA graph, DP/TP optimization."
+    description: "SGLang 性能调优：批大小、token 利用率、mem-fraction-static、chunked-prefill-size、CUDA 图、DP/TP 优化。"
 ---
-## Achieving high throughput for offline batch inference
+## 提升离线批量推理的吞吐量
 
-Achieving a large batch size is the most important thing for attaining high throughput in offline batch inference.
-When the server is running at full load in a steady state, look for the following in the log:
+在离线批量推理中，追求高吞吐最重要的一点是把批大小（batch size）做大。
+当服务端处于满负载的稳态运行时，请在日志中关注以下内容：
 
 ```text Output
 Decode batch. #running-req: 233, #token: 370959, token usage: 0.82, cuda graph: True, gen throughput (token/s): 4594.01, #queue-req: 317
 ```
 
-### Adjust the request submission speed to control `#queue-req`
+<Note>
+💡 AI Infra 学习笔记：这行日志是理解推理引擎运行状态的"仪表盘"——`#running-req` 是当前并行解码的请求数，`token usage` 是 KV 缓存利用率，`gen throughput` 是生成吞吐，`#queue-req` 是排队中的请求数。调优离线批量推理时，先读懂这几项指标，比盲目改参数更有效。
+</Note>
 
-`#queue-req` indicates the number of requests in the queue.
-If you frequently see `#queue-req: 0`, it suggests that your client code is submitting requests too slowly.
-A healthy range for `#queue-req` is `100 - 2000`.
-However, avoid making `#queue-req` too large, as this will increase the scheduling overhead on the server.
+### 调整请求提交速度来控制 `#queue-req`
 
-### Achieve a high `token usage`
+`#queue-req` 表示队列中请求的数量。
+如果你经常看到 `#queue-req: 0`，说明你的客户端代码提交请求的速度太慢了。
+`#queue-req` 的健康区间是 `100 - 2000`。
+但也要避免 `#queue-req` 过大，否则会增加服务端的调度开销。
 
-`token usage` indicates the KV cache memory utilization of the server. `token usage > 0.9` means good utilization.
+### 让 `token usage` 保持高位
 
-If you frequently see `token usage < 0.9` and `#queue-req > 0`, it means the server is too conservative about taking in new requests. You can decrease `--schedule-conservativeness` to a value like 0.3.
-The case of a server being too conservative can happen when users send many requests with a large `max_new_tokens` but the requests stop very early due to EOS or stop strings.
+`token usage` 表示服务端 KV 缓存内存的利用率。`token usage > 0.9` 说明利用率良好。
 
-On the other hand, if you see `token usage` very high and you frequently see warnings like
-`KV cache pool is full. Retract requests. #retracted_reqs: 1, #new_token_ratio: 0.9998 -> 1.0000`, you can increase `--schedule-conservativeness` to a value like 1.3.
-If you see `KV cache pool is full. Retract requests.` occasionally but not frequently (~1 time per minute), it is okay.
+如果你经常看到 `token usage < 0.9` 且 `#queue-req > 0`，说明服务端在接收新请求时过于保守。你可以把 `--schedule-conservativeness` 调低，例如 0.3。
+服务端过于保守的情况，通常出现在用户提交了大量 `max_new_tokens` 很大的请求、但这些请求又因 EOS 或停止字符串而提前结束时。
 
-### Tune `--mem-fraction-static` to increase KV cache pool capacity
-SGLang allocates memory as follows:
+另一方面，如果你看到 `token usage` 非常高，并且经常出现类似
+`KV cache pool is full. Retract requests. #retracted_reqs: 1, #new_token_ratio: 0.9998 -> 1.0000` 的警告，可以把 `--schedule-conservativeness` 调高到 1.3 之类的值。
+如果 `KV cache pool is full. Retract requests.` 只是偶尔出现（大约每分钟一次），那没有问题。
 
-Total memory usage = model weights + KV cache pool + CUDA graph buffers + activations
+### 调整 `--mem-fraction-static` 来扩大 KV 缓存池容量
+SGLang 按以下方式分配内存：
 
-The `--mem-fraction-static` parameter determines how much memory is allocated to the first two components:
+总内存占用 = 模型权重 + KV 缓存池 + CUDA 图缓冲区 + 激活值
 
-mem_fraction_static = (model weights + KV cache pool) / GPU memory capacity
+`--mem-fraction-static` 参数决定了前两项能分到多少内存：
 
-To support higher concurrency, you should maximize the KV cache pool capacity by setting `--mem-fraction-static` as high as possible while still reserving enough memory for activations and CUDA graph buffers.
+mem_fraction_static = (模型权重 + KV 缓存池) / GPU 显存容量
 
-SGLang uses simple heuristics to set the default value of `--mem-fraction-static`, but you can optimize it for your use cases.
-As a rule of thumb, reserving 5–8 GB of memory for activations is typically sufficient. You can check this by inspecting the logs just before the server is ready.
-Look for log entries like this:
+要支撑更高的并发，你应该尽可能把 `--mem-fraction-static` 调高、从而最大化 KV 缓存池容量，同时仍要为激活值和 CUDA 图缓冲区预留足够内存。
+
+<Note>
+💡 AI Infra 学习笔记：`--mem-fraction-static` 决定了"模型权重 + KV 缓存池"占 GPU 显存的比例，是并发能力与稳定性的核心平衡点。调高它 = 更大的 KV 缓存池 = 能扛更多并发，但留给激活值和 CUDA 图缓冲的显存变少，容易 OOM。这是推理引擎里最常见的"压榨显存"调优，面试中也常被问到。
+</Note>
+
+SGLang 会用简单的启发式规则来设定 `--mem-fraction-static` 的默认值，但你可以针对自己的场景优化它。
+经验法则：为激活值预留 5–8 GB 内存通常就足够了。你可以在服务端即将就绪时检查日志来确认这一点。
+留意类似下面的日志：
 
 ```text Output
 [2025-08-11 17:17:03] max_total_num_tokens=665690, chunked_prefill_size=8192, max_prefill_tokens=16384, max_running_requests=4096, context_len=65536, available_gpu_mem=13.50 GB
 ```
 
-Check the `available_gpu_mem` value.
-- If it is between 5–8 GB, the setting is good.
-- If it is too high (e.g., 10 - 20 GB), increase `--mem-fraction-static` to allocate more memory to the KV cache.
-- If it is too low, you risk out-of-memory (OOM) errors later, so decrease `--mem-fraction-static`.
+检查 `available_gpu_mem` 的值。
+- 如果它在 5–8 GB 之间，说明设置是合适的。
+- 如果太高（例如 10 - 20 GB），调高 `--mem-fraction-static`，把更多内存分配给 KV 缓存。
+- 如果太低，后续可能会遇到内存不足（OOM）错误，所以请调低 `--mem-fraction-static`。
 
-Another straightforward approach is to increase `--mem-fraction-static` in increments of 0.01 until you encounter OOM errors for your workloads.
+另一个直接的方法是：把 `--mem-fraction-static` 每次增加 0.01，直到你的工作负载出现 OOM 错误为止。
 
-### Avoid out-of-memory errors by tuning `--chunked-prefill-size`, `--mem-fraction-static`, and `--max-running-requests`
+### 通过调整 `--chunked-prefill-size`、`--mem-fraction-static` 和 `--max-running-requests` 来避免 OOM
 
-If you encounter out-of-memory (OOM) errors, you can adjust the following parameters:
+如果遇到内存不足（OOM）错误，可以调整以下参数：
 
-- If OOM occurs during prefill, try reducing `--chunked-prefill-size` to `4096` or `2048`. This saves memory but slows down the prefill speed for long prompts.
-- If OOM occurs during decoding, try lowering `--max-running-requests`.
-- You can also reduce `--mem-fraction-static` to a smaller value, such as 0.8 or 0.7. This decreases the memory usage of the KV cache memory pool and helps prevent OOM errors during both prefill and decoding. However, it limits maximum concurrency and reduces peak throughput.
+- 如果 OOM 发生在预填充阶段，试着把 `--chunked-prefill-size` 降到 `4096` 或 `2048`。这会节省内存，但会拖慢长提示词的预填充速度。
+- 如果 OOM 发生在解码阶段，试着调低 `--max-running-requests`。
+- 也可以把 `--mem-fraction-static` 调小，例如 0.8 或 0.7。这会降低 KV 缓存内存池的内存占用，有助于避免预填充和解码阶段的 OOM。但代价是限制最大并发数、降低峰值吞吐。
 
-### Tune `--cuda-graph-max-bs-decode`
-By default, CUDA graph is enabled only for small batch sizes (e.g., less than 160 or 256).
-However, for some models, especially at large tensor parallelism sizes, CUDA graph can be useful for batch sizes up to 512 or 768.
-Therefore, it may be beneficial to increase `--cuda-graph-max-bs-decode` to a larger value.
-Note that CUDA graph consumes more memory, so you may need to reduce `--mem-fraction-static` at the same time.
+### 调整 `--cuda-graph-max-bs-decode`
+默认情况下，CUDA 图只在小批大小时启用（例如小于 160 或 256）。
+但对于某些模型，尤其是在张量并行规模较大时，CUDA 图在批大小达到 512 或 768 时依然有用。
+因此，把 `--cuda-graph-max-bs-decode` 调大一些可能是有益的。
+注意 CUDA 图会占用更多内存，所以你可能需要同时调低 `--mem-fraction-static`。
 
-### Tune `--dp-size` and `--tp-size`
+<Note>
+💡 AI Infra 学习笔记：CUDA 图把一段 GPU kernel 启动序列"录制"成一张图，之后整体重放，可以省掉大量 kernel 启动开销。它只对小批大小效果明显（大批大小下计算本身已成瓶颈），但会额外占用显存——这就是为什么调大 `--cuda-graph-max-bs-decode` 往往需要同步调低 `--mem-fraction-static`。
+</Note>
 
-Data parallelism is better for throughput. When there is enough GPU memory, always favor data parallelism for throughput. Refer to [SGLang Model Gateway (former Router)](../advanced_features/sgl_model_gateway) for a better data parallelism rather than using `dp_size` parameter.
+### 调整 `--dp-size` 和 `--tp-size`
 
-### Try other options
+数据并行（data parallelism）更利于提升吞吐。当 GPU 显存充足时，追求吞吐应优先考虑数据并行。要获得比 `dp_size` 参数更好的数据并行方案，请参考 [SGLang Model Gateway（原 Router）](../advanced_features/sgl_model_gateway)。
 
-- `torch.compile` accelerates small models on small batch sizes. You can enable it with `--enable-torch-compile`.
-- Try other quantization (e.g. FP8 quantization with `--quantization fp8`)
-- Try other parallelism strategies (e.g. [expert parallelism](https://lmsys.org/blog/2025-05-05-large-scale-ep/)) or DP attention for deepseek models (with `--enable-dp-attention --dp-size 8`).
-- If the workload has many shared prefixes, try `--schedule-policy lpm`. Here, `lpm` stands for longest prefix match. It reorders requests to encourage more cache hits but introduces more scheduling overhead.
+### 其他可选项
+
+- `torch.compile` 能加速小模型在小批大小下的推理。你可以用 `--enable-torch-compile` 启用它。
+- 尝试其他量化方案（例如用 `--quantization fp8` 做 FP8 量化）。
+- 尝试其他并行策略（例如 [专家并行](https://lmsys.org/blog/2025-05-05-large-scale-ep/)），或对 deepseek 模型使用 DP attention（`--enable-dp-attention --dp-size 8`）。
+- 如果负载中有大量共享前缀，试试 `--schedule-policy lpm`。这里的 `lpm` 表示最长前缀匹配（longest prefix match），它会重排请求以促进缓存命中，但会引入更多调度开销。

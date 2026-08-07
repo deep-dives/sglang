@@ -1,41 +1,44 @@
 ---
-title: "Adaptive Speculative Decoding"
+title: "自适应投机解码"
 metatags:
-    description: "Configure adaptive speculative decoding so SGLang can adjust speculative steps and draft tokens at runtime based on acceptance behavior."
+    description: "配置自适应投机解码，让 SGLang 根据接受率行为在运行时动态调整投机步数与草稿 token 数量。"
 ---
 
-Adaptive speculative decoding lets SGLang adjust `speculative_num_steps/speculative_num_draft_tokens` at runtime instead of keeping a single fixed value for the whole server lifetime.
-It is designed for workloads whose accept length changes over time, where one static step count is rarely optimal.
+自适应投机解码让 SGLang 在运行时调整 `speculative_num_steps`/`speculative_num_draft_tokens`，而不是在整个服务生命周期内保持一个固定值。它面向接受长度随时间变化的工作负载——这类场景下，单一的静态步数很少是最优的。
 
-## Current support
+<Note>
+💡 AI Infra 学习笔记：投机解码的收益取决于「草稿步数」与「接受率」是否匹配。步数太少，草稿模型的潜力没挖完；步数太多，被拒绝的候选 token 白白消耗算力——而且在大批大小下，每一轮浪费都要乘上批内请求数，代价被放大。固定一个 `num_steps` 很难同时适配低并发和高并发，这正是自适应投机解码存在的意义。
+</Note>
 
-- Only `--speculative-algorithm EAGLE` or `EAGLE3`
-- Only `--speculative-eagle-topk 1`
-- If either condition is not met, SGLang falls back to static speculative settings
+## 当前支持
 
-## Why adaptive steps help
+- 仅支持 `--speculative-algorithm EAGLE` 或 `EAGLE3`
+- 仅支持 `--speculative-eagle-topk 1`
+- 若不满足任一条件，SGLang 会回退到静态投机设置
 
-`speculative_num_steps` controls how many draft-model autoregressive steps run in each speculative round. In practice, the best value depends on the current workload.
+## 为什么自适应的步数有帮助
 
-- If `num_steps` is too small, the draft model could have produced more accepted tokens, but the round stops too early.
-- If `num_steps` is too large, the draft model produces many candidate tokens that the target model rejects, so extra draft work is wasted.
-- At **high batch sizes**, the cost of each wasted draft step is multiplied across all sequences in the batch, so the optimal step count is often lower than at low batch sizes.
+`speculative_num_steps` 控制每一轮投机中草稿模型运行多少步自回归。实践中，最优值取决于当前工作负载。
 
-Real traffic often moves between high-acceptance and low-acceptance phases, and batch sizes vary continuously. Adaptive mode follows both signals at runtime instead of hard-coding a single global `num_steps`.
+- 如果 `num_steps` 太小，草稿模型本可以产生更多被接受的 token，但这一轮提前结束了。
+- 如果 `num_steps` 太大，草稿模型产生大量被目标模型拒绝的候选 token，额外的草稿工作就白费了。
+- 在**大批大小**下，每个被浪费的草稿步的成本会乘上批内所有序列的数量，因此最优步数往往比小批大小更低。
 
-## Design overview
+真实流量常常在高接受率与低接受率阶段之间切换，批大小也持续变化。自适应模式在运行时同时跟随这两种信号，而不是硬编码一个全局的 `num_steps`。
 
-The adaptive mechanism has three pieces:
+## 设计概览
 
-- `AdaptiveSpeculativeParams`: the EMA-based policy
-- `SpecRuntimeState`: the per-tier runtime state bundle
-- `AdaptiveController`: the coordinator that queries the policy for the current batch size and activates the matching runtime state
+自适应机制由三部分组成：
 
-### Per-batch-size independent tracking
+- `AdaptiveSpeculativeParams`：基于 EMA 的策略
+- `SpecRuntimeState`：每个档位（tier）的运行时状态包
+- `AdaptiveController`：协调器，查询当前批大小对应的策略并激活匹配的运行时状态
 
-The controller maintains **independent EMA trackers for each batch size range**, so observations at small BS don't pollute the large BS signal. Each BS range can have its own candidate steps, hysteresis thresholds, and ceiling coefficient.
+### 按批大小独立跟踪
 
-BS ranges are defined as lower bounds in the config file (e.g., keys `"1"` and `"8"` mean BS 1–7 uses one slot, BS 8+ uses another). `SpecRuntimeState` objects are shared across BS ranges with the same step count — each state owns CUDA graphs captured for the reachable padded batch sizes of that step.
+控制器为**每个批大小区间维护独立的 EMA 跟踪器**，这样小批大小的观测不会污染大批大小的信号。每个 BS 区间都可以有自己的候选步数、迟滞阈值和上限系数。
+
+BS 区间在配置文件中以区间下界定义（例如，键 `"1"` 和 `"8"` 表示 BS 1–7 使用一个槽位，BS 8+ 使用另一个）。步数相同的 BS 区间会共享 `SpecRuntimeState` 对象——每个状态持有该步数可达的补齐批大小所捕获的 CUDA 图。
 
 ```mermaid
 ---
@@ -62,14 +65,14 @@ graph LR
   end
 ```
 
-This matters because `CudaGraphRunner` is shape-dependent. Each candidate tier owns its own graph and backend state, so runtime switching is a reference swap, not an online graph recapture.
+这一点很重要，因为 `CudaGraphRunner` 对形状敏感。每个候选档位拥有自己的图和后端状态，因此运行时切换只是引用交换，而不是在线重新捕获图。
 
-## Runtime flow
+## 运行时流程
 
-The adaptive update happens in two places:
+自适应更新发生在两处：
 
-1. **Pre-draft**: query the optimal step for the current batch size and activate if different
-2. **Post-verify**: update the matching BS slot's EMA with observed accept lengths
+1. **草稿前**：查询当前批大小的最优步数，若不同则激活
+2. **验证后**：用观测到的接受长度更新对应 BS 槽位的 EMA
 
 ```mermaid
 ---
@@ -85,30 +88,34 @@ flowchart TD
   Z --> A --> B --> C --> D --> E
 ```
 
-> Tier switch happens after the current round completes. Backends and CUDA graphs are never swapped mid-round.
+> 档位切换发生在当前轮结束后。后端和 CUDA 图绝不在轮次中途切换。
 
-## How the policy decides
+## 策略如何决策
 
-After each verify pass, SGLang reads the accepted draft length per request, computes the batch average, smooths it with an exponential moving average (EMA), and switches among the candidate tiers for the matching BS slot.
+每次验证通过后，SGLang 读取每个请求的接受草稿长度，计算批平均值，用指数移动平均（EMA）平滑，并在对应 BS 槽位的候选档位之间切换。
 
-The decision logic is intentionally conservative:
+<Note>
+💡 AI Infra 学习笔记：EMA + 迟滞（hysteresis）是自适应系统的经典工程组合：EMA 用指数加权平均平滑噪声，迟滞阈值（上调/下调各留余量）避免系统在档位边界反复横跳，预热与更新间隔则限制切换频率。理解这套机制对设计任何在线自适应、动态调整批大小或步数的系统都有借鉴意义。
+</Note>
 
-- `warmup_batches` skips the first few batches
-- `update_interval` avoids switching every batch
-- `down_hysteresis` and `up_hysteresis` reduce oscillation
-- `ceiling_coeff` — an optional EMA ceiling rule can cap `num_steps` proportionally to observed draft quality, preventing over-speculation at high BS
+决策逻辑刻意保持保守：
 
-Conceptually, the policy probes one step beyond the observed acceptance:
+- `warmup_batches` 跳过最初的几批
+- `update_interval` 避免每批都切换
+- `down_hysteresis` 和 `up_hysteresis` 减少振荡
+- `ceiling_coeff`——可选的 EMA 上限规则，能按观测到的草稿质量成比例地封顶 `num_steps`，防止大批大小下过度投机
+
+概念上，策略会在观测到的接受长度基础上多试探一步：
 
 ```text
 target_steps ≈ clamp(round(ema_accept_len) + 1, min(candidate_steps), max(candidate_steps))
 ```
 
-So if recent requests consistently accept more drafted tokens, the policy tends to move up. If they start rejecting earlier, it tends to move down.
+所以，如果最近的请求持续接受更多草稿 token，策略倾向于上调；如果更早开始拒绝，则倾向于下调。
 
-## Usage
+## 使用方法
 
-`--speculative-adaptive-config` is optional, but the speculative setup still needs to be valid for adaptive mode.
+`--speculative-adaptive-config` 是可选的，但投机配置本身仍须对自适应模式有效。
 
 ```bash
 python3 -m sglang.launch_server \
@@ -121,9 +128,9 @@ python3 -m sglang.launch_server \
     --speculative-adaptive
 ```
 
-If you want to override the defaults, add `--speculative-adaptive-config /path/to/adaptive_spec.json`.
+如果想覆盖默认值，加上 `--speculative-adaptive-config /path/to/adaptive_spec.json`。
 
-Example config:
+示例配置：
 
 ```json
 {
@@ -135,13 +142,13 @@ Example config:
 }
 ```
 
-Non-integer keys (`ema_alpha`, `warmup_batches`, `update_interval`) are global overrides applied to every BS slot. Integer keys (`"1"`, `"8"`) define per-BS slots.
+非整数键（`ema_alpha`、`warmup_batches`、`update_interval`）是作用于每个 BS 槽位的全局覆盖。整数键（`"1"`、`"8"`）定义按 BS 区分的槽位。
 
-## Config file reference
+## 配置文件参考
 
-The config file is optional. When provided, each integer BS-slot key must specify `candidate_steps`; all other keys fall back to defaults.
+配置文件是可选的。提供时，每个整数 BS 槽位键必须指定 `candidate_steps`；其余键回退到默认值。
 
-### Per-BS slot parameters
+### 按 BS 槽位的参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -151,36 +158,36 @@ The config file is optional. When provided, each integer BS-slot key must specif
   </colgroup>
   <thead>
     <tr>
-      <th>Key</th>
-      <th>Default</th>
-      <th>Meaning</th>
+      <th>键</th>
+      <th>默认值</th>
+      <th>含义</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>candidate_steps</code></td>
-      <td><em>required</em></td>
-      <td>Candidate <code>speculative_num_steps</code> tiers for this BS range. Must be a non-empty list of positive ints; a slot that omits it raises a config error</td>
+      <td><em>必填</em></td>
+      <td>该 BS 区间的候选 <code>speculative_num_steps</code> 档位。必须是正整数构成的非空列表；省略它的槽位会触发配置错误</td>
     </tr>
     <tr>
       <td><code>down_hysteresis</code></td>
       <td><code>-0.25</code></td>
-      <td>Extra margin before moving to a smaller step</td>
+      <td>下调到更小步数前的额外余量</td>
     </tr>
     <tr>
       <td><code>up_hysteresis</code></td>
       <td><code>0.0</code></td>
-      <td>Extra margin before moving to a larger step</td>
+      <td>上调到更大步数前的额外余量</td>
     </tr>
     <tr>
       <td><code>ceiling_coeff</code></td>
-      <td><code>0</code> (disabled)</td>
-      <td>EMA ceiling coefficient; set &gt; 0 to cap steps proportionally to draft quality</td>
+      <td><code>0</code>（禁用）</td>
+      <td>EMA 上限系数；设为 &gt; 0 可按草稿质量成比例地封顶步数</td>
     </tr>
   </tbody>
 </table>
 
-### Global parameters
+### 全局参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -190,58 +197,58 @@ The config file is optional. When provided, each integer BS-slot key must specif
   </colgroup>
   <thead>
     <tr>
-      <th>Key</th>
-      <th>Default</th>
-      <th>Meaning</th>
+      <th>键</th>
+      <th>默认值</th>
+      <th>含义</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>ema_alpha</code></td>
       <td><code>0.2</code></td>
-      <td>EMA smoothing factor for accepted draft length</td>
+      <td>接受草稿长度的 EMA 平滑因子</td>
     </tr>
     <tr>
       <td><code>update_interval</code></td>
       <td><code>5</code></td>
-      <td>Recompute interval, in verify batches, after warmup</td>
+      <td>预热后，以验证批为单位的重新计算间隔</td>
     </tr>
     <tr>
       <td><code>warmup_batches</code></td>
       <td><code>10</code></td>
-      <td>Number of verify batches to observe before switching</td>
+      <td>切换前需要观测的验证批数量</td>
     </tr>
   </tbody>
 </table>
 
-## Monitoring
+## 监控
 
-You can inspect the active tier and acceptance metric via `/server_info`:
+你可以通过 `/server_info` 查看当前激活的档位和接受率指标：
 
 ```bash
 curl -s http://127.0.0.1:30000/server_info | jq '.internal_states[0] | {speculative_num_steps, avg_spec_accept_length}'
 ```
 
-- `speculative_num_steps` is the current active tier
-- `avg_spec_accept_length` helps explain whether the server is likely to move up or down
+- `speculative_num_steps` 是当前激活的档位
+- `avg_spec_accept_length` 有助于判断服务端可能会上调还是下调
 
-## Tuning tips
+## 调优建议
 
-- Start with the built-in default (conservative) — it is safe for all draft model qualities
-- For strong draft models, use the aggressive config with ceiling rule
-- Use fewer candidate steps if you want lower startup GPU memory overhead
-- Increase `ema_alpha` to react faster, or lower it for more stability
-- Increase `warmup_batches` or `update_interval` if tier switching is too noisy
-- At high batch sizes, narrower ladders (e.g., `[1, 2]` or `[1]`) often outperform wide ones
-- If your workload is already stable and one static setting is well tuned, adaptive mode may not help much
+- 从内置默认（保守）配置开始——它对所有草稿模型质量都安全
+- 对强草稿模型，使用带上限规则的激进配置
+- 想降低启动时的 GPU 显存开销，就减少候选步数
+- 增大 `ema_alpha` 以更快响应，降低它则更稳定
+- 如果档位切换过于频繁，增大 `warmup_batches` 或 `update_interval`
+- 在大批大小下，较窄的阶梯（如 `[1, 2]` 或 `[1]`）通常优于宽阶梯
+- 如果你的工作负载已经稳定、且某个静态配置调得很好，自适应模式可能帮助不大
 
-## Recommended configs
+## 推荐配置
 
-The built-in default is conservative — safe for all draft models but may under-speculate for strong ones. Save one of these as a JSON file and pass via `--speculative-adaptive-config`.
+内置默认是保守的——对所有草稿模型都安全，但对强草稿模型可能投机不足。把下面某个配置保存为 JSON 文件，并通过 `--speculative-adaptive-config` 传入。
 
-### Conservative (default) — for weak draft models
+### 保守（默认）——面向弱草稿模型
 
-This is the built-in default: BS 8–31 allows `[1, 3]`, and BS≥32 locks to `step=1` to avoid wasted compute. Best for models like MiniMax-M2.5, DSV4.
+这就是内置默认：BS 8–31 允许 `[1, 3]`，BS≥32 锁定 `step=1` 以避免浪费算力。最适合 MiniMax-M2.5、DSV4 这类模型。
 
 ```json
 {
@@ -251,9 +258,9 @@ This is the built-in default: BS 8–31 allows `[1, 3]`, and BS≥32 locks to `s
 }
 ```
 
-### Aggressive — for strong or high-variance draft models
+### 激进——面向强或高方差草稿模型
 
-Uses wider ladders with ceiling rule to cap speculation at high BS. Best for models like GLM-4.7-FP8.
+使用更宽的阶梯配合上限规则，在大批大小下封顶投机。最适合 GLM-4.7-FP8 这类模型。
 
 ```json
 {
@@ -264,6 +271,6 @@ Uses wider ladders with ceiling rule to cap speculation at high BS. Best for mod
 }
 ```
 
-### Custom per-model config
+### 自定义按模型配置
 
-For the best performance, benchmark your specific model across batch sizes with different static `num_steps` values, then build a per-BS config that matches each range's optimal step. A well-tuned per-model config might outperform the generic presets above.
+为了最佳性能，请在多个批大小下用不同的静态 `num_steps` 对你的模型做基准测试，然后构建一个让每个区间匹配其最优步数的按 BS 配置。调好的按模型配置可能优于上面的通用预设。

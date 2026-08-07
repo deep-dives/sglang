@@ -1,36 +1,46 @@
 ---
-title: "DP, DPA and SGLang DP Router"
+title: "DP、DPA 与 SGLang DP 路由器"
 metatags:
-    description: "Learn the differences between Data Parallelism, Data Parallelism Attention, and SGLang Model Gateway routing for production DP deployments."
+    description: "了解数据并行（DP）、数据并行注意力（DPA）与 SGLang Model Gateway 路由之间的区别，用于生产级 DP 部署。"
 ---
 
-This guide explains the difference between Data Parallelism (DP) and Data Parallelism Attention (DPA), how to enable each mode correctly, and how to use the SGLang Model Gateway (SMG) for production-grade DP deployments.
+本指南解释数据并行（DP）与数据并行注意力（DPA）的区别、如何正确启用每种模式，以及如何使用 SGLang Model Gateway（SMG）做生产级 DP 部署。
 
-## Data Parallelism (DP)
+## 数据并行（DP）
 
-**Data Parallelism (DP)** is the most common parallelism strategy that replicates the entire model across multiple GPU sets and processes different batches of requests in parallel. Each GPU set handles independent requests. With dedicated routing strategies, as we will introduce later, with those proper routing algorithms in SGLang Model Gateway, the throughput of your serving system could be multiplied nearly linearly.
+**数据并行（DP）** 是最常见的并行策略：把整个模型复制到多组 GPU 上，并行处理不同的请求批次。每组 GPU 处理独立的请求。配合合适的路由策略——稍后我们会介绍 SGLang Model Gateway 中的路由算法——你的推理系统吞吐量几乎可以线性倍增。
 
-### Key characteristics
+### 关键特征
 
-- Each replica has a full copy of the model
-- Requests are distributed/scattered across replicas
-- No inter-replica communication during one request's inference (for simple DP)
+- 每个副本都有模型的完整拷贝
+- 请求被分发/分散到各个副本
+- 单个请求推理期间副本之间无通信（简单 DP 下）
 
-## Data Parallelism Attention (DPA)
+<Note>
+💡 AI Infra 学习笔记：DP 是最直观的扩展方式——整模型复制、各副本处理不同请求、副本间无需通信，理论上吞吐随副本数近线性增长。它的收益高度依赖路由：如果路由能把「共享前缀」的请求送到同一副本，RadixAttention 命中率会非常高；乱路由则会让每个副本的缓存都无法命中。
+</Note>
 
-**Data Parallelism Attention (DPA)**, also known as DP Attention, is an advanced parallelism strategy. While DPA provides the most significant benefits for **Multi-Head Latent Attention (MLA)** models (such as DeepSeek, MiniMax, Kimi-K2), it also supports **standard attention models** like Qwen.
 
-### The Problem with Tensor Parallelism for MLA Models
+## 数据并行注意力（DPA）
 
-The most common parallelism strategy for inference is **Tensor Parallelism (TP)**. However, TP might not be the most efficient strategy for certain models. For example, DeepSeek models use MLA and only have **one KV head**. If we use tensor parallelism on 8 GPUs, it will lead to:
+**数据并行注意力（DPA）**，又称 DP Attention，是一种高级并行策略。DPA 对**多头潜在注意力（MLA）**模型（如 DeepSeek、MiniMax、Kimi-K2）的收益最大，但它也支持像 Qwen 这样的**标准注意力模型**。
 
-- **Duplicated KV cache** across all GPUs
-- **Unwanted memory usage** that limits batch size
-- **Reduced throughput** due to memory constraints
+### MLA 模型下张量并行的问题
 
-### How DPA Works
+推理中最常见的并行策略是**张量并行（TP）**。然而，TP 对某些模型可能不是最有效的策略。例如，DeepSeek 模型使用 MLA，且只有**一个 KV 头**。如果在 8 块 GPU 上使用张量并行，会导致：
 
-DPA addresses these limitations by applying **data parallelism specifically to the attention component**.
+- **KV 缓存在所有 GPU 上重复**
+- **不必要的内存占用**限制了批大小
+- 由于内存限制导致**吞吐下降**
+
+<Note>
+💡 AI Infra 学习笔记：MLA 模型只有一个 KV 头，TP 会把这份 KV 头切到多卡上，导致每个 rank 都存了一份重复的 KV 缓存——既浪费显存又限制批大小。DPA 的思路是「注意力不做 TP，而是让不同 DP 副本各自独立处理一批请求、各自持有自己的 KV 缓存」；MoE 层则配合 EP 分发专家。这样既消除了 KV 重复，又能把大批的注意力工作摊到多副本上。DPA 本质上是「把 TP 从注意力路径上撤下来、用 DP 补齐」的混合并行。
+</Note>
+
+
+### DPA 如何工作
+
+DPA 通过**专门对注意力组件应用数据并行**来解决这些限制。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -40,41 +50,41 @@ DPA addresses these limitations by applying **data parallelism specifically to t
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", verticalAlign: "top", backgroundColor: "rgba(255,255,255,0.02)"}}>
-        <img src="/images/dpa.png" alt="DPA + EP Architecture" style={{width: "100%", height: "auto"}} />
+        <img src="/images/dpa.png" alt="DPA + EP 架构" style={{width: "100%", height: "auto"}} />
       </td>
       <td style={{padding: "9px 12px", verticalAlign: "top", backgroundColor: "rgba(255,255,255,0.05)"}}>
-        <p><strong>Each DP replica:</strong></p>
+        <p><strong>每个 DP 副本：</strong></p>
         <ul>
-          <li>Processes different batches independently (can be in different forward modes: prefill, decode, or idle)</li>
-          <li>Maintains its own KV cache (no duplication)</li>
-          <li>Enables significantly larger batch sizes due to memory savings</li>
+          <li>独立处理不同的批次（可以处于不同的前向模式：预填充、解码或空闲）</li>
+          <li>维护自己的 KV 缓存（无重复）</li>
+          <li>由于内存节省，可支持显著更大的批大小</li>
         </ul>
-        <p><strong>Communication patterns in DPA + EP:</strong></p>
+        <p><strong>DPA + EP 的通信模式：</strong></p>
         <ul>
-          <li><strong>All2All (Dispatch)</strong>: Routes tokens to expert sub-groups based on gating decisions</li>
-          <li><strong>All2All (Combine)</strong>: Gathers computed results from experts back to original token positions</li>
+          <li><strong>All2All（分发）</strong>：根据门控决策把 token 路由到专家子组</li>
+          <li><strong>All2All（回收）</strong>：把专家计算的结果收集回原始 token 位置</li>
         </ul>
       </td>
     </tr>
   </tbody>
 </table>
 
-### Key benefits of DPA
+### DPA 的主要优势
 
-1. **Significantly reduced KV cache memory**: Each DP replica only stores KV cache for its own batches
-2. **Larger batch sizes**: Memory savings enable larger batch sizes
-3. **Improved decoding throughput**: Significant throughput gains for MLA-based models
-4. **Independent forward modes**: Each DP replica can be in different forward modes (prefill, decode, or idle) and handles its assigned batches independently during attention computation
+1. **显著减少 KV 缓存内存**：每个 DP 副本只为自己批次的请求存储 KV 缓存
+2. **更大的批大小**：内存节省带来了更大的批大小
+3. **解码吞吐提升**：对基于 MLA 的模型有显著的吞吐增益
+4. **独立的前向模式**：每个 DP 副本可以处于不同的前向模式（预填充、解码或空闲），并在注意力计算期间独立处理分配给它的批次
 
-### DPA with Expert Parallelism for MoE
+### DPA 与 MoE 的专家并行结合
 
-For MoE models like DeepSeek, DPA is **often** paired with Expert Parallelism (EP) for best throughput at scale. However, **DPA does not require EP**: you can enable DPA without EP if your deployment does not need expert sharding.
+对于 DeepSeek 这类 MoE 模型，DPA **通常**会与专家并行（EP）搭配，以获得大规模下的最佳吞吐。然而，**DPA 并不依赖 EP**：如果你的部署不需要专家分片，可以在不启用 EP 的情况下启用 DPA。
 
-- Distribute 256+ expert weights across GPUs (cannot fit on a single GPU)
-- Enable efficient all-to-all token routing via DeepEP
-- Scale to large clusters (up to 5x throughput improvement over vanilla TP)
+- 把 256+ 个专家权重分布到多块 GPU 上（无法装进单块 GPU）
+- 通过 DeepEP 实现高效的 all-to-all token 路由
+- 扩展到大规模集群（相比朴素 TP 最高 5 倍吞吐提升）
 
-### Recommended setup for DeepSeek
+### DeepSeek 的推荐配置
 
 ```bash
 python -m sglang.launch_server \
@@ -87,30 +97,30 @@ python -m sglang.launch_server \
     --moe-runner-backend deep_gemm
 ```
 
-> **Note**: `--dp-size` must be explicitly set when using `--enable-dp-attention`. If `dp_size` is 1 (default), DPA will be disabled.
+> **注意**：使用 `--enable-dp-attention` 时必须显式设置 `--dp-size`。如果 `dp_size` 为 1（默认值），DPA 会被禁用。
 
-For detailed EP configuration (DeepEP, Two-Batch Overlap, EPLB), see [Expert Parallelism](/docs/advanced_features/expert_parallelism).
+EP 的详细配置（DeepEP、双批重叠、EPLB）参见[专家并行](/docs/advanced_features/expert_parallelism)。
 
-### Target Models
+### 支持的模型
 
-DPA supports the following model architectures:
+DPA 支持以下模型架构：
 
-- **MLA (Multi-Head Latent Attention) models** - where DPA provides the most significant benefits:
-  - DeepSeek family (DeepSeek-V2, DeepSeek-V3, DeepSeek-R1)
-  - MiniMax models
+- **MLA（多头潜在注意力）模型**——DPA 在此类模型上收益最大：
+  - DeepSeek 系列（DeepSeek-V2、DeepSeek-V3、DeepSeek-R1）
+  - MiniMax 模型
   - Kimi-K2
-  - Other models using MLA architecture
+  - 其他使用 MLA 架构的模型
 
-- **Standard attention models** - also supported:
-  - Qwen models (see [PR #6121](https://github.com/sgl-project/sglang/pull/6121))
+- **标准注意力模型**——同样支持：
+  - Qwen 模型（参见 [PR #6121](https://github.com/sgl-project/sglang/pull/6121)）
 
-For models like Llama, with standard GQA, standard DP, or TP is typically recommended.
+对于 Llama 这类使用标准 GQA 的模型，通常推荐标准 DP 或 TP。
 
-To enable DPA, add `--enable-dp-attention` to your server launch command.
+要启用 DPA，在服务端启动命令中加上 `--enable-dp-attention`。
 
-### Activation Logic
+### 激活逻辑
 
-DPA is enabled explicitly via server arguments (CLI or config). You must set both `--dp-size` and `--enable-dp-attention`:
+DPA 通过服务端参数（CLI 或配置）显式启用。你必须同时设置 `--dp-size` 和 `--enable-dp-attention`：
 
 ```bash
 python -m sglang.launch_server \
@@ -120,17 +130,17 @@ python -m sglang.launch_server \
     --enable-dp-attention
 ```
 
-**Important**: `--dp-size` must be greater than 1 for DPA to work. When `dp_size == 1` (default), `--enable-dp-attention` is automatically disabled. The constraint `tp_size % dp_size == 0` must also be satisfied.
+**重要**：DPA 要生效，`--dp-size` 必须大于 1。当 `dp_size == 1`（默认值）时，`--enable-dp-attention` 会被自动禁用。还必须满足约束 `tp_size % dp_size == 0`。
 
-### Standard DP for MLA models
+### MLA 模型的标准 DP
 
-Note that MLA models, of course, also support DP. Suppose you want to enable standard DP for MLA models. First, launch each MLA model's replica independently. You may launch these replicas one by one with DPA enabled. After launching each MLA model's replica, launch an SMG and connect all the replicas to the SMG. A detailed explanation of SMG is as follows.
+注意，MLA 模型当然也支持 DP。假设你想为 MLA 模型启用标准 DP：首先，独立启动每个 MLA 模型的副本（可以逐个启动这些副本，并启用 DPA）。启动完所有副本后，启动一个 SMG，并把所有副本接入该 SMG。下面详细说明 SMG。
 
-## Modern Data Parallelism SGLang Model Gateway (SMG)
+## 现代数据并行 SGLang Model Gateway（SMG）
 
-### Native DP Mode
+### 原生 DP 模式
 
-Native DP (built-in Data Parallelism) in SGLang creates multiple worker processes within a single SGLang instance, under the control of `DataParallelController` with the launching parameter of `dp-size`.
+SGLang 的原生 DP（内置数据并行）在单个 SGLang 实例内创建多个 worker 进程，由 `DataParallelController` 控制，启动参数为 `dp-size`。
 
 ```bash
 # Native DP mode
@@ -139,23 +149,28 @@ python -m sglang.launch_server \
     --dp-size 4
 ```
 
-**Limitations:**
+**局限：**
 
-- Built-in in-process load balancing only (e.g., `round_robin`, `total_requests`, `total_tokens`)
-- No cache-aware routing
-- Limited observability and metrics
-- No fault tolerance or circuit breakers
-- Not suitable for production workloads
+- 仅内置进程内负载均衡（例如 `round_robin`、`total_requests`、`total_tokens`）
+- 无缓存感知路由
+- 可观测性与指标有限
+- 无故障容错或熔断器
+- 不适合生产工作负载
 
-⚠️ Native DP is **highly not recommended for use right now**. It is only used in some ancient/outdated RL frameworks. You can use SGLang Model Gateway (SMG) to power up your data parallelism in any use case.
+⚠️ 目前**强烈不建议**使用原生 DP。它只出现在一些古老/过时的 RL 框架中。你可以在任何场景下用 SGLang Model Gateway（SMG）来支撑你的数据并行。
 
-### SMG-Based DP (Recommended)
+<Note>
+💡 AI Infra 学习笔记：DP 的路由质量决定缓存命中率。朴素 round-robin 会把共享前缀的请求散到不同副本，RadixAttention 的命中率随之崩溃；而 SMG 维护每个 worker 的近似前缀树，把请求路由到最可能已持有其前缀的副本。缓存感知路由把「集群级缓存命中率」变成路由策略的函数——这也是「路由」从简单负载均衡升级为性能优化手段的核心原因。
+</Note>
 
-Starting from September 2024, SGLang Model Gateway, i.e., SMG, formerly named as SGLang DP Router, was built especially as a production-ready DP routing system with Rust. It starts from DP routing, but later we further expanded its scope to coordinate RL, PD Disaggregation, and other scenarios. This doc only discusses SMG's usage in DP routing. For other usage, please refer to [SGLang Model Gateway Documentation](/docs/advanced_features/sgl_model_gateway).
 
-> To achieve the best production-level routing performance and reduce the overhead to an extreme extent, we use Rust to build SMG, but not Python, since Python is never FAST enough.
+### 基于 SMG 的 DP（推荐）
 
-**We strongly recommend using the SGLang Model Gateway (SMG) for production-grade Data Parallelism.** SMG provides significant advantages over native DP mode.
+从 2024 年 9 月开始，SGLang Model Gateway（即 SMG，原名 SGLang DP Router）作为生产级的 DP 路由系统用 Rust 构建。它从 DP 路由起步，后来扩展到协调 RL、PD 分离部署等更多场景。本文档只讨论 SMG 在 DP 路由中的用法。其他用法请参考 [SGLang Model Gateway 文档](/docs/advanced_features/sgl_model_gateway)。
+
+> 为了获得最佳的生产级路由性能并把开销压到极致，我们用 Rust 而非 Python 构建 SMG——Python 永远不够快。
+
+**我们强烈推荐在生产级数据并行中使用 SGLang Model Gateway（SMG）。** 相比原生 DP 模式，SMG 有显著优势。
 
 ```bash
 # SMG-based DP mode (Recommended)
@@ -164,9 +179,9 @@ python -m sglang_router.launch_server \
     --dp-size 4
 ```
 
-⚠️ Note that **SMG and Naive DP share the same launching parameter, `--dp-size`**. But the entrypoint of Naive DP is `python -m sglang.launch_server`, and SMG's entrypoint is `python -m sglang_router.launch_server`.
+⚠️ 注意：**SMG 与原生 DP 使用相同的启动参数 `--dp-size`**。但原生 DP 的入口是 `python -m sglang.launch_server`，SMG 的入口是 `python -m sglang_router.launch_server`。
 
-**Advantages of SMG-Based DP:**
+**基于 SMG 的 DP 的优势：**
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -176,58 +191,58 @@ python -m sglang_router.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Feature</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Native DP</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>SMG-Based DP</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>特性</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>原生 DP</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>基于 SMG 的 DP</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Load Balancing</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Built-in in-process methods</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Advanced policies (cache-aware, power-of-two, etc.)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>负载均衡</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>内置进程内方法</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>高级策略（缓存感知、power-of-two 等）</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Cache Awareness</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes - significantly higher cache hit rate</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>缓存感知</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ 无</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 有——显著更高的缓存命中率</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Throughput</strong></td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>吞吐量</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Baseline</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Significant improvement</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>显著提升</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Multi-Node Support</strong></td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>多节点支持</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Limited</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Full support</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 完整支持</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Worker Health Monitoring</strong></td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Worker 健康监控</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Basic</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Circuit breakers, health checks</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 熔断器、健康检查</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Reliability</strong></td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>可靠性</strong></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Basic</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Retries, rate limiting, queuing</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 重试、限流、排队</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Observability</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Basic metrics</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 40+ Prometheus metrics, OpenTelemetry</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>可观测性</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>基础指标</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 40+ 个 Prometheus 指标、OpenTelemetry</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Hot Worker Add/Remove</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Worker 热增删</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ 无</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 有</td>
     </tr>
   </tbody>
 </table>
 
-### SMG's Performance
+### SMG 的性能
 
-The cache-aware routing policy in SMG significantly improves performance for workloads with shared prefixes:
+SMG 中的缓存感知路由策略能显著提升共享前缀工作负载的性能：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -237,49 +252,49 @@ The cache-aware routing policy in SMG significantly improves performance for wor
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Metric</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Without Cache-Aware</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>With Cache-Aware SMG</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>指标</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>无缓存感知</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>带缓存感知的 SMG</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Throughput (token/s)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>吞吐量（token/s）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>82,665</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>158,596 (+92%)</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Cache Hit Rate</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>缓存命中率</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>20%</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>75% (+275%)</td>
     </tr>
   </tbody>
 </table>
 
-*Benchmark from [SGLang v0.4 blog](https://lmsys.org/blog/2024-12-04-sglang-v0-4/), workload with multiple long prefix groups, 8x A100 80GB GPUs, dp-size=8*
+*基准测试来自 [SGLang v0.4 博客](https://lmsys.org/blog/2024-12-04-sglang-v0-4/)：多组长前缀工作负载，8x A100 80GB GPU，dp-size=8*
 
-### When to Use Each
+### 各自的使用时机
 
-**Use Native DP when:**
+**何时使用原生 DP：**
 
-- ~Never use Native/Naive DP~
-- Learning material of DP routing
+- ~永远不要用原生/朴素 DP~
+- 学习 DP 路由的教材
 
-**Use SMG-Based DP when:**
+**何时使用基于 SMG 的 DP：**
 
-- In any case, when you think DP is needed
-- Production deployments
-- Multi-node distributed setups
-- Workloads with shared prefixes (high cache reuse potential)
-- You need high availability and reliability features
-- You require detailed observability and metrics
-- You want to have highly efficient RL rollout systems
+- 任何你认为需要 DP 的场合
+- 生产环境部署
+- 多节点分布式部署
+- 带共享前缀的工作负载（高缓存复用潜力）
+- 需要高可用与可靠性特性
+- 需要详细的可观测性与指标
+- 想要高效的 RL rollout 系统
 
-Note that for RL rollout systems, **there are four crucial reasons that SMG-Based DP is far better than naive DP routing**. Details can be found at [Load Balancing Router in RL](/docs/advanced_features/sglang_for_rl#load-balancing-router).
+注意，对于 RL rollout 系统，**有四个关键原因说明基于 SMG 的 DP 远优于朴素 DP 路由**。详情见 [RL 中的负载均衡路由器](/docs/advanced_features/sglang_for_rl#load-balancing-router)。
 
-### Quick Start For SMG
+### SMG 快速上手
 
-**Installation**
+**安装**
 
 ```bash
 pip install sglang-router
@@ -287,9 +302,9 @@ pip install sglang-router
 pip install "sglang[all]"
 ```
 
-**Option A: Co-launch Workers and SMG (Simplest)**
+**方式 A：同时启动 Worker 与 SMG（最简单）**
 
-This is the easiest way to get started - SMG and workers are launched together:
+这是最容易上手的方式——SMG 与 worker 一起启动：
 
 ```bash
 python -m sglang_router.launch_server \
@@ -299,11 +314,11 @@ python -m sglang_router.launch_server \
     --port 30000
 ```
 
-**Option B: Separate Launch (Multi-Node)**
+**方式 B：分开启动（多节点）**
 
-For distributed deployments across multiple machines:
+用于跨多台机器的分布式部署：
 
-1. Launch workers on each node
+1. 在每个节点上启动 worker
 
 ```bash
 # Node 1
@@ -317,7 +332,7 @@ python -m sglang.launch_server \
     --port 8000
 ```
 
-2. Launch SMG pointing to workers
+2. 启动 SMG 并指向 worker
 
 ```bash
 python -m sglang_router.launch_router \
@@ -327,9 +342,9 @@ python -m sglang_router.launch_router \
     --port 30000
 ```
 
-**Option C: Dynamic Worker Registration**
+**方式 C：Worker 动态注册**
 
-For elastic deployments where workers can be added/removed dynamically:
+用于 worker 可动态增删的弹性部署：
 
 ```bash
 # Launch SMG first
@@ -348,9 +363,9 @@ curl -X POST http://localhost:30000/workers \
     -d '{"url": "http://worker2:8000"}'
 ```
 
-### Load Balancing Policies
+### 负载均衡策略
 
-SMG supports multiple load balancing policies:
+SMG 支持多种负载均衡策略：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -360,38 +375,38 @@ SMG supports multiple load balancing policies:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Policy</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>策略</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Best For</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>最适合</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>cache_aware</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Combines cache locality with load balancing</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Recommended for most workloads</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>结合缓存局部性与负载均衡</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><strong>推荐用于大多数工作负载</strong></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>round_robin</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Cycles through workers in order</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Simple, predictable distribution</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>按顺序轮询各 worker</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>简单、可预测的分发</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>random</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Random worker selection</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Baseline, testing</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>随机选择 worker</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>基线、测试</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>power_of_two</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Samples two workers, picks lighter one</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Low latency requirements</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>采样两个 worker，选择负载较轻的一个</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>低延迟要求</td>
     </tr>
   </tbody>
 </table>
 
-**Cache-Aware Policy (Default, Recommended)**
+**缓存感知策略（默认，推荐）**
 
-The cache-aware policy provides the best performance for most workloads:
+缓存感知策略能为大多数工作负载提供最佳性能：
 
 ```bash
 python -m sglang_router.launch_router \
@@ -404,20 +419,20 @@ python -m sglang_router.launch_router \
     --max-tree-size 67108864
 ```
 
-**How it works:**
+**工作原理：**
 
-1. Maintains an approximate radix tree for each worker based on request history
-2. Routes requests to workers with the highest prefix match (cache hit)
-3. Falls back to shortest-queue routing when load is imbalanced
-4. Automatically evicts old entries to prevent memory overflow
+1. 基于请求历史为每个 worker 维护一棵近似前缀树
+2. 把请求路由到前缀匹配最高（缓存命中）的 worker
+3. 负载不均衡时回退到最短队列路由
+4. 自动淘汰旧条目以防止内存溢出
 
-### Best Practices
+### 最佳实践
 
-1. **Start with `cache_aware` policy** - It provides the best balance between cache locality and load distribution for most workloads
-2. **Use SMG for production** - Prefer `sglang_router.launch_server` over `sglang.launch_server` for better reliability and observability
-3. **Enable health checks** - Configure `--router-health-check-interval-secs` to detect and remove unhealthy workers automatically
+1. **从 `cache_aware` 策略开始**——它为大多数工作负载提供了缓存局部性与负载分布之间的最佳平衡
+2. **生产环境用 SMG**——优先用 `sglang_router.launch_server` 而非 `sglang.launch_server`，以获得更好的可靠性与可观测性
+3. **启用健康检查**——配置 `--router-health-check-interval-secs` 自动发现并剔除不健康的 worker
 
-**Recommended command with best practices applied:**
+**套用最佳实践的推荐命令：**
 
 ```bash
 python -m sglang_router.launch_server \
@@ -430,25 +445,25 @@ python -m sglang_router.launch_server \
     --port 30000
 ```
 
-For advanced configuration (circuit breakers, retries, Prometheus metrics, K8s integration), see [SGLang Model Gateway Documentation](/docs/advanced_features/sgl_model_gateway).
+高级配置（熔断器、重试、Prometheus 指标、K8s 集成）参见 [SGLang Model Gateway 文档](/docs/advanced_features/sgl_model_gateway)。
 
-### Verifying Traffic Distribution
+### 验证流量分发
 
-After launching SMG, verify that traffic is being distributed correctly:
+启动 SMG 后，验证流量是否正确分发：
 
-**1. Check worker status:**
+**1. 检查 worker 状态：**
 
 ```bash
 curl http://localhost:30000/workers
 ```
 
-**2. Check load distribution:**
+**2. 检查负载分布：**
 
 ```bash
 curl http://localhost:30000/get_loads
 ```
 
-**3. Monitor metrics (if Prometheus enabled):**
+**3. 监控指标（如果启用了 Prometheus）：**
 
 ```bash
 # Key metrics to check
@@ -457,9 +472,9 @@ smg_worker_requests_active{worker="..."}
 sglang_cache_hit_rate{source="..."}
 ```
 
-For detailed metrics and monitoring setup, see [SGLang Model Gateway Documentation](/docs/advanced_features/sgl_model_gateway).
+详细的指标与监控配置参见 [SGLang Model Gateway 文档](/docs/advanced_features/sgl_model_gateway)。
 
-## Reference
+## 参考
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -469,41 +484,41 @@ For detailed metrics and monitoring setup, see [SGLang Model Gateway Documentati
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Strategy</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Use Case</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Key Benefit</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>策略</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>适用场景</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>关键收益</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Native DP</strong> (<code>--dp-size</code>)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>原生 DP</strong>（<code>--dp-size</code>）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Never</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Easy to understand, not rust based</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>容易理解，非 Rust 实现</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>SMG-Based DP</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>Production (recommended)</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Cache-aware routing, high availability</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>基于 SMG 的 DP</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>生产环境（推荐）</strong></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>缓存感知路由、高可用</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DPA</strong> (<code>--dp-size N --enable-dp-attention</code>)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek/MLA models</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Eliminates KV cache duplication, improved throughput</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DPA</strong>（<code>--dp-size N --enable-dp-attention</code>）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek/MLA 模型</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>消除 KV 缓存重复、提升吞吐</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong>DPA + EP</strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek MoE models</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Significant throughput improvement vs vanilla TP</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek MoE 模型</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>相比朴素 TP 显著提升吞吐</td>
     </tr>
   </tbody>
 </table>
 
-**Recommended production setup for DeepSeek:**
-1. Enable **DPA** for attention layers (`--dp-size 8 --enable-dp-attention`)
-2. Enable **EP** for MoE layers (`--ep 8 --moe-a2a-backend deepep`)
-3. Use **SMG** with **cache_aware** policy
+**DeepSeek 的推荐生产配置：**
+1. 为注意力层启用 **DPA**（`--dp-size 8 --enable-dp-attention`）
+2. 为 MoE 层启用 **EP**（`--ep 8 --moe-a2a-backend deepep`）
+3. 使用带 **cache_aware** 策略的 **SMG**
 
-**Related documentation:**
-- [Expert Parallelism](./expert_parallelism) - DeepEP, Two-Batch Overlap, EPLB
-- [SGLang Model Gateway Documentation](./sgl_model_gateway) - SMG configuration & troubleshooting
-- [Large-Scale EP Blog](https://lmsys.org/blog/2025-05-05-large-scale-ep/) - 96 GPU deployment guide
+**相关文档：**
+- [专家并行](./expert_parallelism) - DeepEP、双批重叠、EPLB
+- [SGLang Model Gateway 文档](./sgl_model_gateway) - SMG 配置与故障排查
+- [大规模 EP 博客](https://lmsys.org/blog/2025-05-05-large-scale-ep/) - 96 GPU 部署指南

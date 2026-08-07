@@ -1,40 +1,44 @@
 ---
-title: "Speculative Decoding"
+title: "投机解码"
 metatags:
-    description: "SGLang speculative decoding: EAGLE-2/EAGLE-3, MTP, DFLASH, draft model configuration, and overlap-scheduler guidance."
+    description: "SGLang 投机解码：EAGLE-2/EAGLE-3、MTP、DFLASH、草稿模型配置，以及重叠调度器（overlap scheduler）指南。"
 ---
-SGLang provides several speculative decoding options, including EAGLE-2/EAGLE-3, MTP, DFLASH, classic draft-model decoding, and an NGRAM-based variant. Our implementation aims to maximize speed and efficiency and is considered to be among the fastest in open-source LLM engines.
+SGLang 提供多种投机解码方案，包括 EAGLE-2/EAGLE-3、MTP、DFLASH、经典草稿模型解码，以及基于 NGRAM 的变体。我们的实现以速度和效率最大化为目标，被认为是开源 LLM 引擎中速度最快的之一。
 
-## Summary
+<Note>
+💡 AI Infra 学习笔记：投机解码（speculative decoding）的核心思路是「用小而快的草稿模型（draft model）先猜一串 token，再用大模型一次并行验证，接受与目标分布一致的 token」。自回归解码每步只能生成 1 个 token，而投机解码把多步生成合并成一次并行前向，从而在不改变输出分布的前提下大幅提升吞吐——代价是额外显存，以及草稿与验证两条路径的实现复杂度。
+</Note>
 
-### Jump to sections
+## 概览
 
-- [EAGLE Decoding](#eagle-decoding)
-  - [EAGLE-2 Decoding](#eagle-2-decoding)
-  - [EAGLE-2 Decoding with torch.compile](#eagle-2-decoding-with-torch-compile)
-  - [EAGLE-2 Decoding via Frequency-Ranked Speculative Sampling](#eagle-2-decoding-via-frequency-ranked-speculative-sampling)
-  - [EAGLE-3 Decoding](#eagle-3-decoding)
-- [Multi Token Prediction](#multi-token-prediction)
-- [DFlash Decoding](#dflash-decoding)
-- [Standalone Speculative Decoding (Small Draft Model)](#standalone-speculative-decoding-small-draft-model)
-- [Speculative Decoding V2 (Overlap Scheduler)](#speculative-decoding-v2-overlap-scheduler)
-- [Ngram Speculative Decoding](#ngram-speculative-decoding)
-- [Full Parameter Reference](#full-parameter-reference)
-- [OOM Troubleshooting](#oom-troubleshooting)
-- [References](#references)
+### 章节跳转
 
-### Quick guidance
+- [EAGLE 解码](#eagle-decoding)
+  - [EAGLE-2 解码](#eagle-2-decoding)
+  - [结合 torch.compile 的 EAGLE-2 解码](#eagle-2-decoding-with-torch-compile)
+  - [基于频率排序投机采样的 EAGLE-2 解码](#eagle-2-decoding-via-frequency-ranked-speculative-sampling)
+  - [EAGLE-3 解码](#eagle-3-decoding)
+- [多 token 预测（MTP）](#multi-token-prediction)
+- [DFlash 解码](#dflash-decoding)
+- [独立投机解码（小型草稿模型）](#standalone-speculative-decoding-small-draft-model)
+- [投机解码 V2（重叠调度器）](#speculative-decoding-v2-overlap-scheduler)
+- [Ngram 投机解码](#ngram-speculative-decoding)
+- [完整参数参考](#full-parameter-reference)
+- [OOM 故障排查](#oom-troubleshooting)
+- [参考资料](#references)
 
-- **Best speed/quality (recommended)**: Use **EAGLE-3** with `--speculative-algorithm EAGLE3`.
-- **Strong default / broad compatibility**: Use **EAGLE-2** with `--speculative-algorithm EAGLE`.
-- **Workload acceptance changes over time**: Use [**Adaptive speculative decoding**](./adaptive_speculative_decoding) on top of **EAGLE** with `--speculative-eagle-topk 1`.
-- **Lower `lm_head` overhead for EAGLE-2**: Enable **FR-Spec** with `--speculative-token-map`.
-- **Model is MTP-enabled**: Use **MTP via speculative decoding** (often with small `speculative_num_steps/topk/num_draft_tokens`, see the example section).
-- **You have a DFlash draft checkpoint**: Use **DFLASH** with `--speculative-algorithm DFLASH` and `--speculative-draft-model-path ...`.
-- **You have a smaller draft LLM**: Use **STANDALONE** (`--speculative-algorithm STANDALONE`).
-- **No extra model available**: Use **NGRAM** (`--speculative-algorithm NGRAM`, CUDA-only).
+### 快速指引
 
-### Method comparison (mini table)
+- **速度/质量最佳（推荐）**：使用 **EAGLE-3**，配合 `--speculative-algorithm EAGLE3`。
+- **稳健默认 / 广泛兼容**：使用 **EAGLE-2**，配合 `--speculative-algorithm EAGLE`。
+- **工作负载的接受率随时间变化**：在 **EAGLE** 之上使用 [**自适应投机解码**](./adaptive_speculative_decoding)，配合 `--speculative-eagle-topk 1`。
+- **降低 EAGLE-2 的 `lm_head` 开销**：用 `--speculative-token-map` 启用 **FR-Spec**。
+- **模型支持 MTP**：使用**基于投机解码的 MTP**（通常配合较小的 `speculative_num_steps/topk/num_draft_tokens`，参见示例部分）。
+- **你有 DFlash 草稿检查点**：使用 **DFLASH**，配合 `--speculative-algorithm DFLASH` 和 `--speculative-draft-model-path ...`。
+- **你有更小的草稿 LLM**：使用 **STANDALONE**（`--speculative-algorithm STANDALONE`）。
+- **没有额外的模型可用**：使用 **NGRAM**（`--speculative-algorithm NGRAM`，仅 CUDA）。
+
+### 方法对比（简表）
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -43,77 +47,77 @@ SGLang provides several speculative decoding options, including EAGLE-2/EAGLE-3,
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Draft source</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Separate draft model?</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>How to enable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Notes / constraints</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿来源</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>是否需要独立草稿模型？</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>如何启用</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>备注 / 约束</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>EAGLE-2</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE draft model (feature drafting + tree)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Typically yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE 草稿模型（特征草稿 + 树形）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>通常需要</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--speculative-algorithm EAGLE</code> + <code>--speculative-draft-model-path ...</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Tune <code>--speculative-num-steps</code>, <code>--speculative-eagle-topk</code>, <code>--speculative-num-draft-tokens</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>调参：<code>--speculative-num-steps</code>、<code>--speculative-eagle-topk</code>、<code>--speculative-num-draft-tokens</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>EAGLE-2 + <code>torch.compile</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Same as EAGLE-2</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Typically yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Add <code>--enable-torch-compile</code> (optionally <code>--torch-compile-max-bs</code>)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Benefit varies by hardware/model; benchmark to verify</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>与 EAGLE-2 相同</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>通常需要</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>加上 <code>--enable-torch-compile</code>（可选 <code>--torch-compile-max-bs</code>）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>收益因硬件/模型而异；请用基准测试验证</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>EAGLE-2 + FR-Spec</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Same as EAGLE-2 + token subset</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Typically yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>与 EAGLE-2 相同 + token 子集</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>通常需要</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Add <code>--speculative-token-map ...</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Reduces <code>lm_head</code> overhead with high-frequency token vocab</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用高频 token 词表降低 <code>lm_head</code> 开销</td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>EAGLE-3</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 draft model</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--speculative-algorithm EAGLE3</code> + <code>--speculative-draft-model-path ...</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Best throughput in the benchmark below</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>下方基准测试中吞吐量最佳</td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>MTP</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Built-in multi-token heads (model-specific)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Often no</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>See <strong>Multi Token Prediction</strong> section</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Uses speculative workflow; draft path may be auto-handled for some models</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>内建的多 token 头（模型相关）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>通常不需要</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>参见 <strong>多 token 预测（MTP）</strong> 一节</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用投机解码工作流；部分模型的草稿路径可能自动处理</td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>DFLASH</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash draft model (linear block verification)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash 草稿模型（线性块验证）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--speculative-algorithm DFLASH</code> + <code>--speculative-draft-model-path ...</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No <code>--enable-dp-attention</code>; <code>pp_size == 1</code>; disables overlap scheduler &amp; mixed chunked prefill</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>不支持 <code>--enable-dp-attention</code>；<code>pp_size == 1</code>；会禁用重叠调度器与混合分块预填充</td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>STANDALONE</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Smaller draft LLM (token-level)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>更小的草稿 LLM（token 级）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--speculative-algorithm STANDALONE</code> + <code>--speculative-draft-model-path ...</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Does <strong>not</strong> support <code>--enable-dp-attention</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>不</strong>支持 <code>--enable-dp-attention</code></td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>NGRAM</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ngram cache from previous tokens</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>从先前 token 构建的 ngram 缓存</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--speculative-algorithm NGRAM</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>CUDA-only; no <code>--enable-dp-attention</code>; disables overlap scheduler &amp; mixed chunked prefill</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>仅 CUDA；不支持 <code>--enable-dp-attention</code>；会禁用重叠调度器与混合分块预填充</td>
     </tr>
 </tbody>
 </table>
 
-### Performance Highlights
+### 性能亮点
 
-Please see below for the huge improvements on throughput for LLaMA-Instruct 3.1 8B tested on MT bench that can be achieved via EAGLE3 decoding.
-For further details please see the [EAGLE3 paper](https://arxiv.org/pdf/2503.01840).
+下面展示了在 MT-bench 上对 LLaMA-Instruct 3.1 8B 实测、通过 EAGLE3 解码获得的巨大吞吐量提升。
+更多细节请参见 [EAGLE3 论文](https://arxiv.org/pdf/2503.01840)。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -122,21 +126,21 @@ For further details please see the [EAGLE3 paper](https://arxiv.org/pdf/2503.018
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Method</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Throughput (tokens/s)</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>方法</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>吞吐量（token/s）</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang (w/o speculative, 1x H100)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang（无投机，1x H100）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>158.34 tokens/s</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang + EAGLE-2 (1x H100)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang + EAGLE-2（1x H100）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>244.10 tokens/s</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang + EAGLE-3 (1x H100)</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang + EAGLE-3（1x H100）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>373.25 tokens/s</td>
     </tr>
   </tbody>
@@ -144,9 +148,9 @@ For further details please see the [EAGLE3 paper](https://arxiv.org/pdf/2503.018
 
 ---
 
-## EAGLE Decoding
+## EAGLE 解码
 
-To enable EAGLE speculative decoding the following parameters are relevant:
+启用 EAGLE 投机解码时，以下参数与之相关：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -156,82 +160,87 @@ To enable EAGLE speculative decoding the following parameters are relevant:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-path</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Draft model path/weights. <strong>Typically required</strong> for EAGLE/EAGLE3 and STANDALONE. For some MTP-enabled models, this can be omitted.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的路径/权重。对于 EAGLE/EAGLE3 和 STANDALONE，**通常必填**。部分支持 MTP 的模型可以省略。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-steps</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Depth of autoregressive drafting. Increases speculation range but risks rejection cascades.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Auto (<code>5</code> for Llama/Grok; <code>3</code> for many other models)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>自回归草稿的深度。增大投机范围，但有级联拒绝的风险。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>自动（Llama/Grok 为 <code>5</code>；许多其他模型为 <code>3</code>）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-eagle-topk</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Branching factor per step. Improves candidate diversity and acceptance rate, but increases memory/compute consumption.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Auto (<code>4</code> for Llama/Grok; <code>1</code> for many other models)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每步的分支因子。提升候选多样性和接受率，但增加内存/计算消耗。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>自动（Llama/Grok 为 <code>4</code>；许多其他模型为 <code>1</code>）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-draft-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum parallel verification capacity. Allows deeper tree evaluation but increases GPU memory usage.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Auto (<code>8</code> for Llama/Grok; <code>4</code> for many other models). If <code>topk=1</code>, it is adjusted to <code>num_steps + 1</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>并行验证的最大容量。允许更深的树评估，但增加 GPU 内存占用。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>自动（Llama/Grok 为 <code>8</code>；许多其他模型为 <code>4</code>）。如果 <code>topk=1</code>，会被调整为 <code>num_steps + 1</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-accept-threshold-single</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Acceptance threshold for single-token verification. Lower values accept more aggressively.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>单 token 验证的接受阈值。值越低接受越激进。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1.0</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-accept-threshold-acc</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Accumulated acceptance threshold across steps.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>跨步骤的累计接受阈值。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1.0</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-attention-mode</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Attention mode for speculative operations (<code>prefill</code> or <code>decode</code>), affecting both target verification and draft extension.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>投机操作的注意力模式（<code>prefill</code> 或 <code>decode</code>），同时影响目标验证与草稿扩展。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>"prefill"</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-attention-backend</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Override attention backend for the draft model.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code> (same as target)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>覆盖草稿模型的 Attention 后端。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code>（与目标相同）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-quantization</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Quantization method for the draft model. Use <code>"unquant"</code> to force no quantization even when the target model is quantized.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Same as target model</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的量化方法。用 <code>"unquant"</code> 强制不量化，即使目标模型已量化。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>与目标模型相同</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-revision</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Specific revision/commit of the draft model to load.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code> (auto-set to <code>"main"</code> when <code>--speculative-draft-model-path</code> is set and revision is omitted)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>要加载的草稿模型的具体 revision/commit。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code>（设置了 <code>--speculative-draft-model-path</code> 且省略 revision 时，自动设为 <code>"main"</code>）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-load-format</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load format for the draft model weights.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型权重的加载格式。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
   </tbody>
 </table>
 
-These parameters are mostly the same for EAGLE-2 and EAGLE-3. `--speculative-token-map` is ignored for EAGLE-3 models.
-For `--speculative-num-steps`, `--speculative-eagle-topk`, and `--speculative-num-draft-tokens`: leave all three unset to use auto-tuning, or set all three explicitly when tuning.
-If you use EAGLE with `--speculative-eagle-topk 1` and your acceptance rate varies across requests, see [Adaptive Speculative Decoding](./adaptive_speculative_decoding).
+这些参数对 EAGLE-2 和 EAGLE-3 大体相同。`--speculative-token-map` 对 EAGLE-3 模型会被忽略。
+对于 `--speculative-num-steps`、`--speculative-eagle-topk` 和 `--speculative-num-draft-tokens`：要么三者都不设置以使用自动调优，要么在调参时三者都显式设置。
+如果你使用 EAGLE 且 `--speculative-eagle-topk 1`，但各请求的接受率差异较大，参见 [自适应投机解码](./adaptive_speculative_decoding)。
 
-You can find the best combinations of these parameters with [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py).
+<Note>
+💡 AI Infra 学习笔记：EAGLE 与经典「小模型草稿」的关键区别在于草稿空间：经典方法在 token 空间逐 token 猜测，而 EAGLE 直接预测 LLM 的隐藏层特征（feature），再经语言头采样出 token。特征空间更平滑、可预测性更高，因此 EAGLE 的接受率通常显著高于 token 级草稿——这正是它在开源引擎中速度领先的原因。EAGLE-3 进一步去掉特征预测目标、融合低中层特征，草稿更准。
+</Note>
 
 
-### EAGLE-2 Decoding
+你可以用 [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py) 找到这些参数的最佳组合。
 
-You can enable EAGLE-2 Decoding by setting `--speculative-algorithm EAGLE` and choosing an appropriate model.
 
-**Launch the server:**
+### EAGLE-2 解码
+
+你可以通过设置 `--speculative-algorithm EAGLE` 并选择合适的模型来启用 EAGLE-2 解码。
+
+**启动服务端：**
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -246,7 +255,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -267,11 +276,11 @@ print(response.choices[0].message.content)
 
 ---
 
-### EAGLE-2 Decoding with `torch.compile`
+### 结合 `torch.compile` 的 EAGLE-2 解码
 
-You can optionally enable `torch.compile` to apply kernel-level optimizations (operator fusion, autotune) to the draft model. The actual speedup depends on your hardware, model architecture, and batch size. In some configurations (e.g., small draft models on H100 where cuBLAS is already optimal and CUDA graphs are enabled), the benefit may be negligible. We recommend benchmarking with and without this flag on your specific setup to verify whether it helps.
+你可以选择启用 `torch.compile`，为草稿模型应用 kernel 级优化（算子融合、自动调优）。实际加速效果取决于你的硬件、模型架构和批大小。在某些配置下（例如 H100 上 cuBLAS 已经最优、且已启用 CUDA 图的小型草稿模型），收益可能微乎其微。我们建议在你自己的环境里分别用带/不带该参数做基准测试，验证它是否有效。
 
-To enable it, add `--enable-torch-compile` and optionally set `--torch-compile-max-bs`:
+要启用它，加上 `--enable-torch-compile`，并可选设置 `--torch-compile-max-bs`：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -287,7 +296,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -308,13 +317,13 @@ print(response.choices[0].message.content)
 
 ---
 
-### EAGLE-2 Decoding via Frequency-Ranked Speculative Sampling
+### 基于频率排序投机采样的 EAGLE-2 解码
 
-By employing a truncated high-frequency token vocabulary in the draft model, EAGLE speculative decoding reduces `lm_head` computational overhead while accelerating the pipeline without quality degradation. For more details, check out [the paper](https://arxiv.org/pdf/2502.14856).
+通过在草稿模型中使用截断的高频 token 词表，EAGLE 投机解码在加速整体流水线的同时降低了 `lm_head` 的计算开销，且不损失质量。更多细节参见[论文](https://arxiv.org/pdf/2502.14856)。
 
-In our implementation, set `--speculative-token-map` to enable the optimization. You can get the high-frequency tokens in FR-Spec from [this model](https://huggingface.co/thunlp/LLaMA3-Instruct-8B-FR-Spec). Or you can obtain high-frequency tokens by directly downloading these tokens from [this repo](https://github.com/thunlp/FR-Spec/tree/main?tab=readme-ov-file#prepare-fr-spec-vocabulary-subset).
+在我们的实现中，设置 `--speculative-token-map` 即可启用该优化。你可以从[这个模型](https://huggingface.co/thunlp/LLaMA3-Instruct-8B-FR-Spec)获取 FR-Spec 的高频 token；也可以直接从[这个仓库](https://github.com/thunlp/FR-Spec/tree/main?tab=readme-ov-file#prepare-fr-spec-vocabulary-subset)下载这些高频 token。
 
-Thanks for the contribution from [Weilin Zhao](https://github.com/Achazwl) and [Zhousx](https://github.com/Zhou-sx).
+感谢 [Weilin Zhao](https://github.com/Achazwl) 和 [Zhousx](https://github.com/Zhou-sx) 的贡献。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -331,7 +340,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -352,9 +361,9 @@ print(response.choices[0].message.content)
 
 ---
 
-### EAGLE-3 Decoding
+### EAGLE-3 解码
 
-You can enable EAGLE-3 decoding by setting `--speculative-algorithm EAGLE3` and choosing an appropriate model.
+你可以通过设置 `--speculative-algorithm EAGLE3` 并选择合适的模型来启用 EAGLE-3 解码。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -370,7 +379,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -391,9 +400,9 @@ print(response.choices[0].message.content)
 
 ---
 
-## Multi Token Prediction
+## 多 token 预测（MTP）
 
-We support [MTP (Multi-Token Prediction)](https://arxiv.org/pdf/2404.19737) in SGLang by using speculative decoding. We use `XiaomiMiMo/MiMo-7B-RL` as an example here (for DeepSeek MTP usage, refer to [DeepSeek-V3.2 cookbook §4.2.3](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2#4-2-3-multi-token-prediction-eagle-speculative-decoding)).
+SGLang 通过投机解码支持 [MTP（多 token 预测）](https://arxiv.org/pdf/2404.19737)。这里以 `XiaomiMiMo/MiMo-7B-RL` 为例（DeepSeek 的 MTP 用法参见 [DeepSeek-V3.2 cookbook §4.2.3](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2#4-2-3-multi-token-prediction-eagle-speculative-decoding)）。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -409,7 +418,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import requests
@@ -427,11 +436,11 @@ print(response.json())
 
 ---
 
-## DFlash Decoding
+## DFlash 解码
 
-SGLang also supports **DFLASH** speculative decoding using a dedicated draft model checkpoint. Compared with EAGLE-style tree verification, DFLASH verifies a linear draft block and is configured around a block size / draft window. This path is useful when the target model has a matching DFlash draft checkpoint, such as `meta-llama/Llama-3.1-8B-Instruct` with `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat`.
+SGLang 还支持使用专用草稿模型检查点的 **DFLASH** 投机解码。与 EAGLE 风格的树形验证相比，DFLASH 验证的是线性的草稿块，并围绕块大小/草稿窗口进行配置。当目标模型有配套的 DFlash 草稿检查点时（例如 `meta-llama/Llama-3.1-8B-Instruct` 搭配 `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat`），这条路径很实用。
 
-Relevant parameters:
+相关参数：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -441,30 +450,30 @@ Relevant parameters:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-path</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Required DFlash draft model path/weights.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>必填的 DFlash 草稿模型路径/权重。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-draft-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash verify block size.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Inferred from draft config, otherwise <code>16</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash 验证块大小。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>从草稿配置推断，否则为 <code>16</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-dflash-block-size</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Alias of <code>--speculative-num-draft-tokens</code> for DFlash.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash 中 <code>--speculative-num-draft-tokens</code> 的别名。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-dflash-draft-window-size</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Draft KV sliding-window size. Must be <code>&gt;= speculative-num-draft-tokens</code> when set.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿 KV 滑动窗口大小。设置时须满足 <code>&gt;= speculative-num-draft-tokens</code>。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
   </tbody>
@@ -477,7 +486,7 @@ python3 -m sglang.launch_server \
     --speculative-draft-model-path z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -498,11 +507,11 @@ print(response.choices[0].message.content)
 
 ---
 
-## Standalone Speculative Decoding (Small Draft Model)
+## 独立投机解码（小型草稿模型）
 
-Besides EAGLE/MTP, SGLang also supports **token-level speculative decoding** using a smaller **draft model**. Enable it with `--speculative-algorithm STANDALONE` and provide a draft model via `--speculative-draft-model-path`.
+除了 EAGLE/MTP，SGLang 还支持使用更小的**草稿模型**进行 **token 级投机解码**。用 `--speculative-algorithm STANDALONE` 启用，并通过 `--speculative-draft-model-path` 提供草稿模型。
 
-Relevant parameters:
+相关参数：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -512,41 +521,41 @@ Relevant parameters:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-path</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Draft model weights (smaller than the target model).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型权重（比目标模型小）。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-steps</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Draft depth (how many steps the draft model runs autoregressively).</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>3</code> (auto default for STANDALONE)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿深度（草稿模型自回归运行的步数）。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>3</code>（STANDALONE 的自动默认值）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-eagle-topk</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Branching factor (token candidates per step).</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1</code> (auto default for STANDALONE)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>分支因子（每步的候选 token 数）。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1</code>（STANDALONE 的自动默认值）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-draft-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Verification capacity.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>4</code> (auto default for STANDALONE)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>验证容量。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>4</code>（STANDALONE 的自动默认值）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-quantization</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Quantization for the draft model. Use <code>"unquant"</code> to disable quantization on the draft even when the target is quantized.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Same as target</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的量化。用 <code>"unquant"</code> 在目标已量化的情况下也禁用草稿的量化。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>与目标相同</td>
     </tr>
   </tbody>
 </table>
 
-> **Note:** Standalone speculative decoding currently **does not support** `--enable-dp-attention`.
+> **注意：** 独立投机解码目前**不支持** `--enable-dp-attention`。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -561,7 +570,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -582,14 +591,19 @@ print(response.choices[0].message.content)
 
 ---
 
-## Speculative Decoding V2 (Overlap Scheduler)
+## 投机解码 V2（重叠调度器）
 
-Speculative decoding runs the V2 speculative workers (e.g. `StandaloneWorkerV2`, `EAGLEWorkerV2`) with the overlap scheduler enabled by default. Pass `--disable-overlap-schedule` to fall back to the synchronous (non-overlap) path.
+投机解码默认以启用重叠调度器的方式运行 V2 投机工作进程（例如 `StandaloneWorkerV2`、`EAGLEWorkerV2`）。传入 `--disable-overlap-schedule` 可回退到同步（非重叠）路径。
 
-Notes:
-- The overlap scheduler currently only supports `--speculative-eagle-topk 1`; **set `--speculative-eagle-topk 1` explicitly**.
-- If you explicitly set `--speculative-eagle-topk > 1`, the server will error.
-- If you omit `--speculative-eagle-topk`, auto-tuning may pick `topk > 1` for some models (e.g. Llama). This is incompatible with the overlap scheduler and may not always trigger an immediate config error, so set `--speculative-eagle-topk 1` explicitly.
+注意事项：
+- 重叠调度器目前只支持 `--speculative-eagle-topk 1`；**请显式设置 `--speculative-eagle-topk 1`**。
+- 如果你显式设置 `--speculative-eagle-topk > 1`，服务端会报错。
+- 如果你省略 `--speculative-eagle-topk`，自动调优可能为某些模型（如 Llama）选择 `topk > 1`。这与重叠调度器不兼容，且不一定立刻触发配置错误，所以请显式设置 `--speculative-eagle-topk 1`。
+
+<Note>
+💡 AI Infra 学习笔记：重叠调度器（overlap scheduler）把「草稿生成」与「目标验证」做成异步流水：GPU 在跑当前 batch 解码的同时，CPU 提前准备下一个 batch 并预取草稿，从而隐藏草稿与验证阶段之间的大部分空闲等待。它目前只在 `--speculative-eagle-topk 1` 下工作，因为多分支树形验证的调度复杂度更高，难以做干净的流水重叠。
+</Note>
+
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -604,7 +618,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -625,14 +639,14 @@ print(response.choices[0].message.content)
 
 ---
 
-## Ngram Speculative Decoding
+## Ngram 投机解码
 
-SGLang also supports **ngram-based speculative decoding** (no separate draft model). It retrieves draft tokens from an ngram cache built from previously generated tokens, and then verifies them with the target model.
+SGLang 还支持**基于 ngram 的投机解码**（无需单独的草稿模型）。它从基于先前生成 token 构建的 ngram 缓存中检索草稿 token，再用目标模型验证。
 
-Enable it with:
+启用方式：
 - `--speculative-algorithm NGRAM`
 
-### Ngram-specific parameters
+### Ngram 专用参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -642,51 +656,51 @@ Enable it with:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-draft-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Number of draft tokens verified per step. If omitted, defaults to <code>min(--speculative-ngram-max-trie-depth, 12)</code>.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>12</code> (with default ngram settings)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每步验证的草稿 token 数量。省略时默认为 <code>min(--speculative-ngram-max-trie-depth, 12)</code>。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>12</code>（使用默认 ngram 设置）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-min-bfs-breadth</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Minimum BFS breadth.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最小 BFS 广度。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-max-bfs-breadth</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum BFS breadth.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最大 BFS 广度。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>10</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-match-type</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ngram tree-building mode: <code>"BFS"</code> for recency-based expansion or <code>"PROB"</code> for frequency-based expansion.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ngram 树的构建模式：<code>"BFS"</code> 按最近性扩展，<code>"PROB"</code> 按频率扩展。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>"BFS"</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-max-trie-depth</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum suffix length stored and matched by the ngram trie.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>ngram trie 存储并匹配的最大后缀长度。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>18</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-capacity</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Cache capacity (number of entries).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>缓存容量（条目数）。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>10,000,000</code></td>
     </tr>
   </tbody>
 </table>
 
-Notes:
-- Ngram speculative decoding **only supports CUDA**.
-- It currently **does not support** `--enable-dp-attention`.
-- It disables the overlap scheduler and mixed chunked prefill.
-- If `--speculative-ngram-max-bfs-breadth > 1` (thus `speculative_eagle_topk > 1`) and `page_size > 1`, use `--attention-backend flashinfer`; otherwise the server will error.
-- Optional: set `SGLANG_NGRAM_FORCE_GREEDY_VERIFY=True` to force greedy verification.
+注意事项：
+- Ngram 投机解码**仅支持 CUDA**。
+- 目前**不支持** `--enable-dp-attention`。
+- 它会禁用重叠调度器和混合分块预填充。
+- 如果 `--speculative-ngram-max-bfs-breadth > 1`（即 `speculative_eagle_topk > 1`）且 `page_size > 1`，请使用 `--attention-backend flashinfer`；否则服务端会报错。
+- 可选：设置 `SGLANG_NGRAM_FORCE_GREEDY_VERIFY=True` 强制贪心验证。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -699,7 +713,7 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-**Send a request:**
+**发送请求：**
 
 ```python Example
 import openai
@@ -720,11 +734,11 @@ print(response.choices[0].message.content)
 
 ---
 
-## Full Parameter Reference
+## 完整参数参考
 
-Below is a comprehensive list of all speculative decoding parameters available in SGLang:
+下面是 SGLang 中所有投机解码参数的完整列表：
 
-### Core parameters
+### 核心参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -735,10 +749,10 @@ Below is a comprehensive list of all speculative decoding parameters available i
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
@@ -746,108 +760,108 @@ Below is a comprehensive list of all speculative decoding parameters available i
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-algorithm</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Algorithm to use: <code>DFLASH</code>, <code>EAGLE</code>, <code>EAGLE3</code>, <code>STANDALONE</code>, <code>NGRAM</code>, <code>NEXTN</code> (alias of <code>EAGLE</code>)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用的算法：<code>DFLASH</code>、<code>EAGLE</code>、<code>EAGLE3</code>、<code>STANDALONE</code>、<code>NGRAM</code>、<code>NEXTN</code>（<code>EAGLE</code> 的别名）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-path</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to the draft model weights</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型权重的路径</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-revision</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Specific revision/commit of the draft model (<code>"main"</code> is auto-used when draft path is set and revision is omitted)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的具体 revision/commit（设置了草稿路径且省略 revision 时自动使用 <code>"main"</code>）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-load-format</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Load format for draft model weights</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型权重的加载格式</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-steps</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code> (auto-chosen when omitted)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Autoregressive drafting depth</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code>（省略时自动选择）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>自回归草稿深度</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-eagle-topk</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code> (auto-chosen when omitted)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Branching factor per drafting step</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code>（省略时自动选择）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每个草稿步骤的分支因子</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-num-draft-tokens</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code> (auto-chosen when omitted)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum number of draft tokens for verification</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code>（省略时自动选择）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于验证的草稿 token 最大数量</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-dflash-block-size</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash-only alias of <code>--speculative-num-draft-tokens</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash 专用：<code>--speculative-num-draft-tokens</code> 的别名</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-dflash-draft-window-size</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash-only draft KV sliding-window size</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DFlash 专用：草稿 KV 滑动窗口大小</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-accept-threshold-single</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>float</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1.0</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Single-token acceptance threshold</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>单 token 接受阈值</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-accept-threshold-acc</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>float</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1.0</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Accumulated acceptance threshold</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>累计接受阈值</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-token-map</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to FR-Spec high-frequency token map</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FR-Spec 高频 token 映射的路径</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-attention-mode</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>"prefill"</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Attention mode for speculative operations (<code>"prefill"</code> or <code>"decode"</code>)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>投机操作的注意力模式（<code>"prefill"</code> 或 <code>"decode"</code>）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-attention-backend</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Override attention backend for the draft model</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>覆盖草稿模型的 Attention 后端</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-moe-runner-backend</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MoE runner backend for the draft model</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的 MoE runner 后端</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-moe-a2a-backend</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>None</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MoE all-to-all backend for the draft model</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的 MoE all-to-all 后端</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-draft-model-quantization</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Same as target</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Quantization for the draft model (<code>"unquant"</code> to disable)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>与目标相同</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>草稿模型的量化（<code>"unquant"</code> 表示禁用）</td>
     </tr>
   </tbody>
 </table>
 
-### Ngram-specific parameters
+### Ngram 专用参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -858,10 +872,10 @@ Below is a comprehensive list of all speculative decoding parameters available i
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
@@ -869,36 +883,36 @@ Below is a comprehensive list of all speculative decoding parameters available i
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-min-bfs-breadth</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>1</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Minimum BFS breadth</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最小 BFS 广度</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-max-bfs-breadth</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>10</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum BFS breadth</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最大 BFS 广度</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-match-type</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>str</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>"BFS"</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ngram tree-building mode: <code>"BFS"</code> for recency-based expansion or <code>"PROB"</code> for frequency-based expansion</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ngram 树构建模式：<code>"BFS"</code> 按最近性扩展，<code>"PROB"</code> 按频率扩展</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-max-trie-depth</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>18</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum suffix length stored and matched by the ngram trie</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>ngram trie 存储并匹配的最大后缀长度</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--speculative-ngram-capacity</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>int</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>10,000,000</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Cache capacity</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>缓存容量</td>
     </tr>
   </tbody>
 </table>
 
-### Environment variables
+### 环境变量
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -908,21 +922,21 @@ Below is a comprehensive list of all speculative decoding parameters available i
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>SGLANG_NGRAM_FORCE_GREEDY_VERIFY</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>False</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Force greedy verification for ngram decoding</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>强制 ngram 解码使用贪心验证</td>
     </tr>
   </tbody>
 </table>
 
-### Other related flags
+### 其他相关参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -931,55 +945,55 @@ Below is a comprehensive list of all speculative decoding parameters available i
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--enable-multi-layer-eagle</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Enable multi-layer EAGLE (auto-enabled for MiMoV2 and Step3p5 models)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>启用多层 EAGLE（MiMoV2 和 Step3p5 模型自动启用）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--enable-torch-compile</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Enable <code>torch.compile</code> for kernel-level optimizations</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>启用 <code>torch.compile</code> 进行 kernel 级优化</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--torch-compile-max-bs</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum batch size for <code>torch.compile</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>torch.compile</code> 的最大批大小</td>
     </tr>
   </tbody>
 </table>
 
 ---
 
-## OOM Troubleshooting
+## OOM 故障排查
 
 > [!WARNING]
-> **Out of Memory (OOM)?** Speculative decoding may increase GPU memory usage because the draft tree, CUDA graphs, and verification-related buffers consume additional VRAM. If you encounter OOM errors, try the following adjustments.
+> **遇到显存不足（OOM）？** 投机解码可能增加 GPU 显存占用，因为草稿树、CUDA 图以及与验证相关的缓冲区会消耗额外显存。如果遇到 OOM 错误，请尝试以下调整。
 
-### Step 1: Lower static memory fraction (most effective)
+### 第 1 步：降低静态内存比例（最有效）
 
 ```bash Command
 --mem-fraction-static 0.5   # when omitted, this value is auto-computed
 ```
 
-- `--mem-fraction-static` controls the memory budget for model weights + KV cache pool.
-- Lowering it directly increases dynamic headroom for activations and CUDA graph buffers.
-- If omitted, SGLang auto-estimates this value from other settings, and those auto settings can still be too aggressive for some workloads.
+- `--mem-fraction-static` 控制模型权重 + KV 缓存池的内存预算。
+- 降低它会直接增加激活值和 CUDA 图缓冲区的动态余量。
+- 如果省略，SGLang 会根据其他设置自动估算该值，而这些自动设置对某些工作负载可能仍然过于激进。
 
-### Step 2: Reduce CUDA graph batch size
+### 第 2 步：减小 CUDA 图批大小
 
 ```bash Command
 # Fewer CUDA graph captures = less memory reserved
 --cuda-graph-max-bs-decode 4   # or even 2 for tight memory situations
 ```
 
-- If omitted, `--cuda-graph-max-bs-decode` is auto-selected based on GPU memory and TP size, and can be much larger on high-memory GPUs.
+- 如果省略，`--cuda-graph-max-bs-decode` 会根据 GPU 显存和 TP 大小自动选择，在高显存 GPU 上可能大得多。
 
-### Step 3: Reduce draft tree size
+### 第 3 步：减小草稿树大小
 
-These three parameters directly control how much memory the draft tree consumes:
+这三个参数直接控制草稿树消耗多少内存：
 
 ```bash Command
 # Before (aggressive, high memory)
@@ -989,16 +1003,16 @@ These three parameters directly control how much memory the draft tree consumes:
 --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4
 ```
 
-### Step 4: Limit concurrent requests
+### 第 4 步：限制并发请求数
 
 ```bash Command
 # Fewer concurrent requests lowers in-flight load and can reduce OOM risk
 --max-running-requests 4
 ```
 
-### Quick OOM recovery recipe
+### 快速 OOM 恢复配方
 
-If you're hitting OOM and just want something that works, start with this minimal configuration and scale up:
+如果你遇到 OOM 且只想要一个能跑起来的方案，先从下面这个最小配置开始，再逐步加大：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -1014,19 +1028,19 @@ python3 -m sglang.launch_server \
     --log-level warning
 ```
 
-Then gradually increase `--speculative-num-draft-tokens`, `--speculative-eagle-topk`, and `--cuda-graph-max-bs-decode`. Increase `--mem-fraction-static` last, only after the run is stable.
+然后逐步增大 `--speculative-num-draft-tokens`、`--speculative-eagle-topk` 和 `--cuda-graph-max-bs-decode`。最后再增大 `--mem-fraction-static`，仅在运行稳定之后。
 
 ---
 
-## References
+## 参考资料
 
-EAGLE process is as follows:
+EAGLE 的流程如下：
 
-- Within EAGLE the draft model predicts the next feature vector, i.e. the last hidden state of the original LLM, using the feature sequence $(f_1, ..., f_k)$ and the token sequence $(t_2, ..., t_&#123;k+1&#125;)$.
-- The next token is then sampled from $p_&#123;k+2&#125;=\text&#123;LMHead&#125;(f_&#123;k+1&#125;)$. Afterwards, the two sequences are extended in a tree style—branching out multiple potential continuations, with the branching factor per step controlled by the `speculative_eagle_topk` parameter—to ensure a more coherent connection of context, and are given as input again.
-- In SGLang's EAGLE-2 implementation, the draft tree is expanded for the configured steps and then reranked to select the top `speculative_num_draft_tokens` final nodes as draft tokens.
-- EAGLE-3 removes the feature prediction objective, incorporates low and mid-layer features, and is trained in an on-policy manner.
+- 在 EAGLE 中，草稿模型利用特征序列 $(f_1, ..., f_k)$ 和 token 序列 $(t_2, ..., t_&#123;k+1&#125;)$ 预测下一个特征向量，即原 LLM 的最后隐藏状态。
+- 随后从 $p_&#123;k+2&#125;=\text&#123;LMHead&#125;(f_&#123;k+1&#125;)$ 中采样下一个 token。之后，这两条序列以树形方式扩展——每步扩展出多个可能的续写分支，分支因子由 `speculative_eagle_topk` 参数控制——以保证上下文衔接更连贯，并再次作为输入。
+- 在 SGLang 的 EAGLE-2 实现中，草稿树按配置的步数扩展，然后重新排序，选出排名靠前的 `speculative_num_draft_tokens` 个最终节点作为草稿 token。
+- EAGLE-3 移除了特征预测目标，纳入低层和中层特征，并以 on-policy 方式进行训练。
 
-This enhances drafting accuracy by operating on features instead of tokens for more regular inputs and by additionally passing tokens from the next timestep to reduce sampling randomness. For more details, see the [EAGLE-2](https://arxiv.org/abs/2406.16858) and [EAGLE-3](https://arxiv.org/abs/2503.01840) papers.
+这种方法在特征层面而非 token 层面操作，输入更规整，再加上传入下一时间步的 token 来降低采样随机性，从而提升草稿准确率。更多细节参见 [EAGLE-2](https://arxiv.org/abs/2406.16858) 和 [EAGLE-3](https://arxiv.org/abs/2503.01840) 论文。
 
-For guidance on how to train your own EAGLE model please see the [EAGLE repo](https://github.com/SafeAILab/EAGLE/tree/main?tab=readme-ov-file#train). For EAGLE-3 training specifically, check out [SpecForge](https://github.com/sgl-project/SpecForge), the SGLang team's training framework designed for EAGLE-3 speculative decoding models with seamless porting to SGLang serving. See the [SpecForge documentation](https://docs.sglang.ai/SpecForge/) and [blog post](https://lmsys.org/blog/2025-07-25-spec-forge) for details.
+关于如何训练你自己的 EAGLE 模型，参见 [EAGLE 仓库](https://github.com/SafeAILab/EAGLE/tree/main?tab=readme-ov-file#train)。针对 EAGLE-3 训练，可以关注 [SpecForge](https://github.com/sgl-project/SpecForge)——SGLang 团队为 EAGLE-3 投机解码模型设计的训练框架，可无缝移植到 SGLang 推理服务。详情参见 [SpecForge 文档](https://docs.sglang.ai/SpecForge/) 和[博客文章](https://lmsys.org/blog/2025-07-25-spec-forge)。

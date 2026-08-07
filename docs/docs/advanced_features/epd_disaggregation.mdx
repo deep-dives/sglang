@@ -1,29 +1,33 @@
 ---
-title: "EPD Disaggregation"
+title: "EPD 分离部署"
 metatags:
-    description: "SGLang EPD disaggregation: separate encoder, prefill, decode stages for VLM inference. Independent scaling, load balancing, three-tier architecture."
+    description: "SGLang EPD 分离部署：为 VLM 推理分离编码器（Encoder）、预填充、解码三个阶段。独立扩缩容、负载均衡、三层架构。"
 ---
-## Why and What is EPD Disaggregation?
+## 为什么需要 EPD 分离、它是什么？
 
-In modern Vision-Language Model (VLM) inference, request execution naturally decomposes into three distinct stages: Encoder, Prefill, and Decode.
-The Encoder stage performs vision preprocessing and ViT-based image encoding, which is highly compute-intensive but only required during request initialization. The Prefill stage processes the full multimodal input sequence to initialize the language model’s Key-Value (KV) cache, while the Decode stage is dominated by memory bandwidth and KV cache access for autoregressive token generation.
+在现代视觉语言模型（VLM）推理中，请求的执行天然可以分解为三个不同的阶段：编码（Encoder）、预填充（Prefill）和解码（Decode）。
+编码阶段负责视觉预处理和基于 ViT 的图像编码，计算密度很高，但只在请求初始化时需要。预填充阶段处理完整的多模态输入序列，初始化语言模型的键值（KV）缓存；解码阶段则主要由内存带宽和 KV 缓存访问主导，用于自回归 token 生成。
 
-Existing deployments typically colocate these stages within a unified execution engine, or at best apply Prefill–Decode (PD) disaggregation. However, such designs still tightly couple vision encoding with language prefill, leading to inefficient resource utilization, limited scalability for image-heavy workloads, and suboptimal scheduling under load.
+现有部署通常把这些阶段放在统一的执行引擎中，最多做到预填充-解码（PD）分离。然而，这类设计仍然把视觉编码与语言预填充紧耦合在一起，导致资源利用率低、图像密集型工作负载的可扩展性受限，以及负载下的调度不够优化。
 
-To address these challenges, we introduce Encoder–Prefill–Decode (EPD) Disaggregation in SGLang. EPD further separates vision encoding from language processing, enabling independent horizontal scaling of encoder servers, improved load balancing for multimodal requests, and seamless integration with existing PD disaggregation to form a fully decoupled three-tier inference architecture.
+为解决这些挑战，我们在 SGLang 中引入了编码-预填充-解码（EPD）分离部署。EPD 把视觉编码与语言处理进一步分离，使编码服务器可以独立水平扩展，改善多模态请求的负载均衡，并能与现有 PD 分离无缝集成，形成完全解耦的三层推理架构。
 
-### Usage
+<Note>
+💡 AI Infra 学习笔记：EPD 是 PD 分离在多模态上的延伸。ViT 编码是计算密集的「一次性」工作——每张图像只算一次，但图像多的请求会让编码成为瓶颈；而它与语言预填充耦合时，会挤占语言模型的批调度。把编码拆成独立服务后，图像密集负载可以单独加编码器实例，语言侧则按 PD 架构继续分离预填充/解码。关键点：编码输出（ViT embedding）要跨服务传输，于是就有了传输后端（transfer backend）和嵌入缓存这两类优化。
+</Note>
 
-You can launch a language-only model using `--language-only`, or an encoder-only model using `--encoder-only`.
-When launching a language-only model, you must additionally specify the encoder service endpoints via `--encoder-urls`.
+### 使用方法
 
-We support multiple encoder transfer backends, including zmq_to_scheduler, zmq_to_tokenizer, and mooncake (the default is zmq_to_scheduler). The backend can be selected using `--encoder-transfer-backend`.
+你可以用 `--language-only` 启动仅语言模型，或用 `--encoder-only` 启动仅编码器模型。
+启动仅语言模型时，你还需要通过 `--encoder-urls` 指定编码器服务的端点。
 
-### Encoder transfer with Mooncake
+我们支持多种编码器传输后端，包括 zmq_to_scheduler、zmq_to_tokenizer 和 mooncake（默认为 zmq_to_scheduler）。可以用 `--encoder-transfer-backend` 选择后端。
 
-`--encoder-transfer-backend mooncake` controls **how encoder outputs are transferred** between encoder and language/prefill services. It is an encoder transfer option and can be used independently of the global multimodal embedding cache.
+### 用 Mooncake 传输编码器输出
 
-Example:
+`--encoder-transfer-backend mooncake` 控制**编码器输出如何**在编码器与语言/预填充服务之间传输。它是编码器传输选项，可以独立于全局多模态嵌入缓存使用。
+
+示例：
 
 ```bash Command
 # encoder
@@ -42,28 +46,32 @@ python -m sglang.launch_server \
   --port 30002
 ```
 
-### Global multimodal embedding cache with Mooncake
+### 用 Mooncake 做全局多模态嵌入缓存
 
-SGLang also supports a Mooncake-backed **global multimodal embedding cache** for EPD workloads. When enabled on encoder servers, repeated image inputs can reuse previously computed ViT embeddings across instances instead of running the vision encoder again.
+SGLang 还为 EPD 工作负载支持基于 Mooncake 的**全局多模态嵌入缓存**。在编码器服务器上启用后，重复的图像输入可以跨实例复用之前算好的 ViT 嵌入，而不必重新运行视觉编码器。
 
-This feature is useful when:
+该特性在以下情况很有用：
 
-- the deployment serves repeated or overlapping image inputs,
-- encoder compute is the bottleneck, and
-- Mooncake is already available in the cluster.
+- 部署服务的是重复或部分重叠的图像输入，
+- 编码器计算是瓶颈，
+- 集群中已有可用的 Mooncake。
 
-At a high level, the encoder checks whether the image embedding already exists in Mooncake. Cache hits are prefetched from the global store, while misses are encoded normally and inserted into the cache in the background.
+概括来说，编码器会检查图像嵌入是否已存在于 Mooncake 中。命中时从全局存储预取；未命中时正常编码，并在后台插入缓存。
 
-To enable it:
+<Note>
+💡 AI Infra 学习笔记：把编码器拆成独立服务后，「编码输出怎么送到语言侧」和「重复图像怎么省算力」成为两个独立优化点：前者是编码器传输后端（zmq/mooncake，甚至 gRPC），后者是跨实例的多模态嵌入缓存。缓存命中判断依赖内容哈希或嵌入比对，命中即跳过 ViT 前向——这对图像重复度高的多模态应用（如文档问答、评测集）能显著降低成本。
+</Note>
 
-- install and configure Mooncake in the same way as other SGLang Mooncake integrations,
-- add `--enable-mm-global-cache` on the encoder server.
+启用方式：
 
-`--enable-mm-global-cache` controls **whether multimodal embeddings are looked up and stored in the global Mooncake cache**. It is separate from `--encoder-transfer-backend`, which only controls encoder output transport.
+- 与其他 SGLang Mooncake 集成相同的方式安装并配置 Mooncake，
+- 在编码器服务器上加上 `--enable-mm-global-cache`。
 
-For Mooncake deployment and configuration details, see [HiCache best practices](./hicache_best_practices#deployment-with-mooncake) and the [Mooncake backend README](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/mooncake_store/README.md).
+`--enable-mm-global-cache` 控制**多模态嵌入是否在全局 Mooncake 缓存中查找与存储**。它与 `--encoder-transfer-backend` 相互独立，后者只控制编码器输出的传输。
 
-Example:
+Mooncake 的部署与配置细节参见 [HiCache 最佳实践](./hicache_best_practices#deployment-with-mooncake) 和 [Mooncake 后端 README](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/mooncake_store/README.md)。
+
+示例：
 
 ```bash Command
 # Shared Mooncake configuration
@@ -87,16 +95,16 @@ python -m sglang.launch_server \
   --port 30002
 ```
 
-Notes:
+注意事项：
 
-- This cache is for **multimodal encoder embeddings**, not the language model KV cache.
-- The feature currently uses Mooncake as the shared backing store.
-- It can be enabled regardless of which `--encoder-transfer-backend` you use.
-- It is most relevant for EPD or encoder-disaggregated VLM deployments where the same images are likely to appear across requests or instances.
+- 该缓存针对**多模态编码器嵌入**，而非语言模型的 KV 缓存。
+- 该特性目前使用 Mooncake 作为共享后端存储。
+- 无论你使用哪个 `--encoder-transfer-backend`，都可以启用它。
+- 它最适用于 EPD 或编码器分离的 VLM 部署——这类场景中相同图像很可能出现在不同请求或实例中。
 
 #### Qwen VL
 
-- EP Disaggregation
+- EP 分离部署
 
 ```bash Command
 # encoder 0
@@ -120,7 +128,7 @@ python -m sglang.launch_server \
   --port 30002
 ```
 
-- EPD Disaggregation
+- EPD 分离部署
 
 ```bash Command
 # encoder 0
@@ -157,11 +165,10 @@ python -m sglang_router.launch_router \
 
 ```
 
-#### gRPC Encoder (EPD)
+#### gRPC 编码器（EPD）
 
-You can run the encoder as a gRPC server while keeping prefill/decode as HTTP.
-When using gRPC encoders, set `SGLANG_ENCODER_MM_RECEIVER_MODE=grpc` for the
-prefill process so it uses the gRPC receiver.
+你可以把编码器作为 gRPC 服务器运行，同时让预填充/解码保持 HTTP。
+使用 gRPC 编码器时，为预填充进程设置 `SGLANG_ENCODER_MM_RECEIVER_MODE=grpc`，使其使用 gRPC 接收端。
 
 ```bash Command
 # gRPC encoder

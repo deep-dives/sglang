@@ -1,12 +1,16 @@
 ---
-title: "Tool Parser"
+title: "工具解析器"
 metatags:
-    description: "SGLang function calling: tool parsers for DeepSeek, Llama, Qwen, Mistral, GLM, Kimi K2, and Apertus. OpenAI-compatible tool use API."
+    description: "SGLang 函数调用：面向 DeepSeek、Llama、Qwen、Mistral、GLM、Kimi K2 与 Apertus 的工具解析器。OpenAI 兼容的工具调用 API。"
 ---
-This guide demonstrates how to use SGLang’s [Function calling](https://platform.openai.com/docs/guides/function-calling) functionality.
+本指南演示如何使用 SGLang 的[函数调用](https://platform.openai.com/docs/guides/function-calling)功能。
+
+<Note>
+💡 AI Infra 学习笔记：工具调用（tool calling / function calling）让模型不只是生成文本，还能"决定调用哪个函数、填好参数"，输出被解析成结构化的函数调用（函数名 + 参数 JSON），再由应用去真正执行。它是 agent 系统的基础能力。难点在于：不同厂商的模型用不同的特殊 token 或格式标记工具调用（如 Qwen 的 `<tool_call>`、Llama 的 `[TOOL_CALLS]`、gpt-oss 的 `<call>` 频道标签），推理引擎必须为每种格式写一个"工具调用解析器"，把原始输出流准确切分成"普通文本"和"函数调用"。这通常是配合约束解码一起工作的，保证参数部分合法。
+</Note>
 
 
-## Currently supported parsers:
+## 目前支持的解析器：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -16,41 +20,41 @@ This guide demonstrates how to use SGLang’s [Function calling](https://platfor
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parser</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Supported Models</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>解析器</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>支持的模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`apertus2509`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Apertus 2509 (e.g., `swiss-ai/Apertus-{8,70}B-Instruct-2509`)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Tool calls are emitted as a JSON list of single-key objects: `<|tools_prefix|>[{"tool": {...}}]<|tools_suffix|>`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Apertus 2509（例如 `swiss-ai/Apertus-{8,70}B-Instruct-2509`）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>工具调用以单键对象组成的 JSON 列表形式输出：`<|tools_prefix|>[{"tool": {...}}]<|tools_suffix|>`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseekv3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-v3 (e.g., `deepseek-ai/DeepSeek-V3-0324`)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Recommend adding `--chat-template ./examples/chat_template/tool_chat_template_deepseekv3.jinja` to launch command.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-v3（例如 `deepseek-ai/DeepSeek-V3-0324`）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>建议在启动命令中加上 `--chat-template ./examples/chat_template/tool_chat_template_deepseekv3.jinja`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseekv31`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-V3.1 and DeepSeek-V3.2-Exp (e.g. `deepseek-ai/DeepSeek-V3.1`, `deepseek-ai/DeepSeek-V3.2-Exp`)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Recommend adding `--chat-template ./examples/chat_template/tool_chat_template_deepseekv31.jinja` (Or ..deepseekv32.jinja for DeepSeek-V3.2) to launch command.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-V3.1 和 DeepSeek-V3.2-Exp（例如 `deepseek-ai/DeepSeek-V3.1`、`deepseek-ai/DeepSeek-V3.2-Exp`）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>建议在启动命令中加上 `--chat-template ./examples/chat_template/tool_chat_template_deepseekv31.jinja`（DeepSeek-V3.2 用 ..deepseekv32.jinja）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deepseekv32`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-V3.2 (`deepseek-ai/DeepSeek-V3.2`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepSeek-V3.2（`deepseek-ai/DeepSeek-V3.2`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`glm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GLM series (e.g. `zai-org/GLM-4.6`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GLM 系列（例如 `zai-org/GLM-4.6`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`gpt-oss`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GPT-OSS (e.g., `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `lmsys/gpt-oss-120b-bf16`, `lmsys/gpt-oss-20b-bf16`)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>The gpt-oss tool parser filters out analysis channel events and only preserves normal text. This can cause the content to be empty when explanations are in the analysis channel. To work around this, complete the tool round by returning tool results as `role="tool"` messages, which enables the model to generate the final content.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>GPT-OSS（例如 `openai/gpt-oss-120b`、`openai/gpt-oss-20b`、`lmsys/gpt-oss-120b-bf16`、`lmsys/gpt-oss-20b-bf16`）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>gpt-oss 工具解析器会过滤掉 analysis 频道事件，只保留正常文本。当解释都在 analysis 频道里时，这可能导致 content 为空。变通办法：用 `role="tool"` 消息把工具结果返回给模型完成一轮工具调用，让模型生成最终内容。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`kimi_k2`</td>
@@ -59,32 +63,32 @@ This guide demonstrates how to use SGLang’s [Function calling](https://platfor
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`llama3`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Llama 3.1 / 3.2 / 3.3 (e.g. `meta-llama/Llama-3.1-8B-Instruct`, `meta-llama/Llama-3.2-1B-Instruct`, `meta-llama/Llama-3.3-70B-Instruct`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Llama 3.1 / 3.2 / 3.3（例如 `meta-llama/Llama-3.1-8B-Instruct`、`meta-llama/Llama-3.2-1B-Instruct`、`meta-llama/Llama-3.3-70B-Instruct`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`llama4`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Llama 4 (e.g. `meta-llama/Llama-4-Scout-17B-16E-Instruct`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Llama 4（例如 `meta-llama/Llama-4-Scout-17B-16E-Instruct`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`mistral`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Mistral (e.g. `mistralai/Mistral-7B-Instruct-v0.3`, `mistralai/Mistral-Nemo-Instruct-2407`, `mistralai/Mistral-7B-v0.3`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Mistral（例如 `mistralai/Mistral-7B-Instruct-v0.3`、`mistralai/Mistral-Nemo-Instruct-2407`、`mistralai/Mistral-7B-v0.3`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`pythonic`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Llama-3.2 / Llama-3.3 / Llama-4</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Model outputs function calls as Python code. Requires `--tool-call-parser pythonic` and is recommended to use with a specific chat template.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>模型把函数调用输出为 Python 代码。需要 `--tool-call-parser pythonic`，并建议配合特定的对话模板使用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Qwen series (e.g. `Qwen/Qwen3-Next-80B-A3B-Instruct`, `Qwen/Qwen3-VL-30B-A3B-Thinking`) except Qwen3-Coder</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Qwen 系列（例如 `Qwen/Qwen3-Next-80B-A3B-Instruct`、`Qwen/Qwen3-VL-30B-A3B-Thinking`），Qwen3-Coder 除外</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`qwen3_coder`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Qwen3-Coder (e.g. `Qwen/Qwen3-Coder-30B-A3B-Instruct`)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Qwen3-Coder（例如 `Qwen/Qwen3-Coder-30B-A3B-Instruct`）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}></td>
     </tr>
     <tr>
@@ -97,10 +101,10 @@ This guide demonstrates how to use SGLang’s [Function calling](https://platfor
 
 
 
-## OpenAI Compatible API
+## OpenAI 兼容 API
 
 
-### Launching the Server
+### 启动服务端
 
 
 
@@ -116,11 +120,11 @@ server_process, port = launch_server_cmd(
 wait_for_server(f"http://localhost:{port}")
 ```
 
-Note that `--tool-call-parser` defines the parser used to interpret responses.
+注意，`--tool-call-parser` 定义了用来解释响应的解析器。
 
 
-### Define Tools for Function Call
-Below is a Python snippet that shows how to define a tool as a dictionary. The dictionary includes a tool name, a description, and property defined Parameters.
+### 为函数调用定义工具
+下面是一段 Python 代码，演示如何把工具定义成一个字典。字典包含工具名称、描述和定义的参数属性。
 
 
 
@@ -157,7 +161,7 @@ tools = [
 ]
 ```
 
-### Define Messages
+### 定义消息
 
 
 
@@ -174,7 +178,7 @@ def get_messages():
 messages = get_messages()
 ```
 
-### Initialize the Client
+### 初始化客户端
 
 
 
@@ -184,7 +188,7 @@ client = OpenAI(api_key="None", base_url=f"http://0.0.0.0:{port}/v1")
 model_name = client.models.list().data[0].id
 ```
 
-###  Non-Streaming Request
+### 非流式请求
 
 
 
@@ -207,8 +211,8 @@ print_highlight("==== tool_calls ====")
 print_highlight(response_non_stream.choices[0].message.tool_calls)
 ```
 
-#### Handle Tools
-When the engine determines it should call a particular tool, it will return arguments or partial arguments through the response. You can parse these arguments and later invoke the tool accordingly.
+#### 处理工具
+当引擎决定应该调用某个工具时，它会通过响应返回参数或部分参数。你可以解析这些参数，然后据此调用对应的工具。
 
 
 
@@ -222,7 +226,7 @@ print_highlight(f"Final streamed function call name: {name_non_stream}")
 print_highlight(f"Final streamed function call arguments: {arguments_non_stream}")
 ```
 
-### Streaming Request
+### 流式请求
 
 
 
@@ -256,8 +260,8 @@ for tool_call in tool_calls:
     print_highlight(tool_call)
 ```
 
-#### Handle Tools
-When the engine determines it should call a particular tool, it will return arguments or partial arguments through the response. You can parse these arguments and later invoke the tool accordingly.
+#### 处理工具
+当引擎决定应该调用某个工具时，它会通过响应返回参数或部分参数。你可以解析这些参数，然后据此调用对应的工具。
 
 
 
@@ -276,7 +280,7 @@ full_arguments = "".join(arguments)
 print_highlight(f"streamed function call arguments: {full_arguments}")
 ```
 
-### Define a Tool Function
+### 定义一个工具函数
 
 
 
@@ -293,7 +297,7 @@ available_tools = {"get_current_weather": get_current_weather}
 ```
 
 
-### Execute the Tool
+### 执行工具
 
 
 
@@ -319,7 +323,7 @@ messages.append(
 print_highlight(f"Updated message history: {messages}")
 ```
 
-### Send Results Back to Model
+### 把结果送回模型
 
 
 
@@ -339,7 +343,7 @@ print_highlight("==== Text ====")
 print_highlight(final_response.choices[0].message.content)
 ```
 
-## Native API and SGLang Runtime (SRT)
+## 原生 API 与 SGLang 运行时（SRT）
 
 
 
@@ -394,7 +398,7 @@ print("function arguments: ", function_call_response_json["calls"][0]["parameter
 terminate_process(server_process)
 ```
 
-## Offline Engine API
+## 离线引擎 API
 
 
 
@@ -461,20 +465,24 @@ for call in calls:
 llm.shutdown()
 ```
 
-## Tool Choice Mode
+## 工具选择模式（Tool Choice）
 
-SGLang supports OpenAI's `tool_choice` parameter to control when and which tools the model should call. This feature is implemented using EBNF (Extended Backus-Naur Form) grammar to ensure reliable tool calling behavior.
+SGLang 支持 OpenAI 的 `tool_choice` 参数，用来控制模型何时调用、调用哪些工具。该特性用 EBNF（扩展巴科斯-瑙尔范式）文法实现，以保证可靠的工具调用行为。
 
-### Supported Tool Choice Options
+<Note>
+💡 AI Infra 学习笔记：`tool_choice` 是工具调用 API 里的"调度开关"：`auto` 让模型自己决定、`required` 强制至少调用一个工具、指定函数名则强制调用某个函数。SGLang 的实现方式是把它编译进 EBNF 文法——例如 `required` 就等价于约束"输出必须以某个工具调用开头/必须包含工具调用"，靠约束解码而不是"提示词+碰运气"来保证。这也是"约束解码不只用于 JSON 输出，还能控制 agent 行为"的典型例子。注意不同语法后端对 tool_choice 的支持程度不同，目前只有默认的 Xgrammar 后端完整支持。
+</Note>
 
-- **`tool_choice="required"`**: Forces the model to call at least one tool
-- **`tool_choice={"type": "function", "function": {"name": "specific_function"}}`**: Forces the model to call a specific function
+### 支持的 tool_choice 选项
 
-### Backend Compatibility
+- **`tool_choice="required"`**：强制模型至少调用一个工具
+- **`tool_choice={"type": "function", "function": {"name": "specific_function"}}`**：强制模型调用某个具体函数
 
-Tool choice is fully supported with the **Xgrammar backend**, which is the default grammar backend (`--grammar-backend xgrammar`). However, it may not be fully supported with other backends such as `outlines`.
+### 后端兼容性
 
-### Example: Required Tool Choice
+Tool choice 在 **Xgrammar 后端**上完整支持，它是默认的语法后端（`--grammar-backend xgrammar`）。但其他后端（如 `outlines`）可能支持不完整。
+
+### 示例：required 工具选择
 
 
 
@@ -540,7 +548,7 @@ print("Content:", response_required.choices[0].message.content)
 print("Tool calls:", response_required.choices[0].message.tool_calls)
 ```
 
-### Example: Specific Function Choice
+### 示例：指定函数选择
 
 
 
@@ -578,32 +586,32 @@ if response_specific.choices[0].message.tool_calls:
 terminate_process(server_process_tool_choice)
 ```
 
-## Pythonic Tool Call Format (Llama-3.2 / Llama-3.3 / Llama-4)
+## Pythonic 工具调用格式（Llama-3.2 / Llama-3.3 / Llama-4）
 
-Some Llama models (such as Llama-3.2-1B, Llama-3.2-3B, Llama-3.3-70B, and Llama-4) support a "pythonic" tool call format, where the model outputs function calls as Python code, e.g.:
+一些 Llama 模型（如 Llama-3.2-1B、Llama-3.2-3B、Llama-3.3-70B 和 Llama-4）支持"pythonic"工具调用格式，模型把函数调用输出为 Python 代码，例如：
 
 ```python Example
 [get_current_weather(city="San Francisco", state="CA", unit="celsius")]
 ```
 
-- The output is a Python list of function calls, with arguments as Python literals (not JSON).
-- Multiple tool calls can be returned in the same list:
+- 输出是一个 Python 函数调用列表，参数是 Python 字面量（不是 JSON）。
+- 同一个列表里可以返回多个工具调用：
 ```python Example
 [get_current_weather(city="San Francisco", state="CA", unit="celsius"),
  get_current_weather(city="New York", state="NY", unit="fahrenheit")]
 ```
 
-For more information, refer to Meta’s documentation on  [Zero shot function calling](https://github.com/meta-llama/llama-models/blob/main/models/llama4/prompt_format.md#zero-shot-function-calling---system-message).
+更多信息参见 Meta 关于 [Zero shot function calling](https://github.com/meta-llama/llama-models/blob/main/models/llama4/prompt_format.md#zero-shot-function-calling---system-message) 的文档。
 
-Note that this feature is still under development on Blackwell.
+注意，该特性在 Blackwell 上仍在开发中。
 
-### How to enable
-- Launch the server with `--tool-call-parser pythonic`
-- You may also specify --chat-template with the improved template for the model (e.g., `--chat-template=examples/chat_template/tool_chat_template_llama4_pythonic.jinja`).
-This is recommended because the model expects a special prompt format to reliably produce valid pythonic tool call outputs. The template ensures that the prompt structure (e.g., special tokens, message boundaries like `<|eom|>`, and function call delimiters) matches what the model was trained or fine-tuned on. If you do not use the correct chat template, tool calling may fail or produce inconsistent results.
+### 如何启用
+- 用 `--tool-call-parser pythonic` 启动服务端
+- 也可以用改进过的模板给模型指定 --chat-template（例如 `--chat-template=examples/chat_template/tool_chat_template_llama4_pythonic.jinja`）。
+推荐这样做，因为模型期望特定的提示词格式才能可靠地产出合法的 pythonic 工具调用输出。该模板保证提示词结构（例如特殊 token、`<|eom|>` 这类消息边界、函数调用定界符）与模型训练/微调时一致。如果不用正确的对话模板，工具调用可能失败或产生不一致的结果。
 
-#### Forcing Pythonic Tool Call Output Without a Chat Template
-If you don't want to specify a chat template, you must give the model extremely explicit instructions in your messages to enforce pythonic output. For example, for `Llama-3.2-1B-Instruct`, you need:
+#### 不使用对话模板强制 pythonic 输出
+如果不想指定对话模板，就必须在消息里给模型极其明确的指令来强制 pythonic 输出。例如，对 `Llama-3.2-1B-Instruct`，你需要：
 
 
 
@@ -723,12 +731,12 @@ for tool_call in tool_calls:
 terminate_process(server_process)
 ```
 
-> **Note:**
-> The model may still default to JSON if it was heavily finetuned on that format. Prompt engineering (including examples) is the only way to increase the chance of pythonic output if you are not using a chat template.
+> **注意：**
+> 如果模型在 JSON 格式上被大量微调过，它可能仍然默认输出 JSON。如果不用对话模板，提示词工程（包括示例）是提高 pythonic 输出概率的唯一办法。
 
 
-## How to support a new model?
-1. Update the TOOLS_TAG_LIST in sglang/srt/function_call_parser.py with the model’s tool tags. Currently supported tags include:
+## 如何支持新模型？
+1. 在 sglang/srt/function_call_parser.py 中更新 TOOLS_TAG_LIST，加入该模型的工具标签。目前支持的标签包括：
 ```text Output
 	TOOLS_TAG_LIST = [
 	    “<|plugin|>“,
@@ -738,8 +746,8 @@ terminate_process(server_process)
 	    “[TOOL_CALLS]”
 	]
 ```
-2. Create a new detector class in sglang/srt/function_call_parser.py that inherits from BaseFormatDetector. The detector should handle the model’s specific function call format. For example:
+2. 在 sglang/srt/function_call_parser.py 中创建一个继承 BaseFormatDetector 的新检测器类。检测器应处理该模型特有的函数调用格式。例如：
 ```text Output
     class NewModelDetector(BaseFormatDetector):
 ```
-3. Add the new detector to the MultiFormatParser class that manages all the format detectors.
+3. 把新检测器加入管理所有格式检测器的 MultiFormatParser 类。

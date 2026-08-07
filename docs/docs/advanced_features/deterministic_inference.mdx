@@ -1,31 +1,34 @@
 ---
-title: "Deterministic Inference"
+title: "确定性推理"
 metatags:
-    description: "SGLang deterministic inference: consistent outputs for RL training, testing, and production. Supports FlashInfer, FA3, Triton backends with CUDA Graph."
+    description: "SGLang 确定性推理：为 RL 训练、测试与生产提供一致的输出。支持 FlashInfer、FA3、Triton 后端并兼容 CUDA 图。"
 ---
-## Why Deterministic Inference Matters
+## 为什么确定性推理重要
 
-Deterministic inference ensures consistent LLM outputs across runs, which is critical for:
-- **Reinforcement Learning**: Ensures consistent logprobs across runs, reducing stochastic noise and making RL training more stable, reproducible, and debuggable.
-- **Testing & Debugging**: Enables reproducible validation
-- **Production**: Improves reliability and user experience
+确定性推理保证 LLM 输出在多次运行之间保持一致，这对以下场景至关重要：
+- **强化学习**：保证多次运行之间的 logprob 一致，减少随机噪声，让 RL 训练更稳定、更可复现、更易调试。
+- **测试与调试**：支持可复现的验证
+- **生产环境**：提升可靠性与用户体验
 
-Even with `temperature=0`, standard LLM inference can produce different outputs due to dynamic batching and varying reduction orders in GPU kernels.
+即使在 `temperature=0` 下，标准 LLM 推理也可能因为动态批处理以及 GPU kernel 中不同的归约顺序而产生不同输出。
 
-## The Root Cause of Non-Determinism
+<Note>
+💡 AI Infra 学习笔记：很多人以为 `temperature=0` 就等于确定性，其实不是——`temperature=0` 只是采样策略变成贪心，但浮点运算的顺序仍然受批大小影响。动态批处理下批大小一直在变，kernel 的归约顺序也随之变化，而浮点加法不满足结合律（`(a + b) + c ≠ a + (b + c)`），微小的舍入差异就会导致不同的 token 被选中。这是推理引擎"看起来应该确定、实际不确定"的经典根源。
+</Note>
 
-The main source is **varying batch sizes**. Different batch sizes cause GPU kernels to split reduction operations differently, leading to different addition orders. Due to floating-point non-associativity (`(a + b) + c ≠ a + (b + c)`), this produces different results even for identical inputs.
+## 非确定性的根本原因
 
+主要来源是**不断变化的批大小**。不同的批大小会让 GPU kernel 以不同方式拆分归约操作，导致加法顺序不同。由于浮点数不满足结合律（`(a + b) + c ≠ a + (b + c)`），即使输入完全相同，也会产生不同结果。
 
-## SGLang's Solution
+## SGLang 的解决方案
 
-Building on [Thinking Machines Lab's batch-invariant operators](https://github.com/thinking-machines-lab/batch_invariant_ops), SGLang achieves fully deterministic inference while maintaining compatibility with chunked prefill, CUDA graphs, radix cache, and non-greedy sampling. The development roadmap for deterministic inference features can be found in this [issue](https://github.com/sgl-project/sglang/issues/10278).
+基于 [Thinking Machines Lab 的批不变算子](https://github.com/thinking-machines-lab/batch_invariant_ops)，SGLang 在保持与分块预填充、CUDA 图、Radix 缓存以及非贪心采样兼容的同时，实现了完全确定性的推理。确定性推理特性的开发路线图见这个 [issue](https://github.com/sgl-project/sglang/issues/10278)。
 
-### Supported Backends
+### 支持的后端
 
-Deterministic inference is only supported with the following three attention backends: **FlashInfer**, **FlashAttention 3 (FA3)**, and **Triton**.
+确定性推理只支持以下三种 Attention 后端：**FlashInfer**、**FlashAttention 3（FA3）** 和 **Triton**。
 
-The following table shows feature compatibility for deterministic inference across different attention backends:
+下表展示了确定性推理在不同 Attention 后端下的特性兼容性：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -37,43 +40,43 @@ The following table shows feature compatibility for deterministic inference acro
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Attention Backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>CUDA Graph</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Chunked Prefill</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Radix Cache</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Non-greedy Sampling (Temp > 0)</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Attention 后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>CUDA 图</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>分块预填充</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Radix 缓存</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>非贪心采样（Temp > 0）</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**FlashInfer**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>❌ 不支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**FlashAttention 3 (FA3)**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Triton**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ Yes</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>✅ 支持</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>✅ 支持</td>
     </tr>
   </tbody>
 </table>
 
-## Usage
+## 用法
 
-### Basic Usage
+### 基本用法
 
-Enable deterministic inference by adding the `--enable-deterministic-inference` flag:
+加上 `--enable-deterministic-inference` 参数即可启用确定性推理：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -82,7 +85,7 @@ python3 -m sglang.launch_server \
     --enable-deterministic-inference
 ```
 
-### Server Arguments
+### 服务端参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -92,26 +95,26 @@ python3 -m sglang.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type/Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型 / 默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--enable-deterministic-inference`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>flag; default: disabled</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Enable deterministic inference with batch-invariant operations</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>flag；默认：禁用</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>用批不变（batch-invariant）算子启用确定性推理</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--attention-backend`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>string; default: fa3</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Choose attention backend (flashinfer, fa3, or triton)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>string；默认：fa3</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>选择 Attention 后端（flashinfer、fa3 或 triton）</td>
     </tr>
   </tbody>
 </table>
 
-### Example Configurations
+### 示例配置
 
 #### Qwen3-8B
 ```bash Command
@@ -121,7 +124,7 @@ python3 -m sglang.launch_server \
     --enable-deterministic-inference
 ```
 
-#### Llama Models
+#### Llama 模型
 ```bash Command
 python3 -m sglang.launch_server \
     --model-path meta-llama/Llama-3.1-8B-Instruct \
@@ -129,7 +132,7 @@ python3 -m sglang.launch_server \
     --enable-deterministic-inference
 ```
 
-#### Qwen3-30B-A3B (MoE Model)
+#### Qwen3-30B-A3B（MoE 模型）
 ```bash Command
 python3 -m sglang.launch_server \
     --model-path Qwen/Qwen3-30B-A3B \
@@ -137,13 +140,13 @@ python3 -m sglang.launch_server \
     --enable-deterministic-inference
 ```
 
-### Deterministic Inference with Non-Greedy Sampling (Temperature > 0)
+### 非贪心采样（Temperature > 0）下的确定性推理
 
-SGLang supports deterministic inference even with non-greedy sampling by using sampling seeds. This is particularly useful for reinforcement learning scenarios like GRPO (Group Relative Policy Optimization) where you need multiple diverse but reproducible responses.
+通过使用采样种子（sampling seed），SGLang 即使在非贪心采样下也能支持确定性推理。这对 GRPO（Group Relative Policy Optimization）这类强化学习场景特别有用——你需要在同一个提示词上生成多个多样但可复现的响应。
 
-#### Default Behavior
+#### 默认行为
 
-By default, SGLang uses a sampling seed of `42` for reproducible sampling:
+默认情况下，SGLang 使用采样种子 `42` 实现可复现的采样：
 
 ```python Example
 import requests
@@ -162,9 +165,9 @@ print(response.json())
 # This will always produce the same response across runs
 ```
 
-#### Generating Multiple Reproducible Responses
+#### 生成多个可复现的响应
 
-To sample different responses from the same prompt while maintaining reproducibility (e.g., for GRPO training), provide different sampling seeds in your requests:
+要针对同一个提示词采样出不同的响应、同时保持可复现性（例如用于 GRPO 训练），请在请求中提供不同的采样种子：
 
 ```python Example
 import requests
@@ -191,15 +194,19 @@ for seed in sampling_seeds:
 # Using the same seed will always produce the same response
 ```
 
-This approach ensures that:
-- Different seeds produce diverse responses
-- The same seed always produces the same response across different runs
-- Results are reproducible for debugging and evaluation
+<Note>
+💡 AI Infra 学习笔记：确定性采样为什么对 RL 这么重要？GRPO 之类的算法要对同一提示词采样多个响应并计算相对奖励，如果采样不可复现，同一份代码在不同时间跑出来的训练数据就不同，梯度也随之漂移，实验对比和 bug 定位都会非常痛苦。用种子把随机性"钉死"后，多样性（不同种子）与可复现性（同一种子）可以同时满足。
+</Note>
+
+这种方式保证了：
+- 不同种子产生多样化的响应
+- 同一种子在多次运行之间总是产生相同响应
+- 结果可复现，便于调试与评估
 
 
-## Verification
+## 验证
 
-Run deterministic tests to verify consistent outputs:
+运行确定性测试来验证输出一致性：
 
 ```bash Command
 # Single test: same prompt, varying batch sizes
@@ -212,4 +219,4 @@ python3 -m sglang.test.test_deterministic --test-mode prefix --n-trials 50
 python3 -m sglang.test.test_deterministic --test-mode radix_cache
 ```
 
-Expected result: All tests should show `Unique samples: 1` (perfectly deterministic).
+预期结果：所有测试都应显示 `Unique samples: 1`（完全确定性）。

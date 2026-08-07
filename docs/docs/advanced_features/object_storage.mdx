@@ -1,30 +1,34 @@
 ---
-title: "Loading Models from Object Storage"
+title: "从对象存储加载模型"
 metatags:
-    description: "Load SGLang models directly from S3, Google Cloud Storage, Azure Blob, and S3-compatible object storage with runai_streamer."
+    description: "用 runai_streamer 直接从 S3、Google Cloud Storage、Azure Blob 以及兼容 S3 的对象存储加载 SGLang 模型。"
 ---
 
-SGLang can load models directly from object storage without a full local download. It uses the `runai_streamer` load format to stream model weights from cloud storage, reducing startup time and local storage requirements.
+SGLang 可以直接从对象存储加载模型，无需在本地完整下载。它使用 `runai_streamer` 加载格式从云端存储流式读取模型权重，从而减少启动时间和本地存储占用。
 
-## Overview
+<Note>
+💡 AI Infra 学习笔记：模型权重加载"流式化"是解决大模型冷启动慢的另一条路——不再把几十 GB 权重先全部下载到本地再加载，而是边下载边用。这样本地机器（或临时弹出的实例）几乎不需要预留磁盘空间，也从"等下载完"变成了"边下边算"，启动时间大幅缩短。runai_model_streamer 就是这类方案的实现。
+</Note>
 
-When loading models from object storage, SGLang uses a two-phase approach:
+## 概览
 
-1. **Metadata Download** (once, before process launch): Configuration files and tokenizer files are downloaded to a local cache
-2. **Weight Streaming** (lazy, during model loading): Model weights are streamed directly from object storage as needed
+从对象存储加载模型时，SGLang 采用两阶段方案：
 
-## Supported Storage Backends
+1. **元数据下载**（进程启动前，一次性）：配置文件与分词器文件会下载到本地缓存
+2. **权重流式读取**（模型加载期间，惰性）：模型权重按需直接从对象存储流式读取
 
-1. **Amazon S3**: `s3://bucket-name/path/to/model/`
-2. **Google Cloud Storage**: `gs://bucket-name/path/to/model/`
-3. **Azure Blob**: `az://some-azure-container/path/`
-4. **S3 compatible**: `s3://bucket-name/path/to/model/`
+## 支持的存储后端
 
-## Quick Start
+1. **Amazon S3**：`s3://bucket-name/path/to/model/`
+2. **Google Cloud Storage**：`gs://bucket-name/path/to/model/`
+3. **Azure Blob**：`az://some-azure-container/path/`
+4. **S3 兼容存储**：`s3://bucket-name/path/to/model/`
 
-### Basic Usage
+## 快速上手
 
-Simply provide an object storage URI as the model path:
+### 基本用法
+
+直接把对象存储 URI 作为模型路径即可：
 
 ```bash
 # S3
@@ -38,14 +42,14 @@ python -m sglang.launch_server \
   --load-format runai_streamer
 ```
 
-**Note**: The `--load-format runai_streamer` is automatically detected when using object storage URIs, so you can omit it:
+**注意**：使用对象存储 URI 时会自动识别出 `--load-format runai_streamer`，所以你可以省略它：
 
 ```bash
 python -m sglang.launch_server \
   --model-path s3://my-bucket/models/llama-3-8b/
 ```
 
-### With Tensor Parallelism
+### 结合张量并行
 
 ```bash
 python -m sglang.launch_server \
@@ -54,11 +58,11 @@ python -m sglang.launch_server \
   --model-loader-extra-config '{"distributed": true}'
 ```
 
-## Configuration
+## 配置
 
-### Load Format
+### 加载格式
 
-The `runai_streamer` load format is designed for object storage, SSDs, and shared filesystems.
+`runai_streamer` 加载格式专为对象存储、SSD 与共享文件系统设计。
 
 ```bash
 python -m sglang.launch_server \
@@ -66,9 +70,9 @@ python -m sglang.launch_server \
   --load-format runai_streamer
 ```
 
-### Extended Configuration Parameters
+### 扩展配置参数
 
-Use `--model-loader-extra-config` to pass additional configuration as a JSON string:
+用 `--model-loader-extra-config` 以 JSON 字符串传入额外配置：
 
 ```bash
 python -m sglang.launch_server \
@@ -80,7 +84,7 @@ python -m sglang.launch_server \
   }'
 ```
 
-#### Available Parameters
+#### 可用参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -91,39 +95,39 @@ python -m sglang.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>distributed</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>bool</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Enable distributed streaming for multi-GPU setups. Automatically set to <code>true</code> for object storage paths on CUDA-like devices.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Auto-detected</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>为多 GPU 环境启用分布式流式加载。在 CUDA 类设备上使用对象存储路径时，会自动设为 <code>true</code>。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>自动检测</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>concurrency</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Number of concurrent download streams. Higher values can improve throughput for large models.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>并发下载流的数量。对于大模型，调高该值有助于提升吞吐。</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>4</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>memory_limit</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>int</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Memory limit (in bytes) for the streaming buffer.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>System-dependent</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>流式缓冲区的内存上限（字节）。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>取决于系统</td>
     </tr>
   </tbody>
 </table>
 
-## Performance Considerations
+## 性能注意事项
 
-### Distributed Streaming
+### 分布式流式加载
 
-For multi-GPU setups, enable distributed streaming to parallelize weight loading across processes:
+对于多 GPU 环境，启用分布式流式加载可以在各进程间并行加载权重：
 
 ```bash
 python -m sglang.launch_server \
@@ -132,11 +136,15 @@ python -m sglang.launch_server \
   --model-loader-extra-config '{"distributed": true}'
 ```
 
-## Limitations
+<Note>
+💡 AI Infra 学习笔记：多 GPU 并行时，如果每个进程都各自从对象存储下载全部权重，等于白白浪费带宽。分布式流式加载让每个进程只下载自己 TP 分片需要的那部分权重——既省带宽，也顺带验证了"权重加载也要并行化"的思路。`concurrency` 控制同时建立的下载流数量，是带宽充足时压吞吐的关键参数。
+</Note>
 
-- **Supported formats**: Only the `.safetensors` weight format is supported.
-- **Supported devices**: Distributed streaming is supported on CUDA-like devices; otherwise it falls back to non-distributed streaming.
+## 限制
 
-## See Also
+- **支持的格式**：只支持 `.safetensors` 权重格式。
+- **支持的设备**：分布式流式加载只在 CUDA 类设备上受支持；其他设备会回退到非分布式流式加载。
 
-- [Runai model streamer documentation](https://github.com/run-ai/runai-model-streamer)
+## 另请参阅
+
+- [Runai model streamer 文档](https://github.com/run-ai/runai-model-streamer)

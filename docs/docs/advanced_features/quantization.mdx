@@ -1,37 +1,35 @@
 ---
-title: "Quantization"
+title: "量化"
 metatags:
-    description: "SGLang quantization: FP8, FP4, AWQ, GPTQ, ModelOpt, torchao. Offline and online quantization methods for efficient LLM inference."
+    description: "SGLang 量化：FP8、FP4、AWQ、GPTQ、ModelOpt、torchao。高效 LLM 推理的离线与在线量化方法。"
 ---
-SGLang supports various quantization methods, including offline quantization and online dynamic quantization.
+SGLang 支持多种量化方法，包括离线量化和在线动态量化。
 
-Offline quantization loads pre-quantized model weights directly during inference. This is required for quantization methods
-such as GPTQ and AWQ, which collect and pre-compute various statistics from the original weights using the calibration dataset.
+离线量化是推理时直接加载预量化好的模型权重。GPTQ 和 AWQ 这类量化方法必须采用离线量化——它们需要用校准数据集从原始权重中收集并预先计算各种统计量。
 
-Online quantization dynamically computes scaling parameters—such as the maximum/minimum values of model weights—during runtime.
-Like NVIDIA FP8 training's [delayed scaling](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/examples/fp8_primer.html#Mixed-precision-training-with-FP8) mechanism, online quantization calculates the appropriate scaling factors
-on-the-fly to convert high-precision weights into a lower-precision format.
+在线量化则是在运行时动态计算缩放参数（例如模型权重的最大值/最小值）。与 NVIDIA FP8 训练中的[延迟缩放](https://docs.nvidia.com/deeplearning/transformer-engine/user-guide/examples/fp8_primer.html#Mixed-precision-training-with-FP8)机制类似，在线量化会即时计算合适的缩放因子，把高精度权重转换成低精度格式。
 
-**Note: For better performance, usability and convenience, offline quantization is recommended over online quantization.**
+<Note>
+💡 AI Infra 学习笔记：量化是把模型的权重和激活值从高精度（如 FP16/BF16）压缩到低精度（如 FP8、INT4），用来省显存、提升访存带宽和计算吞吐。LLM 推理通常是"访存带宽瓶颈"而非"算力瓶颈"，权重越瘦，解码阶段每个 token 要搬运的字节越少，延迟越低、单位显存能装的模型越大。主流方法中，GPTQ/AWQ 属于离线量化（用校准数据预计算缩放因子，质量更可控、启动快），FP8 动态量化属于在线量化（运行时算缩放因子，省事但启动慢）。INT4 相比 FP8 能进一步减半显存，但精度损失与 kernel 支持复杂度更高。
+</Note>
 
-If you use a pre-quantized model, **do not add `--quantization` to enable online quantization at the same time**.
-For popular pre-quantized models, please visit [Unsloth](https://huggingface.co/unsloth), [NVIDIA ModelOpt](https://huggingface.co/collections/nvidia/inference-optimized-checkpoints-with-model-optimizer)
-or [NeuralMagic](https://huggingface.co/collections/neuralmagic) collections on HF for some
-popular quality validated quantized models. Quantized models must be validated via benchmarks post-quantization
-to guard against abnormal quantization loss regressions.
+**注意：考虑到性能、易用性和便利性，推荐优先使用离线量化，而不是在线量化。**
 
-## Platform Compatibility
+如果使用预量化模型，**不要同时添加 `--quantization` 去开启在线量化**。
+想找流行的预量化模型，可以访问 Hugging Face 上的 [Unsloth](https://huggingface.co/unsloth)、[NVIDIA ModelOpt](https://huggingface.co/collections/nvidia/inference-optimized-checkpoints-with-model-optimizer) 或 [NeuralMagic](https://huggingface.co/collections/neuralmagic) 集合，里面有一些经过质量验证的热门量化模型。量化后的模型必须通过基准测试验证，以防范异常的量化质量回退。
 
-The following table summarizes quantization method support across NVIDIA and AMD GPUs, Ascend NPUs.
+## 平台兼容性
+
+下表汇总了 NVIDIA GPU、AMD GPU、Ascend NPU 上的量化方法支持情况。
 
 <table>
   <thead>
     <tr>
-      <th>Method</th>
-      <th>NVIDIA GPUs</th>
-      <th>AMD GPUs (MI300X/MI325X/MI350X)</th>
-      <th>Ascend NPUs (A2/A3/A5)</th>
-      <th>Notes</th>
+      <th>方法</th>
+      <th>NVIDIA GPU</th>
+      <th>AMD GPU（MI300X/MI325X/MI350X）</th>
+      <th>Ascend NPU（A2/A3/A5）</th>
+      <th>备注</th>
     </tr>
   </thead>
   <tbody>
@@ -40,35 +38,35 @@ The following table summarizes quantization method support across NVIDIA and AMD
       <td>Yes</td>
       <td>Yes</td>
       <td>WIP</td>
-      <td>Aiter or Triton backend on AMD</td>
+      <td>AMD 上使用 Aiter 或 Triton 后端</td>
     </tr>
     <tr>
       <td><code>mxfp4</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>Yes (A5)</td>
-      <td>On GPU: requires CDNA3/CDNA4 with MXFP support (uses Aiter). On Ascend NPU (A5): W4A4 MXFP4 for Qwen3 dense LLM (MXFP4 weights + activations) — online uses dual-level MXFP4, offline <code>W4A4_MXFP4</code> checkpoints (single-level) are auto-detected via <code>modelslim</code></td>
+      <td>GPU 上：需要支持 MXFP 的 CDNA3/CDNA4（使用 Aiter）。Ascend NPU（A5）上：面向 Qwen3 稠密 LLM 的 W4A4 MXFP4（MXFP4 权重 + 激活值）——在线方式使用双层 MXFP4，离线 <code>W4A4_MXFP4</code> 检查点（单层）会通过 <code>modelslim</code> 自动识别</td>
     </tr>
     <tr>
       <td><code>mxfp8</code></td>
       <td>No</td>
       <td>No</td>
-      <td>Yes (A5 for Diffusion, LLM Dense Linear and LLM MoE)</td>
-      <td>Ascend NPU only; online + offline MXFP8 for Diffusion models (e.g., Wan2.2), LLM Dense Linear, and LLM MoE (FusedMoE, e.g. Qwen3-30B-A3B) on A5 series; uses CANN <code>npu_dynamic_mx_quant</code> / <code>npu_quant_matmul</code> (dense) and <code>npu_grouped_matmul_swiglu_quant_v2</code> / <code>npu_grouped_matmul</code> (MoE) kernels</td>
+      <td>Yes（A5：Diffusion、LLM 稠密线性层和 LLM MoE）</td>
+      <td>仅 Ascend NPU；A5 系列上支持扩散模型（如 Wan2.2）、LLM 稠密线性层和 LLM MoE（FusedMoE，如 Qwen3-30B-A3B）的在线 + 离线 MXFP8；使用 CANN <code>npu_dynamic_mx_quant</code> / <code>npu_quant_matmul</code>（稠密）和 <code>npu_grouped_matmul_swiglu_quant_v2</code> / <code>npu_grouped_matmul</code>（MoE）kernel</td>
     </tr>
     <tr>
       <td><code>mxfp_w4a8</code></td>
       <td>No</td>
       <td>No</td>
       <td>Yes (A5)</td>
-      <td>Ascend NPU only; online W4A8 for Qwen3 dense LLM (MXFP4 weights + MXFP8 activations) on A5 series; offline <code>W4A8_MXFP</code> checkpoints are auto-detected via <code>modelslim</code></td>
+      <td>仅 Ascend NPU；A5 系列上支持 Qwen3 稠密 LLM 的在线 W4A8（MXFP4 权重 + MXFP8 激活值）；离线 <code>W4A8_MXFP</code> 检查点会通过 <code>modelslim</code> 自动识别</td>
     </tr>
     <tr>
       <td><code>blockwise_int8</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>No</td>
-      <td>Triton-based, works on both platforms</td>
+      <td>基于 Triton，两个平台都可用</td>
     </tr>
     <tr>
       <td><code>w8a8_int8</code></td>
@@ -82,169 +80,169 @@ The following table summarizes quantization method support across NVIDIA and AMD
       <td>Yes</td>
       <td>Yes</td>
       <td>No</td>
-      <td>Aiter or Triton FP8 on AMD</td>
+      <td>AMD 上使用 Aiter 或 Triton FP8</td>
     </tr>
     <tr>
       <td><code>awq</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>Yes</td>
-      <td>Uses Triton dequantize on AMD (vs. optimized CUDA kernels on NVIDIA). Uses CANN kernels on Ascend</td>
+      <td>AMD 上使用 Triton 反量化（NVIDIA 上是优化过的 CUDA kernel）。Ascend 上使用 CANN kernel</td>
     </tr>
     <tr>
       <td><code>gptq</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>Yes</td>
-      <td>Uses Triton or vLLM kernels on AMD. Uses CANN kernels on Ascend</td>
+      <td>AMD 上使用 Triton 或 vLLM kernel。Ascend 上使用 CANN kernel</td>
     </tr>
     <tr>
       <td><code>compressed-tensors</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>Partial</td>
-      <td>Aiter paths for FP8/MoE on AMD. Uses CANN kernels on Ascend, <code>FP8</code> not supported yet</td>
+      <td>AMD 上 FP8/MoE 使用 Aiter 路径。Ascend 上使用 CANN kernel，<code>FP8</code> 暂不支持</td>
     </tr>
     <tr>
       <td><code>quark</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>No</td>
-      <td>AMD Quark quantization; Aiter GEMM paths on AMD</td>
+      <td>AMD Quark 量化；AMD 上使用 Aiter GEMM 路径</td>
     </tr>
     <tr>
       <td><code>auto-round</code></td>
       <td>Yes</td>
       <td>Yes</td>
       <td>Partial</td>
-      <td>Platform-agnostic (Intel auto-round). Uses CANN kernels on Ascend</td>
+      <td>平台无关（Intel auto-round）。Ascend 上使用 CANN kernel</td>
     </tr>
     <tr>
       <td><code>quark_int4fp8_moe</code></td>
       <td>No</td>
       <td>Yes</td>
       <td>No</td>
-      <td>AMD-only; online INT4-to-FP8 MoE quantization (CDNA3/CDNA4)</td>
+      <td>仅 AMD；在线 INT4 到 FP8 的 MoE 量化（CDNA3/CDNA4）</td>
     </tr>
     <tr>
       <td><code>awq_marlin</code></td>
       <td>Yes</td>
       <td>No</td>
       <td>No</td>
-      <td>Marlin kernels are CUDA-only</td>
+      <td>Marlin kernel 仅支持 CUDA</td>
     </tr>
     <tr>
       <td><code>gptq_marlin</code></td>
       <td>Yes</td>
       <td>No</td>
       <td>No</td>
-      <td>Marlin kernels are CUDA-only</td>
+      <td>Marlin kernel 仅支持 CUDA</td>
     </tr>
     <tr>
       <td><code>gguf</code></td>
       <td>Yes</td>
       <td>No</td>
       <td>Yes</td>
-      <td>CUDA kernels in sgl-kernel; Ascend uses CPU pre-dequantization at load time</td>
+      <td>CUDA kernel 在 sgl-kernel 中；Ascend 在加载时用 CPU 预先反量化</td>
     </tr>
     <tr>
       <td><code>modelopt</code> / <code>modelopt_fp8</code></td>
       <td>Yes (Hopper/SM90+)</td>
       <td>No</td>
       <td>No</td>
-      <td><a href="https://github.com/NVIDIA/Model-Optimizer">NVIDIA ModelOpt</a>; requires NVIDIA hardware</td>
+      <td><a href="https://github.com/NVIDIA/Model-Optimizer">NVIDIA ModelOpt</a>；需要 NVIDIA 硬件</td>
     </tr>
     <tr>
       <td><code>modelopt_fp4</code></td>
       <td>Yes (SM80-SM90 via Marlin; SM100+ native FP4)</td>
       <td>No</td>
       <td>No</td>
-      <td><a href="https://github.com/NVIDIA/Model-Optimizer">NVIDIA ModelOpt</a>; use Marlin W4A16 fallback on Ampere/Hopper and native FP4 backends on Blackwell; supports load-time BF16/FP16/FP8 MoE conversion with per-tensor FP32 activation scales</td>
+      <td><a href="https://github.com/NVIDIA/Model-Optimizer">NVIDIA ModelOpt</a>；Ampere/Hopper 上用 Marlin W4A16 兜底，Blackwell 上用原生 FP4 后端；支持加载时的 BF16/FP16/FP8 MoE 转换，带 per-tensor FP32 激活缩放</td>
     </tr>
     <tr>
       <td><code>nvfp4_online</code></td>
       <td>Yes (Blackwell/SM100 or SM103)</td>
       <td>No</td>
       <td>No</td>
-      <td>Online MoE-only NVFP4 weight quantization with per-token FP32 activation scales for BF16/FP16/FP8 checkpoints; use <code>modelopt_fp4</code> for per-tensor FP32 activation scales; requires <code>flashinfer_trtllm</code> or <code>flashinfer_trtllm_routed</code></td>
+      <td>面向 BF16/FP16/FP8 检查点的在线 MoE-only NVFP4 权重量化，带 per-token FP32 激活缩放；需要 per-tensor FP32 激活缩放的请用 <code>modelopt_fp4</code>；需要 <code>flashinfer_trtllm</code> 或 <code>flashinfer_trtllm_routed</code></td>
     </tr>
     <tr>
       <td><code>petit_nvfp4</code></td>
       <td>No</td>
       <td>Yes (MI250/MI300X/MI325X)</td>
       <td>No</td>
-      <td>Enables NVFP4 on ROCm via <a href="https://github.com/causalflow-ai/petit-kernel">Petit</a>; use <code>modelopt_fp4</code> on NVIDIA Blackwell. Auto-selected when loading NVFP4 models on AMD. See <a href="https://lmsys.org/blog/2025-09-21-petit-amdgpu/">LMSYS blog</a> and <a href="https://rocm.blogs.amd.com/artificial-intelligence/fp4-mixed-precision/README.html">AMD ROCm blog</a>.</td>
+      <td>通过 <a href="https://github.com/causalflow-ai/petit-kernel">Petit</a> 在 ROCm 上启用 NVFP4；NVIDIA Blackwell 上用 <code>modelopt_fp4</code>。在 AMD 上加载 NVFP4 模型时会自动选择。详见 <a href="https://lmsys.org/blog/2025-09-21-petit-amdgpu/">LMSYS 博客</a>和 <a href="https://rocm.blogs.amd.com/artificial-intelligence/fp4-mixed-precision/README.html">AMD ROCm 博客</a>。</td>
     </tr>
     <tr>
       <td><code>bitsandbytes</code></td>
       <td>Yes</td>
       <td>Experimental</td>
       <td>No</td>
-      <td>Depends on bitsandbytes ROCm support</td>
+      <td>取决于 bitsandbytes 对 ROCm 的支持</td>
     </tr>
     <tr>
       <td><code>torchao</code> (<code>int4wo</code>, etc.)</td>
       <td>Yes</td>
       <td>Partial</td>
       <td>No</td>
-      <td><code>int4wo</code> not supported on AMD; other methods may work</td>
+      <td><code>int4wo</code> 在 AMD 上不支持；其他方法可能可用</td>
     </tr>
     <tr>
       <td><code>modelslim</code></td>
       <td>No</td>
       <td>No</td>
       <td>Yes</td>
-      <td>Ascend quantization; Uses CANN kernels</td>
+      <td>Ascend 量化；使用 CANN kernel</td>
     </tr>
 
   </tbody>
 </table>
 
-On AMD, several of these methods use [Aiter](https://github.com/ROCm/aiter) for acceleration -- set `SGLANG_USE_AITER=1` where noted. See [AMD GPU setup](../hardware-platforms/amd_gpu) for installation and configuration details.
+在 AMD 上，其中一些方法使用 [Aiter](https://github.com/ROCm/aiter) 加速——在标注处设置 `SGLANG_USE_AITER=1`。安装与配置细节见 [AMD GPU 环境搭建](../hardware-platforms/amd_gpu)。
 
-On Ascend, various layers quantization configurations are supported, see [Ascend NPU quantization](../hardware-platforms/ascend-npus/optimization/quantization) for details.
+在 Ascend 上支持多种 layer 量化配置，详见 [Ascend NPU 量化](../hardware-platforms/ascend-npus/optimization/quantization)。
 
-## GEMM Backends for FP4/FP8 Quantization
+## FP4/FP8 量化的 GEMM 后端
 
 <Note>
-Backend selection applies to **blockwise FP8**, **MXFP8** (dense linear), and **NVFP4** GEMM. When running offline or online FP8 or FP4 quantized models, you can select the GEMM backend via `--fp8-gemm-backend` and `--fp4-gemm-backend`.
+后端选择适用于 **blockwise FP8**、**MXFP8**（稠密线性层）和 **NVFP4** 的 GEMM。在运行离线或在线 FP8/FP4 量化模型时，可以通过 `--fp8-gemm-backend` 和 `--fp4-gemm-backend` 选择 GEMM 后端。
 </Note>
 
-### `--fp8-gemm-backend` (Blockwise FP8 GEMM)
+### `--fp8-gemm-backend`（Blockwise FP8 GEMM）
 
 <table>
   <thead>
     <tr>
-      <th>Backend</th>
-      <th>Hardware</th>
-      <th>Description</th>
+      <th>后端</th>
+      <th>硬件</th>
+      <th>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>auto</code></td>
       <td>All</td>
-      <td>Auto-selects based on hardware</td>
+      <td>根据硬件自动选择</td>
     </tr>
     <tr>
       <td><code>deep_gemm</code></td>
       <td>SM90, SM100</td>
-      <td>JIT-compiled; enabled when DeepGEMM is installed</td>
+      <td>JIT 编译；安装 DeepGEMM 后启用</td>
     </tr>
     <tr>
       <td><code>flashinfer_trtllm</code></td>
       <td>SM100</td>
-      <td>FlashInfer TensorRT-LLM backend; optimal for low-latency</td>
+      <td>FlashInfer TensorRT-LLM 后端；低延迟场景最优</td>
     </tr>
     <tr>
       <td><code>flashinfer_cutlass</code></td>
       <td>SM100/120</td>
-      <td>FlashInfer CUTLASS groupwise FP8 GEMM</td>
+      <td>FlashInfer CUTLASS 分组 FP8 GEMM</td>
     </tr>
     <tr>
       <td><code>flashinfer_deepgemm</code></td>
       <td>SM90</td>
-      <td>Uses swapAB optimization for small M dimensions in decoding</td>
+      <td>解码阶段对较小的 M 维度使用 swapAB 优化</td>
     </tr>
     <tr>
       <td><code>cutlass</code></td>
@@ -254,71 +252,73 @@ Backend selection applies to **blockwise FP8**, **MXFP8** (dense linear), and **
     <tr>
       <td><code>triton</code></td>
       <td>All</td>
-      <td>Fallback; widely compatible</td>
+      <td>兜底；兼容性最广</td>
     </tr>
     <tr>
       <td><code>aiter</code></td>
       <td>ROCm</td>
-      <td>AMD AITER backend</td>
+      <td>AMD AITER 后端</td>
     </tr>
   </tbody>
 </table>
 
-**`auto` selection order:** 1) DeepGEMM (SM90/SM100, installed); 2) FlashInfer TRTLLM (SM100, FlashInfer available); 3) CUTLASS (SM120); 4) AITER (AMD); 5) Triton (fallback).
+**`auto` 的选择顺序：** 1) DeepGEMM（SM90/SM100，已安装时）；2) FlashInfer TRTLLM（SM100，FlashInfer 可用时）；3) CUTLASS（SM120）；4) AITER（AMD）；5) Triton（兜底）。
 
-**MXFP8 dense linear:** `auto` uses `flashinfer_cutlass` on SM100 (else `triton`). `flashinfer_cutlass` is fastest on most shapes; `flashinfer_trtllm` is faster only at small M.
+**MXFP8 稠密线性层：** `auto` 在 SM100 上使用 `flashinfer_cutlass`（否则用 `triton`）。`flashinfer_cutlass` 在大多数形状下最快；`flashinfer_trtllm` 只在 M 较小时更快。
 
-### `--fp4-gemm-backend` (NVFP4 GEMM)
+<Note>
+💡 AI Infra 学习笔记：量化模型的 GEMM（矩阵乘）kernel 选择直接决定性能——不同后端针对不同硬件架构（SM90 Hopper / SM100 Blackwell）做了专门优化：DeepGEMM 是 JIT 编译的 GEMM 库，FlashInfer 的 TensorRT-LLM 后端面向低延迟优化，Marlin 是 CUDA-only 的 W4A16 kernel，Aiter 是 AMD ROCm 专属。同一模型在不同 GEMM 后端下的吞吐可能相差数倍，这是推理引擎性能调优的重要抓手，也是面试高频考点。
+</Note>
+
+### `--fp4-gemm-backend`（NVFP4 GEMM）
 
 <table>
   <thead>
     <tr>
-      <th>Backend</th>
-      <th>Hardware</th>
-      <th>Description</th>
+      <th>后端</th>
+      <th>硬件</th>
+      <th>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>auto</code></td>
       <td>SM80+</td>
-      <td>Auto-selects: <code>flashinfer_cutedsl</code> on SM100; <code>marlin</code> on SM80-SM90; <code>flashinfer_cutlass</code> otherwise (including SM120)</td>
+      <td>自动选择：SM100 上用 <code>flashinfer_cutedsl</code>；SM80-SM90 上用 <code>marlin</code>；其余（包括 SM120）用 <code>flashinfer_cutlass</code></td>
     </tr>
     <tr>
       <td><code>flashinfer_cutlass</code></td>
       <td>SM100/120</td>
-      <td>FlashInfer CUTLASS backend</td>
+      <td>FlashInfer CUTLASS 后端</td>
     </tr>
     <tr>
       <td><code>flashinfer_cudnn</code></td>
       <td>SM100/120 (CUDA 13+, cuDNN 9.15+)</td>
-      <td>FlashInfer cuDNN backend</td>
+      <td>FlashInfer cuDNN 后端</td>
     </tr>
     <tr>
       <td><code>flashinfer_cutedsl</code></td>
       <td>SM100</td>
-      <td>FlashInfer CuTe DSL backend</td>
+      <td>FlashInfer CuTe DSL 后端</td>
     </tr>
     <tr>
       <td><code>flashinfer_trtllm</code></td>
       <td>SM100</td>
-      <td>FlashInfer TensorRT-LLM backend</td>
+      <td>FlashInfer TensorRT-LLM 后端</td>
     </tr>
     <tr>
       <td><code>marlin</code></td>
       <td>SM80-SM90</td>
-      <td>Weight-only W4A16 fallback for NVFP4 checkpoints</td>
+      <td>NVFP4 检查点的仅权重 W4A16 兜底</td>
     </tr>
   </tbody>
 </table>
 
-On SM80-SM90, `auto` selects Marlin for NVFP4. NVFP4 GEMM requires FlashInfer to be installed.
+在 SM80-SM90 上，`auto` 会为 NVFP4 选择 Marlin。NVFP4 GEMM 需要安装 FlashInfer。
 
-## Offline Quantization
+## 离线量化
 
-To load already quantized models, simply load the model weights and config. **Again, if the model has been quantized offline,
-there's no need to add `--quantization` argument when starting the engine. The quantization method will be parsed from the
-downloaded Hugging Face or msModelSlim config. For example, DeepSeek V3/R1 models are already in FP8, so do not add redundant parameters.**
+加载已量化模型很简单，直接加载模型权重和配置即可。**再次强调：如果模型已经离线量化过，启动引擎时就不需要加 `--quantization` 参数。量化方法会从下载的 Hugging Face 或 msModelSlim 配置中自动解析。例如，DeepSeek V3/R1 模型本身就是 FP8，不要再加冗余参数。**
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -326,7 +326,7 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-Take note, if your model is **per-channel quantized (INT8 or FP8) with per-token dynamic quantization activation**, you can opt to include `--quantization w8a8_int8` or `--quantization w8a8_fp8` to invoke the corresponding CUTLASS int8_kernel or fp8_kernel in sgl-kernel. This action will ignore the Hugging Face config's quantization settings. For instance, with `neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8-dynamic`, if you execute with `--quantization w8a8_fp8`, the system will use the `W8A8Fp8Config` from SGLang to invoke the sgl-kernel, rather than the `CompressedTensorsConfig` for vLLM kernels.
+请注意，如果你的模型是**带 per-token 动态量化激活值的 per-channel 量化（INT8 或 FP8）**，可以加上 `--quantization w8a8_int8` 或 `--quantization w8a8_fp8` 来调用 sgl-kernel 中对应的 CUTLASS int8_kernel 或 fp8_kernel。这样做会忽略 Hugging Face 配置中的量化设置。例如，对 `neuralmagic/Meta-Llama-3.1-8B-Instruct-FP8-dynamic`，如果执行时带 `--quantization w8a8_fp8`，系统会使用 SGLang 的 `W8A8Fp8Config` 调用 sgl-kernel，而不是 vLLM kernel 的 `CompressedTensorsConfig`。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -335,20 +335,20 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-### Examples of Offline Model Quantization
+### 离线模型量化示例
 
-#### Using [Unsloth](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide)
+#### 使用 [Unsloth](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide)
 
-We strongly suggest the use of Unsloth to quantize and load the model. Please refer to [SGLang Deployment & Inference Guide with Unsloth](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide).
+我们强烈建议用 Unsloth 来量化并加载模型。请参考 [使用 Unsloth 部署与推理 SGLang 指南](https://docs.unsloth.ai/basics/inference-and-deployment/sglang-guide)。
 
-#### Using [auto-round](https://github.com/intel/auto-round)
+#### 使用 [auto-round](https://github.com/intel/auto-round)
 
 ```bash Command
 # Install
 pip install auto-round
 ```
 
-- LLM quantization
+- LLM 量化
 
 ```py Example
 # for LLM
@@ -363,7 +363,7 @@ autoround.quantize_and_save(quant_path, format=format) # quantize and save
 
 ```
 
-- VLM quantization
+- VLM 量化
 ```py Example
 # for VLMs
 from auto_round import AutoRoundMLLM
@@ -376,7 +376,7 @@ autoround.quantize_and_save(quant_path, format=format) # quantize and save
 
 ```
 
-- Command Line Usage (Gaudi/CPU/Intel GPU/CUDA)
+- 命令行用法（Gaudi/CPU/Intel GPU/CUDA）
 
 ```bash Command
 auto-round \
@@ -387,7 +387,7 @@ auto-round \
     --output_dir ./tmp_autoround
 ```
 
-- SGlang API Usage (CPU/CUDA)
+- SGLang API 用法（CPU/CUDA）
 
 ```python Example
 from sglang.srt.configs.load_config import LoadConfig
@@ -415,40 +415,38 @@ quantized_model = model_loader.load_model(
 )
 ```
 
-- known issues
+- 已知问题
 
-Several limitations currently affect offline quantized model loading in sglang, These issues might be resolved in future updates of sglang. If you experience any problems, consider using Hugging Face Transformers as an alternative.
+目前 sglang 在加载离线量化模型时存在一些限制，这些问题可能会在 sglang 后续更新中解决。如果遇到问题，可以考虑改用 Hugging Face Transformers。
 
-1. Mixed-bit Quantization Limitations
+1. 混合位宽量化的限制
 
-    Mixed-bit quantization is not fully supported. Due to vLLM's layer fusion (e.g., QKV fusion), applying different bit-widths to components within the same fused layer can lead to compatibility issues.
+    混合位宽量化支持不完整。由于 vLLM 的层融合（例如 QKV 融合），对同一个融合层内的不同组件应用不同位宽会导致兼容性问题。
 
+2. 量化 MoE 模型支持有限
 
-2. Limited Support for Quantized MoE Models
+    由于 kernel 的限制（例如缺少对 mlp.gate 层量化的支持），量化后的 MoE 模型可能会遇到推理问题。请尽量跳过这些层的量化以避免此类错误。
 
-    Quantized MoE models may encounter inference issues due to kernel limitations (e.g., lack of support for mlp.gate layer quantization). please try to skip quantizing these layers to avoid such errors.
-
-
-3. Limited Support for Quantized VLMs
-    <Accordion title="Details">
-        {/* VLM failure cases */}
+3. 量化 VLM 支持有限
+    <Accordion title="详情">
+        {/* VLM 失败案例 */}
 
     Qwen2.5-VL-7B
 
-    auto_round:auto_gptq format:  Accuracy is close to zero.
+    auto_round:auto_gptq 格式：精度接近为零。
 
-    GPTQ format:  Fails with:
+    GPTQ 格式：失败，报错：
     ```text Output
     The output size is not aligned with the quantized weight shape
     ```
-    auto_round:auto_awq and AWQ format:  These work as expected.
+    auto_round:auto_awq 和 AWQ 格式：这些能正常工作。
     </Accordion>
 
-4. Limited Support for SGlang API Usage
+4. SGLang API 用法支持有限
 
-    SGlang API Usage only supports `auto-round-int8` quantization method now, more quantization methods are on the way.
+    SGLang API 用法目前只支持 `auto-round-int8` 一种量化方法，更多量化方法正在路上。
 
-#### Using [GPTQModel](https://github.com/ModelCloud/GPTQModel)
+#### 使用 [GPTQModel](https://github.com/ModelCloud/GPTQModel)
 
 ```bash Command
 # install
@@ -474,14 +472,14 @@ model.quantize(calibration_dataset, batch_size=2) # quantize
 model.save(quant_path) # save model
 ```
 
-#### Using [LLM Compressor](https://github.com/vllm-project/llm-compressor/)
+#### 使用 [LLM Compressor](https://github.com/vllm-project/llm-compressor/)
 
 ```bash Command
 # install
 pip install llmcompressor
 ```
 
-Here, we take quantize `meta-llama/Meta-Llama-3-8B-Instruct` to `FP8` as an example to elaborate on how to do offline quantization.
+这里以把 `meta-llama/Meta-Llama-3-8B-Instruct` 量化成 `FP8` 为例，说明如何做离线量化。
 
 ```python Example
 from transformers import AutoTokenizer
@@ -510,7 +508,7 @@ model.save_pretrained(SAVE_DIR)
 tokenizer.save_pretrained(SAVE_DIR)
 ```
 
-Then, you can directly use the quantized model with `SGLang`, by using the following command:
+然后，就可以直接用下面的命令把量化好的模型交给 `SGLang` 使用：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -518,32 +516,36 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-#### Using [NVIDIA ModelOpt](https://github.com/NVIDIA/Model-Optimizer)
+#### 使用 [NVIDIA ModelOpt](https://github.com/NVIDIA/Model-Optimizer)
 
-NVIDIA Model Optimizer (ModelOpt) provides advanced quantization techniques optimized for NVIDIA hardware.
+NVIDIA Model Optimizer（ModelOpt）提供针对 NVIDIA 硬件优化过的先进量化技术。
 
-**Offline vs. Online Quantization:**
+**离线量化 vs. 在线量化：**
 
-SGLang supports two modes for ModelOpt.
+SGLang 支持 ModelOpt 的两种模式。
 
-* **Offline Quantization (pre-quantized):**
-    * **Usage:** Download a pre-quantized model from Hugging Face or run `hf_ptq.py` once to create a new quantized checkpoint. Then load this quantized checkpoint.
-    * **Pros:** Fast server startup, quantization can be validated before deployment, efficient resource usage.
-    * **Cons:** Requires an extra preparation step.
+* **离线量化（预量化）：**
+    * **用法：** 从 Hugging Face 下载预量化模型，或运行一次 `hf_ptq.py` 生成新的量化检查点，然后加载这个量化检查点。
+    * **优点：** 服务端启动快，量化质量可以在部署前验证，资源利用高效。
+    * **缺点：** 需要额外的准备步骤。
 
-* **Online Quantization (quant and serve):**
-    * **Usage:** Load a standard BF16/FP16 model and add a flag. The engine applies quantization *on startup*.
-    * **Pros:** Convenient (no new checkpoint needed).
-    * **Cons:** **High startup time**, increases VRAM usage during initialization (risk of OOM).
+* **在线量化（量化即服务）：**
+    * **用法：** 加载普通 BF16/FP16 模型并加一个参数。引擎会在*启动时*应用量化。
+    * **优点：** 方便（不需要生成新检查点）。
+    * **缺点：** **启动时间很长**，初始化期间显存占用上升（有 OOM 风险）。
 
-The following sections guide you through using the Offline path: loading pre-quantized models or creating your own checkpoints.
+<Note>
+💡 AI Infra 学习笔记：在线量化虽然省事，但代价是在引擎启动时实时完成权重转换——启动时间显著变长、初始化期间显存占用上升（有 OOM 风险）。生产环境通常推荐离线量化：一次性量化、多次复用，启动快、量化质量可以预先用基准测试验证。理解"离线 vs 在线"的取舍，是量化部署方案设计的基本功。
+</Note>
 
-##### Using Pre-Quantized Checkpoints
+下面各节引导你走离线路径：加载预量化模型，或创建自己的检查点。
 
-If a model is already quantized (e.g., from Hugging Face), you can load it directly.
+##### 使用预量化检查点
 
-* **FP8 Models:**
-    Use `--quantization modelopt_fp8`.
+如果模型已经量化好（例如来自 Hugging Face），可以直接加载。
+
+* **FP8 模型：**
+    使用 `--quantization modelopt_fp8`。
     ```bash Command
     python3 -m sglang.launch_server \
         --model-path nvidia/Llama-3.1-8B-Instruct-FP8 \
@@ -551,8 +553,8 @@ If a model is already quantized (e.g., from Hugging Face), you can load it direc
         --port 30000
     ```
 
-* **FP4 Models:**
-    Use `--quantization modelopt_fp4`.
+* **FP4 模型：**
+    使用 `--quantization modelopt_fp4`。
     ```bash Command
     python3 -m sglang.launch_server \
         --model-path nvidia/Llama-3.3-70B-Instruct-NVFP4 \
@@ -560,45 +562,45 @@ If a model is already quantized (e.g., from Hugging Face), you can load it direc
         --port 30000
     ```
 
-##### Creating Your Own Quantized Checkpoints
+##### 创建自己的量化检查点
 
-If a pre-quantized checkpoint is not available for your model, you can create one using NVIDIA Model Optimizer's `hf_ptq.py` script.
+如果找不到适合你模型的预量化检查点，可以用 NVIDIA Model Optimizer 的 `hf_ptq.py` 脚本自己生成。
 
-**Why quantize?**
-- Reduce VRAM usage
-- Higher throughput and lower latency
-- More flexible deployment (on smaller GPUs)
+**为什么要量化？**
+- 减少显存占用
+- 更高的吞吐和更低的延迟
+- 部署更灵活（可以在更小的 GPU 上运行）
 
-**What can be quantized?**
-- The entire model
-- MLP layers only
-- KV cache
+**哪些部分可以量化？**
+- 整个模型
+- 仅 MLP 层
+- KV 缓存
 
-**Key options in `hf_ptq.py`:**
+**`hf_ptq.py` 中的关键选项：**
 
-`--qformat`: Quantization formats `fp8`, `nvfp4`, `nvfp4_mlp_only`
+`--qformat`：量化格式 `fp8`、`nvfp4`、`nvfp4_mlp_only`
 
-`--kv_cache_qformat`: KV cache quantization format (default: `fp8`)
+`--kv_cache_qformat`：KV 缓存量化格式（默认：`fp8`）
 
-**Note:** The default `kv_cache_qformat` may not be optimal for all use cases. Consider setting this explicitly.
+**注意：** 默认的 `kv_cache_qformat` 未必适合所有使用场景。建议显式设置它。
 
-**Hardware requirements:** Hopper and higher are recommended. Insufficient GPU memory may cause weight offloading, resulting in extremely long quantization time.
+**硬件要求：** 推荐 Hopper 及以上。GPU 内存不足可能导致权重卸载，量化时间会极其漫长。
 
-For detailed usage and supported model architectures, see [NVIDIA Model Optimizer LLM PTQ](https://github.com/NVIDIA/Model-Optimizer/tree/main/examples/llm_ptq).
+详细用法和受支持的模型架构，见 [NVIDIA Model Optimizer LLM PTQ](https://github.com/NVIDIA/Model-Optimizer/tree/main/examples/llm_ptq)。
 
-SGLang includes a streamlined workflow for quantizing models with ModelOpt and automatically exporting them for deployment.
+SGLang 内置了一套用 ModelOpt 量化模型并自动导出部署的工作流。
 
-##### Installation
+##### 安装
 
-First, install ModelOpt:
+先安装 ModelOpt：
 
 ```bash Command
 pip install nvidia-modelopt
 ```
 
-##### Quantization and Export Workflow
+##### 量化与导出工作流
 
-SGLang provides an example script that demonstrates the complete ModelOpt quantization and export workflow. Run from the SGLang repository root (see [modelopt_quantize_and_export.py](https://github.com/sgl-project/sglang/blob/main/examples/usage/modelopt_quantize_and_export.py)):
+SGLang 提供了一个示例脚本，演示完整的 ModelOpt 量化与导出工作流。在 SGLang 仓库根目录下运行（见 [modelopt_quantize_and_export.py](https://github.com/sgl-project/sglang/blob/main/examples/usage/modelopt_quantize_and_export.py)）：
 
 ```bash Command
 # Quantize and export a model using ModelOpt FP8 quantization
@@ -614,14 +616,14 @@ python examples/usage/modelopt_quantize_and_export.py quantize \
     --quantization-method modelopt_fp4
 ```
 
-##### Available Quantization Methods
+##### 可用的量化方法
 
-- `modelopt_fp8`: FP8 quantization with optimal performance on NVIDIA Hopper and Blackwell GPUs
-- `modelopt_fp4`: FP4 quantization with optimal performance on Nvidia Blackwell GPUs
+- `modelopt_fp8`：FP8 量化，在 NVIDIA Hopper 和 Blackwell GPU 上性能最优
+- `modelopt_fp4`：FP4 量化，在 NVIDIA Blackwell GPU 上性能最优
 
-##### Python API Usage
+##### Python API 用法
 
-You can also use ModelOpt quantization programmatically:
+你也可以用代码方式使用 ModelOpt 量化：
 
 ```python Example
 import sglang as sgl
@@ -651,9 +653,9 @@ quantized_model = model_loader.load_model(
 )
 ```
 
-##### Deploying Quantized Models
+##### 部署量化模型
 
-After quantization and export, you can deploy the model with SGLang:
+量化并导出后，就可以用 SGLang 部署这个模型：
 
 ```bash Command
 # Deploy the exported quantized model
@@ -663,7 +665,7 @@ python -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-Or using the Python API (use the same path as `modelopt_export_path` from the quantize step):
+或者用 Python API（使用与量化步骤中 `modelopt_export_path` 相同的路径）：
 
 ```python Example
 import sglang as sgl
@@ -698,9 +700,9 @@ if __name__ == "__main__":
 
 ```
 
-##### Advanced Features
+##### 高级特性
 
-**Checkpoint Management**: Save and restore fake quantized checkpoints for reuse:
+**检查点管理**：保存并恢复伪量化检查点以便复用：
 
 ```bash Command
 # Save the fake quantized checkpoint during quantization
@@ -713,7 +715,7 @@ python examples/usage/modelopt_quantize_and_export.py quantize \
 # The checkpoint can be reused for future quantization runs and skip calibration
 ```
 
-**Export-only Workflow**: If you have a pre-existing fake quantized ModelOpt checkpoint, you can export it directly. See [LoadConfig](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/configs/load_config.py) for the full API:
+**仅导出工作流**：如果你已有预生成的 ModelOpt 伪量化检查点，可以直接导出它。完整 API 见 [LoadConfig](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/configs/load_config.py)：
 
 ```python Example
 from sglang.srt.configs.device_config import DeviceConfig
@@ -737,18 +739,18 @@ model_loader = get_model_loader(load_config, model_config)
 model_loader.load_model(model_config=model_config, device_config=DeviceConfig())
 ```
 
-##### Benefits of ModelOpt
+##### ModelOpt 的优势
 
-- **Hardware Optimization**: Specifically optimized for NVIDIA GPU architectures
-- **Advanced Quantization**: Supports cutting-edge FP8 and FP4 quantization techniques
-- **Seamless Integration**: Automatic export to HuggingFace format for easy deployment
-- **Calibration-based**: Uses calibration datasets for optimal quantization quality
-- **Production Ready**: Enterprise-grade quantization with NVIDIA support
+- **硬件优化**：针对 NVIDIA GPU 架构专门优化
+- **先进量化**：支持前沿的 FP8 和 FP4 量化技术
+- **无缝集成**：自动导出为 Hugging Face 格式，方便部署
+- **基于校准**：使用校准数据集以获得最佳量化质量
+- **生产就绪**：带 NVIDIA 支持的企业级量化
 
-#### Using [ModelSlim](https://gitcode.com/Ascend/msmodelslim)
-MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression tool launched by MindStudio and optimized for Ascend hardware.
+#### 使用 [ModelSlim](https://gitcode.com/Ascend/msmodelslim)
+MindStudio-ModelSlim（msModelSlim）是 MindStudio 推出、针对 Ascend 硬件优化过的模型离线量化压缩工具。
 
-- **Installation**
+- **安装**
 
     ```bash Command
     # Clone repo and install msmodelslim:
@@ -757,12 +759,12 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
     bash install.sh
     ```
 
-- **LLM quantization**
+- **LLM 量化**
 
-    Download the original floating-point weights of the large model. Taking Qwen3-32B as an example, you can go to [Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) to obtain the original model weights. Then install other dependencies (related to the model, refer to the huggingface model card).
-    > Note: You can find pre-quantized validated models on [modelscope/Eco-Tech](https://modelscope.cn/models/Eco-Tech).
+    下载大模型的原始浮点权重。以 Qwen3-32B 为例，可以去 [Qwen3-32B](https://huggingface.co/Qwen/Qwen3-32B) 获取原始模型权重。然后安装其他依赖（与模型相关，参考 huggingface 模型卡）。
+    > 注意：你可以在 [modelscope/Eco-Tech](https://modelscope.cn/models/Eco-Tech) 上找到预量化并验证过的模型。
 
-    _Traditional quantification methods require the preparation of calibration data files (```.jsonl``` formats) for calibration in the quantification process._
+    _传统的量化方法需要在量化过程中准备校准数据文件（```.jsonl``` 格式）进行校准。_
     ```bash Command
     Qwen3-32B/      # floating-point model downloaded from official HF (or modelscope) repo
     msmodelslim/    # msmodelslim repo
@@ -777,7 +779,7 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
       |----- quant_model_description.json # file with description of the quantization methods for each layer (```W4A4_DYNAMIC```, etc.)
       |----- another files (such as config.json, tokenizer.json, etc.)
     ```
-    Run quantization using one-click quantization (recommended):
+    使用一键量化命令进行量化（推荐）：
     ```bash Command
     msmodelslim quant \
     --model_path ${MODEL_PATH} \
@@ -788,34 +790,34 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
     --trust_remote_code True
     ```
 
-- **Usage Example**
+- **使用示例**
     ```bash Command
     python3 -m sglang.launch_server \
     --model-path $PWD/Qwen3-32B-w8a8 \
     --port 30000 --host 0.0.0.0
     ```
 
-- **Available Quantization Methods**:
-    - [x]  ```W4A4_DYNAMIC``` linear with online quantization of activations
-    - [x]  ```W8A8``` linear with offline quantization of activations
-    - [x]  ```W8A8_DYNAMIC``` linear with online quantization of activations
-    - [x]  ```W4A4_DYNAMIC``` MOE with online quantization of activations
-    - [x]  ```W4A8_DYNAMIC``` MOE with online quantization of activations
-    - [x]  ```W8A8_DYNAMIC``` MOE with online quantization of activations
-    - [ ]  ```W4A8``` linear TBD
-    - [ ]  ```W4A16``` linear TBD
-    - [ ]  ```W48A16``` linear TBD
-    - [ ]  ```W4A16``` MoE in progress
-    - [ ]  ```W8A16``` MoE in progress
-    - [ ]  ```KV Cache``` in progress
-    - [ ]  ```Attention``` in progress
+- **可用的量化方法**：
+    - [x]  ```W4A4_DYNAMIC``` 线性层（linear），在线激活量化
+    - [x]  ```W8A8``` 线性层（linear），离线激活量化
+    - [x]  ```W8A8_DYNAMIC``` 线性层（linear），在线激活量化
+    - [x]  ```W4A4_DYNAMIC``` MoE，在线激活量化
+    - [x]  ```W4A8_DYNAMIC``` MoE，在线激活量化
+    - [x]  ```W8A8_DYNAMIC``` MoE，在线激活量化
+    - [ ]  ```W4A8``` 线性层（linear），待定
+    - [ ]  ```W4A16``` 线性层（linear），待定
+    - [ ]  ```W48A16``` 线性层（linear），待定
+    - [ ]  ```W4A16``` MoE，开发中
+    - [ ]  ```W8A16``` MoE，开发中
+    - [ ]  ```KV Cache```，开发中
+    - [ ]  ```Attention```，开发中
 
 
-For more detailed examples of quantization of models, as well as information about their support, see the [examples](https://gitcode.com/Ascend/msmodelslim/blob/master/example/README.md) section in ModelSLim repo.
+关于模型量化的更多示例和支持情况，见 ModelSLim 仓库中的 [examples](https://gitcode.com/Ascend/msmodelslim/blob/master/example/README.md) 一节。
 
-## Online Quantization
+## 在线量化
 
-To enable online quantization, you can simply specify `--quantization` in the command line. For example, you can launch the server with the following command to enable `FP8` quantization for model `meta-llama/Meta-Llama-3.1-8B-Instruct`:
+要启用在线量化，只需在命令行指定 `--quantization`。例如，下面的命令可以为模型 `meta-llama/Meta-Llama-3.1-8B-Instruct` 启用 `FP8` 量化：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -824,11 +826,11 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-Our team is working on supporting more online quantization methods. SGLang will soon support methods including but not limited to `["awq", "gptq", "marlin", "gptq_marlin", "awq_marlin", "bitsandbytes", "gguf"]`.
+我们团队正在努力支持更多在线量化方法。SGLang 很快会支持包括但不限于 `["awq", "gptq", "marlin", "gptq_marlin", "awq_marlin", "bitsandbytes", "gguf"]` 的方法。
 
-### torchao online quantization method
+### torchao 在线量化方法
 
-SGLang also supports quantization methods based on [torchao](https://github.com/pytorch/ao). You can simply specify `--torchao-config` in the command line to support this feature. For example, if you want to enable `int4wo-128` for model `meta-llama/Meta-Llama-3.1-8B-Instruct`, you can launch the server with the following command:
+SGLang 也支持基于 [torchao](https://github.com/pytorch/ao) 的量化方法。只需在命令行指定 `--torchao-config` 即可启用。例如，想为模型 `meta-llama/Meta-Llama-3.1-8B-Instruct` 启用 `int4wo-128`，可以用下面的命令启动服务端：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -837,9 +839,9 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-SGLang supports the following quantization methods based on torchao `["int8dq", "int8wo", "fp8wo", "fp8dq-per_tensor", "fp8dq-per_row", "int4wo-32", "int4wo-64", "int4wo-128", "int4wo-256"]`.
+SGLang 支持以下基于 torchao 的量化方法：`["int8dq", "int8wo", "fp8wo", "fp8dq-per_tensor", "fp8dq-per_row", "int4wo-32", "int4wo-64", "int4wo-128", "int4wo-256"]`。
 
-Note: According to [this issue](https://github.com/sgl-project/sglang/issues/2219#issuecomment-2561890230), `"int8dq"` method currently has some bugs when using together with cuda graph capture. So we suggest to disable cuda graph capture when using `"int8dq"` method. Namely, please use the following command:
+注意：根据[这个 issue](https://github.com/sgl-project/sglang/issues/2219#issuecomment-2561890230)，`"int8dq"` 方法在与 CUDA graph 捕获一起使用时目前存在一些 bug。因此使用 `"int8dq"` 时建议禁用 CUDA graph 捕获，也就是用下面的命令：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -849,20 +851,20 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-### `nvfp4_online` online quantization method
+### `nvfp4_online` 在线量化方法
 
-Use `--quantization nvfp4_online` to convert eligible BF16, FP16, or FP8 MoE expert weights to NVFP4 at load time with per-token FP32 activation scales. Use `modelopt_fp4` for serialized NVFP4 checkpoints or the same load-time conversion with per-tensor FP32 activation scales.
+用 `--quantization nvfp4_online` 可以在加载时把符合条件的 BF16、FP16 或 FP8 MoE 专家权重转换成 NVFP4，并带 per-token FP32 激活缩放。序列化的 NVFP4 检查点或需要 per-tensor FP32 激活缩放的同类加载时转换，请用 `modelopt_fp4`。
 
-The design separates weight quantization from activation scaling:
+这个设计把权重量化和激活缩放分离开来：
 
-- **Weights:** SGLang quantizes each eligible MoE expert weight tensor as it is loaded, using standard 2D NVFP4 weight quantization. The generated NVFP4 weights use static E4M3 block scales plus static per-tensor FP32 scales derived from the weight amax. For gated MoE experts, the w1/w3 pair shares one per-tensor FP32 scale.
-- **Activations:** FlashInfer computes and propagates one FP32 scale per token at runtime. Backends that accept one per-tensor FP32 activation scale must use `modelopt_fp4`.
-- **FP8 checkpoints:** If an eligible expert weight is stored as FP8, SGLang first dequantizes that tensor with the checkpoint scale and then requantizes it to NVFP4 during loading.
-- **Other layers:** Dense linear layers stay in their source checkpoint precision or checkpoint quantization path.
+- **权重：** SGLang 在加载每个符合条件的 MoE 专家权重张量时进行量化，使用标准的 2D NVFP4 权重量化。生成的 NVFP4 权重使用静态 E4M3 block 缩放，外加由权重 amax 推导出的静态 per-tensor FP32 缩放。对于门控 MoE 专家，w1/w3 这对权重共享同一个 per-tensor FP32 缩放。
+- **激活值：** FlashInfer 在运行时计算并传播每个 token 一个 FP32 缩放。只接受每个 tensor 一个 FP32 激活缩放的端须使用 `modelopt_fp4`。
+- **FP8 检查点：** 如果某个符合条件的专家权重以 FP8 存储，SGLang 会先用检查点缩放对该张量反量化，然后在加载过程中重新量化为 NVFP4。
+- **其他层：** 稠密线性层保持其源检查点的精度或检查点量化路径。
 
-Only `--moe-runner-backend flashinfer_trtllm` and `--moe-runner-backend flashinfer_trtllm_routed` are supported. If `--moe-runner-backend` is omitted, SGLang selects `flashinfer_trtllm`. Tensor parallelism is supported; activation per-token scales are computed locally on each TP rank, while online weight quantization still uses the loaded expert tensor's per-tensor amax-derived FP32 scale.
+只支持 `--moe-runner-backend flashinfer_trtllm` 和 `--moe-runner-backend flashinfer_trtllm_routed`。如果省略 `--moe-runner-backend`，SGLang 会选择 `flashinfer_trtllm`。支持张量并行；每个 TP rank 在本地计算激活 per-token 缩放，而在线权重量化仍使用已加载专家张量基于 per-tensor amax 推导的 FP32 缩放。
 
-FlashInfer TRTLLM MoE backends disable shared-expert fusion, so online quantization applies to routed MoE experts while shared experts stay in the checkpoint precision. Both online modes honor `SGLANG_FP4_IGNORED_LAYERS`; for FP8 source checkpoints, listed experts remain FP8 instead of being converted to NVFP4.
+FlashInfer TRTLLM MoE 后端会禁用共享专家融合，因此在线量化只作用于路由 MoE 专家，共享专家保持检查点精度。两种在线模式都遵循 `SGLANG_FP4_IGNORED_LAYERS`；对于 FP8 源检查点，列出的专家保持 FP8，不会被转换成 NVFP4。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -873,17 +875,17 @@ python3 -m sglang.launch_server \
     --port 30000 --host 0.0.0.0
 ```
 
-### `quark_int4fp8_moe` online quantization method
+### `quark_int4fp8_moe` 在线量化方法
 
-SGLang running on AMD GPUs (CDNA3 or CDNA4 architecture) supports the quantization method `--quantization quark_int4fp8_moe`, that will replace [MoE layers](https://github.com/sgl-project/sglang/blob/v0.4.8/python/sglang/srt/layers/moe/fused_moe_triton/layer.py#L271) originally in high precision (bfloat16, float16 or float32) to use weights dynamically quantized to int4, that are upcasted to float8 during inference to run compute in float8 precision with activations dynamically quantized on the fly to float8.
+运行在 AMD GPU（CDNA3 或 CDNA4 架构）上的 SGLang 支持 `--quantization quark_int4fp8_moe` 量化方法，它会把原本高精度（bfloat16、float16 或 float32）的 [MoE 层](https://github.com/sgl-project/sglang/blob/v0.4.8/python/sglang/srt/layers/moe/fused_moe_triton/layer.py#L271)替换为使用动态量化为 int4 的权重，推理时这些权重会上转换到 float8，以 float8 精度计算，而激活值则即时动态量化为 float8。
 
-Other layers (e.g. projections in the attention layers) have their weights quantized online to float8 directly.
+其他层（例如注意力层中的投影层）的权重会直接在线量化为 float8。
 
-### `quark_mxfp4` online quantization method
+### `quark_mxfp4` 在线量化方法
 
-SGLang running on AMD GPUs with hardware FP4 support (CDNA4 architecture, e.g. MI355x) supports the quantization method `--quantization quark_mxfp4`, that will quantize BF16 model weights to MXFP4 at load time, use dynamic MXFP4 quantization for activations and MXFP4 GEMMs instead of BF16 GEMMs.
+运行在带硬件 FP4 支持的 AMD GPU（CDNA4 架构，例如 MI355x）上的 SGLang 支持 `--quantization quark_mxfp4` 量化方法，它会在加载时把 BF16 模型权重量化为 MXFP4，对激活值使用动态 MXFP4 量化，并用 MXFP4 GEMM 替代 BF16 GEMM。
 
-Example (BF16 to MXFP4 requantization):
+示例（BF16 到 MXFP4 的重新量化）：
 
 ```bash
 sglang serve --model-path Qwen/Qwen3-30B-A3B \
@@ -891,15 +893,15 @@ sglang serve --model-path Qwen/Qwen3-30B-A3B \
     --quantization quark_mxfp4
 ```
 
-The option `--quantization quark_mxfp4` also supports converting FP8 dense and MOE models to MXFP4, following this logic:
+`--quantization quark_mxfp4` 选项也支持把 FP8 稠密模型和 MoE 模型转换为 MXFP4，转换逻辑如下：
 
-1. Load an FP8 weight tensor,
-2. Dequantize it to BF16,
-3. Requantize it to MXFP4
+1. 加载 FP8 权重张量，
+2. 反量化为 BF16，
+3. 重新量化为 MXFP4
 
-progressively during weight loading.
+在权重加载过程中逐步完成。
 
-Example (FP8 to MXFP4 requantization):
+示例（FP8 到 MXFP4 的重新量化）：
 
 ```bash
 sglang serve --model-path Qwen/Qwen3-30B-A3B-Instruct-2507-FP8 \
@@ -907,26 +909,25 @@ sglang serve --model-path Qwen/Qwen3-30B-A3B-Instruct-2507-FP8 \
     --quantization quark_mxfp4
 ```
 
-### Intel® Neural Compressor online quantization method
+### Intel® Neural Compressor 在线量化方法
 
-SGLang supports quantization methods based on the advanced algorithm [auto-round](https://github.com/intel/auto-round) in [Intel® Neural Compressor](https://github.com/intel/neural-compressor). You can simply specify `--quantization auto-round-int8` to use this feature. It will quantize the model on the fly to target format. More online quantization methods are on the way.
+SGLang 支持基于先进算法 [auto-round](https://github.com/intel/auto-round) 的量化方法，它位于 [Intel® Neural Compressor](https://github.com/intel/neural-compressor) 中。只需指定 `--quantization auto-round-int8` 即可使用该功能。它会即时把模型量化到目标格式。更多在线量化方法正在路上。
 
-##### Available Quantization Methods
+##### 可用的量化方法
 
-| Quantization Method | Schemes | Validated Hardware Environment |
+| 量化方法 | 方案 | 验证过的硬件环境 |
 |:--------------------|:--------|:-------------------------------|
-| auto-round-int8     |INT8 per-channel quantized weight <br /> INT8 per-token dynamic quantized activation | Intel Xeon Scalable processor <br /> Nvidia A100 GPU |
+| auto-round-int8     |INT8 逐通道量化权重 <br /> INT8 逐 token 动态量化激活 | Intel Xeon 可扩展处理器 <br /> Nvidia A100 GPU |
 
+## Ascend NPU 上的扩散模型量化
 
-## Diffusion Model Quantization on Ascend NPU
+SGLang-Diffusion 在 Ascend A5 NPU 上支持扩散模型（如 Wan2.2）的 MXFP8 量化，有在线和离线（ModelSlim）两种模式。这与 LLM 推理路径是分开的，使用 `sglang serve` / `sglang generate` CLI。
 
-SGLang-Diffusion supports MXFP8 quantization for diffusion models (such as Wan2.2) on Ascend A5 NPUs, in both online and offline (ModelSlim) modes. This is separate from the LLM serving path and uses the `sglang serve` / `sglang generate` CLI.
+**要求：** Ascend A5，CANN ≥ 8.0.RC3
 
-**Requirements:** Ascend A5, CANN ≥ 8.0.RC3
+### 在线 MXFP8
 
-### Online MXFP8
-
-Pass `--quantization mxfp8` to dynamically quantize FP16/BF16 transformer weights to MXFP8 at load time:
+传 `--quantization mxfp8` 在加载时把 FP16/BF16 transformer 权重动态量化为 MXFP8：
 
 ```bash
 sglang serve \
@@ -935,9 +936,9 @@ sglang serve \
   --num-gpus 4
 ```
 
-### Offline MXFP8 (ModelSlim)
+### 离线 MXFP8（ModelSlim）
 
-Pre-quantize with [msModelSlim](https://gitcode.com/Ascend/msmodelslim) and load the checkpoint directly — the quantization scheme is auto-detected from `quant_model_description.json`:
+用 [msModelSlim](https://gitcode.com/Ascend/msmodelslim) 预量化并直接加载检查点——量化方案会从 `quant_model_description.json` 自动识别：
 
 ```bash
 sglang generate \
@@ -946,9 +947,9 @@ sglang generate \
   --save-output
 ```
 
-For the full quantization + format conversion workflow and a complete list of supported schemes, see [Diffusion Quantization on Ascend NPU](../hardware-platforms/ascend-npus/optimization/quantization#diffusion-model-quantization-on-ascend-npu) and [SGLang-Diffusion Quantization](../sglang-diffusion/quantization#modelslim).
+完整的量化 + 格式转换工作流以及受支持方案的完整列表，见 [Ascend NPU 上的扩散模型量化](../hardware-platforms/ascend-npus/optimization/quantization#diffusion-model-quantization-on-ascend-npu) 和 [SGLang-Diffusion 量化](../sglang-diffusion/quantization#modelslim)。
 
-## Reference
+## 参考
 
 - [GPTQModel](https://github.com/ModelCloud/GPTQModel)
 - [LLM Compressor](https://github.com/vllm-project/llm-compressor/)

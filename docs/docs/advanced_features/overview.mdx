@@ -1,19 +1,23 @@
 ---
-title: Advanced Features
-description: Advanced configuration, optimization, and deployment features for SGLang.
+title: 高级功能
+description: SGLang 的高级配置、优化与部署功能。
 ---
 
-- [Server Arguments](./server_arguments)
-- [Session-Aware Radix Cache](./session_radix_cache)
-- [Hyperparameter Tuning](./hyperparameter_tuning)
-- [Attention Backend](./attention_backend)
-- [Speculative Decoding](./speculative_decoding)
-- [Structured Outputs](./structured_outputs)
-- [Quantization](./quantization)
-- [Expert Parallelism](./expert_parallelism)
+<Note>
+💡 AI Infra 学习笔记：这里的「高级功能」覆盖了推理引擎性能优化的几大方向：并行策略（TP/PP/EP）、内存优化（HiCache、前缀缓存）、推理加速（投机解码、CUDA 图），以及量化与可观测性。建议先理解每个特性解决什么问题，再动手尝试，效率会高很多。
+</Note>
+
+- [服务端参数](./server_arguments)
+- [会话感知 Radix 缓存](./session_radix_cache)
+- [超参数调优](./hyperparameter_tuning)
+- [Attention 后端](./attention_backend)
+- [投机解码](./speculative_decoding)
+- [结构化输出](./structured_outputs)
+- [量化](./quantization)
+- [专家并行](./expert_parallelism)
 - [LoRA](./lora)
-- [PD Disaggregation](./pd_disaggregation)
-- [Pipeline Parallelism](./pipeline_parallelism)
+- [PD 分离](./pd_disaggregation)
+- [流水线并行](./pipeline_parallelism)
 - [HiCache](./hicache_best_practices)
-- [Observability](./observability)
-- [And more…](./server_arguments)
+- [可观测性](./observability)
+- [更多…](./server_arguments)

@@ -1,8 +1,12 @@
 ---
-title: "Hierarchical KV Caching (HiCache)"
+title: "分层 KV 缓存（HiCache）"
 metatags:
-    description: "SGLang HiCache: three-tier KV caching (GPU, CPU, storage) for long-context and multi-turn inference. Supports Mooncake, 3FS, NIXL backends."
+    description: "SGLang HiCache：面向长上下文与多轮推理的三层 KV 缓存（GPU、CPU、存储）。支持 Mooncake、3FS、NIXL 后端。"
 ---
-- [Hicache Best Practices](./hicache_best_practices)
-- [Hicache Design](./hicache_design)
-- [Hicache Storage Runtime Attach Detach](./hicache_storage_runtime_attach_detach)
+<Note>
+💡 AI Infra 学习笔记：HiCache 是 SGLang 的分层 KV 缓存方案——KV 缓存不只放在 GPU 显存里，还能扩展到 CPU 内存和外部存储，形成 GPU → CPU → 存储三级层次。长上下文或多轮对话场景下 KV 缓存会非常巨大，放不下的部分可以"溢出"到速度较慢但容量大、成本低的存储，这是突破单卡显存限制、降低长上下文推理成本的关键思路。
+</Note>
+
+- [HiCache 最佳实践](./hicache_best_practices)
+- [HiCache 设计](./hicache_design)
+- [HiCache 存储运行时挂载与卸载](./hicache_storage_runtime_attach_detach)

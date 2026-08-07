@@ -1,47 +1,54 @@
 ---
-title: "Observability"
+title: "可观测性"
 metatags:
-    description: "SGLang observability: Prometheus metrics, request logging, request dump and replay, crash dump debugging."
+    description: "SGLang 可观测性：Prometheus 指标、请求日志、请求转储与回放、崩溃转储调试。"
 ---
-## Production Metrics
-SGLang exposes the following metrics via Prometheus. You can enable them by adding `--enable-metrics` when launching the server.
-You can query them by:
+## 生产环境指标
+SGLang 通过 Prometheus 暴露以下指标。启动服务端时加上 `--enable-metrics` 即可启用。
+查询方式如下：
 ```bash Command
 curl http://localhost:30000/metrics
 ```
 
-See [Production Metrics](../references/production_metrics) and [Production Request Tracing](../references/production_request_trace) for more details.
+<Note>
+💡 AI Infra 学习笔记：可观测性是推理引擎在生产环境的"仪表盘"——单靠日志很难定位吞吐量下降或延迟抖动，而 `token usage`（KV 缓存利用率）、队列长度、缓存命中率这类指标能直接反映服务是否健康。把 `--enable-metrics` 与 Prometheus + Grafana 搭配起来，是排查性能问题的第一步。
+</Note>
 
-## Logging
+更多细节见 [生产环境指标](../references/production_metrics) 和 [生产环境请求追踪](../references/production_request_trace)。
 
-By default, SGLang does not log any request contents. You can log them by using `--log-requests`.
-You can control the verbosity by using `--log-request-level`.
-See [Logging](./server_arguments#logging) for more details.
+## 日志
 
-You can change verbosity at runtime:
+默认情况下，SGLang 不会记录任何请求内容。你可以通过 `--log-requests` 开启请求日志，用 `--log-request-level` 控制日志详细程度。
+更多细节见 [日志](./server_arguments#logging)。
+
+你也可以在运行时动态调整日志级别：
 
 ```bash Command
 python3 -m sglang.srt.managers.configure_logging --url http://localhost:30000 --log-level=debug
 ```
 
-## Request Dump and Replay
+## 请求转储与回放
 
-You can dump all requests and replay them later for benchmarking or other purposes.
+你可以把所有请求转储下来，之后再回放，用于基准测试等目的。
 
-To start dumping, use the following command to send a request to a server:
+要开始转储，先用以下命令向服务端发送一个请求：
 ```bash Command
 python3 -m sglang.srt.managers.configure_logging --url http://localhost:30000 --dump-requests-folder /tmp/sglang_request_dump --dump-requests-threshold 100
 ```
-The server will dump the requests into a pickle file for every 100 requests.
+服务端每收到 100 个请求，就会把请求转储到一个 pickle 文件中。
 
-To replay the request dump, use `scripts/playground/replay_request_dump.py`.
+<Note>
+💡 AI Infra 学习笔记：请求转储/回放是离线基准测试的利器——线上流量往往难以完全复现，把真实请求保存下来再重放，可以在不影响生产环境的情况下反复测试新版本引擎的延迟与吞吐表现。
+</Note>
 
-## Crash Dump and Replay
-Sometimes the server might crash, and you may want to debug the cause of the crash.
-SGLang can preserve recent request data for replay and collect CUDA device coredumps for low-level debugging.
+要回放请求转储，请使用 `scripts/playground/replay_request_dump.py`。
 
-Set the crash diagnostics folder with `--crash-dump-folder /tmp/crash_dump`.
+## 崩溃转储与回放
+服务端有时会崩溃，你可能想排查崩溃原因。
+SGLang 可以保留最近的请求数据用于回放，并收集 CUDA 设备 coredump 供底层调试。
 
-When SGLang handles a crash, it writes completed requests retained by the crash-dump buffer plus in-flight requests to `/tmp/crash_dump/<hostname>/crash_dump_<timestamp>.pkl`. The file also contains the server arguments and launch command. Replay it with `scripts/playground/replay_request_dump.py`.
+用 `--crash-dump-folder /tmp/crash_dump` 设置崩溃诊断文件夹。
 
-On NVIDIA CUDA, the option also sets default environment variables before CUDA initializes. These defaults enable device coredumps on CUDA exceptions and allow SGLang to trigger device coredumps for live scheduler processes when it handles a crash. CUDA device coredumps are written to `/tmp/crash_dump/<hostname>/core.cuda.<timestamp>.<pid>`. Explicitly configured CUDA coredump environment variables take precedence, including a custom `CUDA_COREDUMP_FILE` path. This option does not configure OS process core dumps.
+当 SGLang 处理崩溃时，会把崩溃转储缓冲区中保留的已完成请求与正在执行的请求写入 `/tmp/crash_dump/<hostname>/crash_dump_<timestamp>.pkl`。文件里还包含服务端参数和启动命令。用 `scripts/playground/replay_request_dump.py` 回放。
+
+在 NVIDIA CUDA 上，该选项还会在 CUDA 初始化之前设置默认环境变量。这些默认值会在 CUDA 异常时启用设备 coredump，并允许 SGLang 在处理崩溃时为存活的调度器进程触发设备 coredump。CUDA 设备 coredump 写入 `/tmp/crash_dump/<hostname>/core.cuda.<timestamp>.<pid>`。显式配置的 CUDA coredump 环境变量优先级更高，包括自定义的 `CUDA_COREDUMP_FILE` 路径。该选项不会配置操作系统进程 core dump。

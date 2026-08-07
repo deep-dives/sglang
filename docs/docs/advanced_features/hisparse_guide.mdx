@@ -1,38 +1,42 @@
 ---
-title: "HiSparse: Hierarchical Sparse Attention"
+title: "HiSparse：分层稀疏注意力"
 metatags:
-    description: "Use HiSparse hierarchical sparse attention to reduce decode GPU KV memory with CPU pinned host storage and PD disaggregation."
+    description: "使用 HiSparse 分层稀疏注意力，借助 CPU 固定内存主机存储与 PD 分离，降低解码阶段的 GPU KV 内存占用。"
 ---
 
-HiSparse reduces per-request GPU memory consumption during the decode phase by maintaining only a small "hot" KV buffer on GPU while keeping complete KV data in CPU pinned memory. Combined with PD disaggregation, it enables significantly higher decode concurrency.
+HiSparse 在解码阶段只在 GPU 上维护一个较小的"热点"（hot）KV 缓冲区，同时把完整的 KV 数据保存在 CPU 固定内存中，从而降低每个请求的 GPU 内存占用。再结合 PD 分离，可以显著提升解码并发度。
 
-> **Prerequisites**: HiSparse works with models that use **DeepSeek Sparse Attention (DSA)** architectures (e.g., DeepSeek-V3.2, GLM-5.1) and **DeepSeek V4**. These models natively select a subset of tokens for attention, making it possible to keep only the top-k KV on GPU while storing the full KV in host memory — without accuracy loss. Additionally, HiSparse currently requires **PD disaggregation mode** and is enabled on the **decode instance** only.
+> **前置条件**：HiSparse 适用于使用 **DeepSeek 稀疏注意力（DSA）** 架构的模型（例如 DeepSeek-V3.2、GLM-5.1）以及 **DeepSeek V4**。这些模型天然只为部分 token 计算注意力，因此可以把 top-k 的 KV 保留在 GPU 上、把完整 KV 存在主机内存中，且不会损失精度。另外，HiSparse 目前**要求使用 PD 分离模式**，并且**只在 decode 实例上启用**。
 
-## Why HiSparse?
+<Note>
+💡 AI Infra 学习笔记：稀疏注意力（Sparse Attention）的思想是"注意力不需要看所有 token"——某些架构（如 DeepSeek Sparse Attention）会让每个 token 只对一小部分相关 token 做注意力计算。HiSparse 正是利用了这一点：GPU 上只需放被选中的 top-k 热点 KV，完整 KV 全部沉到主机内存，于是单请求的显存占用从"整条序列"降为"固定大小的缓冲区"，解码并发度自然大幅提升。
+</Note>
 
-In long-context LLM inference, each decoding request holds a full-length KV cache on GPU, limiting the number of concurrent requests a decode instance can serve. HiSparse addresses this by:
+## 为什么需要 HiSparse？
 
-- **Reducing GPU memory per request**: Each request occupies only a fixed-size device buffer (e.g., 4KB tokens) instead of the full sequence length.
-- **On-demand swap-in**: A CUDA kernel dynamically loads the top-k most relevant KV entries from host memory based on attention scores.
-- **Transparent to prefill**: HiSparse is entirely a decode-side optimization; the prefill instance requires no changes.
+在长上下文 LLM 推理中，每个解码请求都要在 GPU 上持有整条序列长度的 KV 缓存，这限制了 decode 实例能并发服务的请求数量。HiSparse 通过以下方式解决这个问题：
 
-## Design Overview
+- **降低每个请求的 GPU 内存占用**：每个请求只占用一个固定大小的设备缓冲区（例如 4KB 个 token 槽位），而不是整条序列长度。
+- **按需换入**：一个 CUDA kernel 根据注意力分数，动态地从主机内存加载最相关的 top-k 个 KV 条目。
+- **对预填充透明**：HiSparse 完全是解码侧的优化，prefill 实例无需任何改动。
 
-### Decode Workflow
+## 设计概览
 
-Each decode step follows this flow:
+### 解码工作流
 
-1. **Forward decode** — generate the next token
-2. **Top-k selection** — select the most relevant token positions via attention scores
-3. **Swap-in** — the CUDA kernel loads top-k KV entries from host to device buffer:
-   - *Short sequences* (`seq_len ≤ device_buffer_size`): fast path, all KV already in buffer
-   - *Long sequences*: hit detection → LRU reordering → miss handling (host → device copy)
-4. **Decode attention** — compute attention using the top-k device locations
-5. **Eager backup** — asynchronously copy the previous token's KV from device to host
+每个解码步按以下流程进行：
 
-### PD Disaggregation Integration (Direct-to-Host)
+1. **前向解码（Forward decode）** — 生成下一个 token
+2. **Top-k 选择** — 通过注意力分数选出最相关的 token 位置
+3. **换入（Swap-in）** — CUDA kernel 把 top-k 个 KV 条目从主机加载到设备缓冲区：
+   - *短序列*（`seq_len ≤ device_buffer_size`）：快速路径，所有 KV 已在缓冲区中
+   - *长序列*：命中检测 → LRU 重排 → 未命中处理（主机 → 设备拷贝）
+4. **解码注意力（Decode attention）** — 用 top-k 个设备端位置计算注意力
+5. **即时备份（Eager backup）** — 异步把上一个 token 的 KV 从设备拷贝到主机
 
-In PD disaggregation mode, the prefill instance transfers KV cache directly into the decode instance's host pool via RDMA, bypassing the GPU entirely on the decode side. This eliminates the transient GPU memory spike during KV transfer and removes the staging DMA step.
+### PD 分离集成（直写主机）
+
+在 PD 分离模式下，prefill 实例通过 RDMA 把 KV 缓存直接写入 decode 实例的主机内存池，完全绕过 decode 侧的 GPU。这消除了 KV 传输过程中瞬时的 GPU 内存峰值，也去掉了暂存 DMA 这一步。
 
 ```
 Prefill GPU  ──RDMA──▶  Decode Host Pool (CPU pinned memory)
@@ -44,9 +48,13 @@ Prefill GPU  ──RDMA──▶  Decode Host Pool (CPU pinned memory)
                      swap-in kernel (on-demand top-k)
 ```
 
-For DeepSeek V4, the direct-to-host path writes only C4 KV into the decode host pool. The c4_indexer and C128 KV remain device-to-device transfers.
+对于 DeepSeek V4，直写主机路径只把 C4 KV 写入 decode 主机内存池，而 c4_indexer 与 C128 KV 仍然走设备到设备的传输。
 
-## Server Arguments
+<Note>
+💡 AI Infra 学习笔记：这里的关键优化是"直写主机（direct-to-host）"——KV 传输路径从"GPU → GPU"变成"GPU → 主机内存池"，decode 侧连中间暂存都不需要，也就没有瞬时显存尖峰。把"放不下的 KV"从显存挪到主机/远端，本质上是把显存容量问题转成带宽问题，这也是 HiCache、HiSparse 等方案共同的设计哲学。
+</Note>
+
+## 服务端参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -56,28 +64,28 @@ For DeepSeek V4, the direct-to-host path writes only C4 KV into the decode host 
   </colgroup>
   <thead>
     <tr>
-      <th>Argument</th>
-      <th>Type / Default</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>类型 / 默认值</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--enable-hisparse</code></td>
-      <td>flag; default: disabled</td>
-      <td>Enable HiSparse on the decode instance</td>
+      <td>flag；默认：禁用</td>
+      <td>在 decode 实例上启用 HiSparse</td>
     </tr>
     <tr>
       <td><code>--hisparse-config</code></td>
-      <td>JSON string</td>
-      <td>Configuration for HiSparse (see below)</td>
+      <td>JSON 字符串</td>
+      <td>HiSparse 的配置（见下文）</td>
     </tr>
   </tbody>
 </table>
 
-### HiSparse Config Parameters
+### HiSparse 配置参数
 
-Pass as a JSON string via `--hisparse-config`:
+通过 `--hisparse-config` 以 JSON 字符串传入：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -87,42 +95,42 @@ Pass as a JSON string via `--hisparse-config`:
   </colgroup>
   <thead>
     <tr>
-      <th>Parameter</th>
-      <th>Type / Default</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>类型 / 默认值</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>top_k</code></td>
       <td>int</td>
-      <td>Number of topk entries</td>
+      <td>Top-k 条目的数量</td>
     </tr>
     <tr>
       <td><code>device_buffer_size</code></td>
       <td>int</td>
-      <td>Number of token slots in the per-request GPU device buffer</td>
+      <td>每个请求的 GPU 设备缓冲区中的 token 槽位数量</td>
     </tr>
     <tr>
       <td><code>host_to_device_ratio</code></td>
       <td>int</td>
-      <td>Ratio of logical pool size to device pool size, determining host memory capacity</td>
+      <td>逻辑内存池与设备内存池的大小比例，决定主机内存容量</td>
     </tr>
     <tr>
       <td><code>swap_in_block_size</code></td>
       <td>int / 960</td>
-      <td>CUDA thread-block size for the HiSparse swap-in kernel</td>
+      <td>HiSparse 换入 kernel 的 CUDA 线程块大小</td>
     </tr>
   </tbody>
 </table>
 
-Example: `--hisparse-config='{"top_k": 2048, "device_buffer_size": 6144, "host_to_device_ratio": 10, "swap_in_block_size": 960}'`
+示例：`--hisparse-config='{"top_k": 2048, "device_buffer_size": 6144, "host_to_device_ratio": 10, "swap_in_block_size": 960}'`
 
-## Deployment
+## 部署
 
-HiSparse currently requires **PD disaggregation mode** and is enabled only on the **decode instance**.
+HiSparse 目前**要求使用 PD 分离模式**，并且**只在 decode 实例上启用**。
 
-### Prefill Instance
+### Prefill 实例
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -138,7 +146,7 @@ python3 -m sglang.launch_server \
     --nnodes 1 --node-rank 0
 ```
 
-### Decode Instance (with HiSparse)
+### Decode 实例（启用 HiSparse）
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -157,9 +165,9 @@ python3 -m sglang.launch_server \
     --hisparse-config='{"top_k": 2048, "device_buffer_size": 6144, "host_to_device_ratio": 10, "swap_in_block_size": 960}'
 ```
 
-> **Note**: For DSA models, `--kv-cache-dtype` defaults to `auto`, which resolves to `fp8_e4m3` on SM100+ (Blackwell) and `bfloat16` on older architectures. The DSA decode backend is automatically selected based on KV dtype (`bfloat16` → `flashmla_sparse`, `fp8_e4m3` → `flashmla_kv`). DSA backend flags apply only to DSA models; DeepSeek V4 uses its own `dsv4` attention backend.
+> **注意**：对于 DSA 模型，`--kv-cache-dtype` 默认为 `auto`，在 SM100+（Blackwell）上解析为 `fp8_e4m3`，在更老的架构上解析为 `bfloat16`。DSA 解码后端会根据 KV 数据类型自动选择（`bfloat16` → `flashmla_sparse`，`fp8_e4m3` → `flashmla_kv`）。DSA 后端参数只适用于 DSA 模型；DeepSeek V4 使用自己的 `dsv4` 注意力后端。
 
-### Benchmark
+### 基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -178,16 +186,16 @@ python3 -m sglang.bench_serving \
     --flush-cache \
 ```
 
-### Key Notes
+### 关键注意事项
 
-- The prefill instance does not need `--enable-hisparse`; it is unaware of HiSparse.
-- On the decode instance, `--enable-hisparse` and `--hisparse-config` are required for HiSparse.
-- For DSA models, `--kv-cache-dtype bfloat16` uses `flashmla_sparse`, and `--kv-cache-dtype fp8_e4m3` uses `flashmla_kv`.
-- For DeepSeek V4, DSA backend flags are not applicable. DeepSeek V4 uses the `dsv4` attention backend and `fp8_e4m3` KV cache by default.
-- `host_to_device_ratio` should be configured based on the host machine's available memory. For example:
-  - **~1 TB** host memory → `host_to_device_ratio: 5`
-  - **~2 TB** host memory → `host_to_device_ratio: 10`
+- prefill 实例不需要 `--enable-hisparse`；它对 HiSparse 一无所知。
+- 在 decode 实例上，启用 HiSparse 必须同时提供 `--enable-hisparse` 与 `--hisparse-config`。
+- 对于 DSA 模型，`--kv-cache-dtype bfloat16` 使用 `flashmla_sparse`，`--kv-cache-dtype fp8_e4m3` 使用 `flashmla_kv`。
+- 对于 DeepSeek V4，DSA 后端参数不适用。DeepSeek V4 默认使用 `dsv4` 注意力后端和 `fp8_e4m3` KV 缓存。
+- `host_to_device_ratio` 应根据主机的可用内存来配置。例如：
+  - **约 1 TB** 主机内存 → `host_to_device_ratio: 5`
+  - **约 2 TB** 主机内存 → `host_to_device_ratio: 10`
 
-## Acknowledgments
+## 致谢
 
-We would like to thank the SGLang team and community for the implementation and generous support, especially Zhiqiang Xie, Zhangheng Huang, Tingwei Huang, Shangming Cai, Teng Ma, and many others. We also thank the Alibaba Cloud TairKVCache team and the AntGroup SCT Inference team for their valuable contributions.
+我们感谢 SGLang 团队与社区在实现与支持上的慷慨帮助，尤其是 Zhiqiang Xie、Zhangheng Huang、Tingwei Huang、Shangming Cai、Teng Ma 以及其他众多贡献者。我们也感谢阿里云 TairKVCache 团队与蚂蚁集团 SCT 推理团队的宝贵贡献。

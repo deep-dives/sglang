@@ -1,16 +1,20 @@
 ---
-title: "Session-Aware Radix Cache"
+title: "会话感知 Radix 缓存"
 metatags:
-    description: "Keep active sessions ahead of unrelated KV in UnifiedRadixCache eviction order."
+    description: "在内存压力下，让活跃会话优先于不相关 KV 保留在 UnifiedRadixCache 的驱逐顺序中。"
 ---
 
-Session-aware radix caching improves cache hits for long-lived, multi-turn workloads under memory pressure. It registers reusable KV to a session and evicts unreferenced KV before KV still referenced by an active session.
+会话感知 Radix 缓存（session-aware radix caching）能在内存压力下提升长生命周期、多轮对话类负载的缓存命中率。它把可复用的 KV 注册到某个会话名下，在驱逐时优先回收未被引用的 KV，再回收仍被活跃会话引用的 KV。
 
-Session references are soft protection, not memory pins. Referenced KV can still be evicted when reclaiming unreferenced KV is insufficient.
+会话引用是软保护（soft protection），不是内存钉住（memory pin）。当回收未引用的 KV 仍不足以腾出空间时，被引用的 KV 同样可能被驱逐。
 
-## Enable the cache
+<Note>
+💡 AI Infra 学习笔记：Radix 缓存的核心思路是把提示词中的公共前缀以树结构（Radix Tree）复用——多轮对话、共享系统提示词时命中率会显著提升。会话感知的变体进一步保证"活跃会话"引用的 KV 优先保留，避免长会话被不相关的短请求挤掉。这是多租户、agent 型长对话场景的关键优化。
+</Note>
 
-This feature is implemented only by `UnifiedRadixCache`.
+## 启用缓存
+
+该特性只由 `UnifiedRadixCache` 实现。
 
 ```bash Command
 SGLANG_ENABLE_UNIFIED_RADIX_TREE=1 python3 -m sglang.launch_server \
@@ -18,9 +22,9 @@ SGLANG_ENABLE_UNIFIED_RADIX_TREE=1 python3 -m sglang.launch_server \
   --enable-session-radix-cache
 ```
 
-## Pass and close the session
+## 传递并关闭会话
 
-Your application must pass the same top-level `session_id` on every request in a session. The ID labels cache references only; it does not append or reconstruct conversation context, so each request must still contain the intended prompt.
+你的应用必须在同一会话的每个请求中传递相同的顶层 `session_id`。该 ID 只用于标记缓存引用，不会拼接或重建对话上下文，所以每个请求仍须携带完整的提示词。
 
 ```bash Command
 curl http://localhost:30000/generate \
@@ -32,9 +36,9 @@ curl http://localhost:30000/generate \
   }'
 ```
 
-When a request finishes, SGLang automatically registers its reusable cache leaves under the `session_id`. This reference-only workflow does not require an `/open_session` call.
+当一个请求结束时，SGLang 会自动把它可复用的缓存叶子节点注册到 `session_id` 名下。这种仅引用（reference-only）的工作流不需要调用 `/open_session`。
 
-Call `/close_session` when the application session ends, including error and cancellation paths:
+当应用会话结束时，调用 `/close_session`，包括出错和取消的路径：
 
 ```bash Command
 curl -X POST http://localhost:30000/close_session \
@@ -42,16 +46,20 @@ curl -X POST http://localhost:30000/close_session \
   -d '{"session_id": "agent-42"}'
 ```
 
-Closing removes the session's references but does not immediately free its KV. The KV remains reusable and returns to the normal eviction order.
+关闭只会移除会话的引用，不会立即释放其 KV。这些 KV 仍然可复用，并回到正常的驱逐顺序中。
 
-## Eviction behavior
+## 驱逐行为
 
-The cache tracks references independently for each UnifiedRadixCache component. Device and host eviction use the same session preference.
+缓存会为每个 UnifiedRadixCache 组件分别跟踪引用。设备与主机（host）的驱逐采用相同的会话优先级。
 
-| Component | Referenced data | Eviction order |
+| 组件 | 被引用的数据 | 驱逐顺序 |
 | --- | --- | --- |
-| Full attention | The reusable prefix path from the registered leaf to the root | Unreferenced nodes first, then referenced nodes with fewer session references, then the configured policy such as LRU |
-| Sliding-window attention (SWA) | The reusable tail covering the sliding window plus page-alignment allowance | Two LRU passes: unreferenced nodes first, then referenced nodes if more space is required |
-| Mamba | The reusable state on the registered leaf | Two LRU passes: unreferenced nodes first, then referenced nodes if more space is required |
+| Full attention | 从注册的叶子节点到根节点的可复用前缀路径 | 先驱逐未引用节点，再驱逐会话引用较少的节点，最后按配置的策略（如 LRU） |
+| 滑动窗口注意力（SWA） | 覆盖滑动窗口及页对齐余量的可复用尾部 | 两轮 LRU：先驱逐未引用节点，空间仍不够时再驱逐被引用节点 |
+| Mamba | 注册叶子节点上的可复用状态 | 两轮 LRU：先驱逐未引用节点，空间仍不够时再驱逐被引用节点 |
 
-UnifiedRadixCache still applies component cascade rules. Evicting an internal Full node also evicts its SWA and Mamba data; evicting SWA also evicts Mamba data; evicting Mamba affects only Mamba. Evicting a leaf removes all component data on that leaf.
+<Note>
+💡 AI Infra 学习笔记：这里的"软保护"值得留意——即使被会话引用，KV 在内存不足时仍可能被驱逐。这是吞吐优先引擎的常见取舍：宁可牺牲个别会话的缓存命中，也要保证整体内存不失控。对可靠性要求极高的长会话业务，需要结合其他手段（如 HiCache 分层缓存）把重要 KV 放到更安全的层次。
+</Note>
+
+UnifiedRadixCache 仍会应用组件级联规则。驱逐一个内部 Full 节点时，其 SWA 与 Mamba 数据也会一并驱逐；驱逐 SWA 时 Mamba 数据一并驱逐；驱逐 Mamba 只影响 Mamba。驱逐一个叶子节点会移除该节点上的全部组件数据。

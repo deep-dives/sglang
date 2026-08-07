@@ -1,27 +1,31 @@
 ---
-title: "Structured Outputs"
+title: "结构化输出"
 metatags:
-    description: "SGLang structured outputs: JSON schema, regex, EBNF constraints. XGrammar, Outlines, Llguidance backends for guaranteed output format."
+    description: "SGLang 结构化输出：JSON schema、regex、EBNF 约束。XGrammar、Outlines、Llguidance 后端保证输出格式。"
 ---
-You can specify a JSON schema, [regular expression](https://en.wikipedia.org/wiki/Regular_expression) or [EBNF](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) to constrain the model output. The model output will be guaranteed to follow the given constraints. Only one constraint parameter (`json_schema`, `regex`, or `ebnf`) can be specified for a request.
+你可以指定一个 JSON schema、[正则表达式](https://en.wikipedia.org/wiki/Regular_expression)或 [EBNF](https://en.wikipedia.org/wiki/Extended_Backus%E2%80%93Naur_form) 来约束模型输出。模型输出会被保证遵循给定的约束。每个请求只能指定一个约束参数（`json_schema`、`regex` 或 `ebnf`）。
 
-SGLang supports three grammar backends:
+SGLang 支持三种语法后端：
 
-- [XGrammar](https://github.com/mlc-ai/xgrammar)(default): Supports JSON schema, regular expression, and EBNF constraints.
-- [Outlines](https://github.com/dottxt-ai/outlines): Supports JSON schema and regular expression constraints.
-- [Llguidance](https://github.com/guidance-ai/llguidance): Supports JSON schema, regular expression, and EBNF constraints.
+- [XGrammar](https://github.com/mlc-ai/xgrammar)（默认）：支持 JSON schema、正则表达式和 EBNF 约束。
+- [Outlines](https://github.com/dottxt-ai/outlines)：支持 JSON schema 和正则表达式约束。
+- [Llguidance](https://github.com/guidance-ai/llguidance)：支持 JSON schema、正则表达式和 EBNF 约束。
 
-We suggest using XGrammar for its better performance and utility. XGrammar currently uses the [GGML BNF format](https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md). For more details, see [XGrammar technical overview](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar).
+我们建议用 XGrammar，性能更好、功能更全。XGrammar 目前使用 [GGML BNF 格式](https://github.com/ggml-org/llama.cpp/blob/master/grammars/README.md)。更多细节见 [XGrammar 技术概览](https://blog.mlc.ai/2024/11/22/achieving-efficient-flexible-portable-structured-generation-with-xgrammar)。
 
-To use Outlines, simply add `--grammar-backend outlines` when launching the server.
-To use llguidance, add `--grammar-backend llguidance`  when launching the server.
-If no backend is specified, XGrammar will be used as the default.
+要使用 Outlines，启动服务端时加 `--grammar-backend outlines`。
+要使用 llguidance，启动服务端时加 `--grammar-backend llguidance`。
+如果没有指定后端，默认使用 XGrammar。
 
-For better output quality, **It's advisable to explicitly include instructions in the prompt to guide the model to generate the desired format.** For example, you can specify, 'Please generate the output in the following JSON format: ...'.
+为了更好的输出质量，**建议在提示词里显式说明，引导模型生成目标格式。** 例如，可以写明："请用以下 JSON 格式生成输出：……"。
+
+<Note>
+💡 AI Infra 学习笔记：结构化输出（又称约束解码 constrained decoding）的核心思想是：不靠"提示词碰运气"，而是把 JSON schema / regex / EBNF 编译成一个有限状态机或上下文无关文法，在每一步采样时**直接屏蔽掉不合法 token**，从根上保证输出必然合法。相比"先生成再校验重试"，它能一次成功、省 token、延迟低。性能关键点在于"文法匹配 + token 掩码"的开销——每次解码都要判断词表里哪些 token 合法，XGrammar 等后端用增量/缓存技术把这一步做快。这是生产级 LLM 服务（工具调用、结构化数据抽取）的核心能力，也是推理引擎面试的高频考点。
+</Note>
 
 
 
-## OpenAI Compatible API
+## OpenAI 兼容 API
 
 
 
@@ -45,10 +49,10 @@ client = openai.Client(base_url=f"http://127.0.0.1:{port}/v1", api_key="None")
 
 ### JSON
 
-you can directly define a JSON schema or use [Pydantic](https://docs.pydantic.dev/latest/) to define and validate the response.
+你可以直接定义一个 JSON schema，或用 [Pydantic](https://docs.pydantic.dev/latest/) 来定义并校验响应。
 
 
-**Using Pydantic**
+**使用 Pydantic**
 
 
 
@@ -88,7 +92,7 @@ capital_info = CapitalInfo.model_validate_json(response_content)
 print_highlight(f"Validated response: {capital_info.model_dump_json()}")
 ```
 
-**JSON Schema Directly**
+**直接使用 JSON Schema**
 
 
 
@@ -156,7 +160,7 @@ response = client.chat.completions.create(
 print_highlight(response.choices[0].message.content)
 ```
 
-### Regular expression
+### 正则表达式
 
 
 
@@ -174,7 +178,7 @@ response = client.chat.completions.create(
 print_highlight(response.choices[0].message.content)
 ```
 
-### Structural Tag
+### 结构标签（Structural Tag）
 
 
 
@@ -331,13 +335,17 @@ response = client.chat.completions.create(
 print_highlight(response.choices[0].message.content)
 ```
 
-## Native API and SGLang Runtime (SRT)
+<Note>
+💡 AI Infra 学习笔记：结构标签（structural tag）是"约束解码 + 工具调用"的结合——平时让模型自由输出文本，只有检测到触发串（如 `<function=`）时才切换到受约束模式，用 JSON schema 约束函数参数部分。这是 XGrammar 的 `triggered_tags` 能力：把"自由文本"和"受控字段"拼接成一个分段文法，兼顾自然语言灵活性和工具调用的可靠性。它解决了传统工具调用里"参数格式飘忽、解析失败率高"的痛点。
+</Note>
+
+## 原生 API 与 SGLang 运行时（SRT）
 
 
 ### JSON
 
 
-**Using Pydantic**
+**使用 Pydantic**
 
 
 
@@ -387,7 +395,7 @@ capital_info = CapitalInfo.model_validate(response_data)
 print_highlight(f"Validated response: {capital_info.model_dump_json()}")
 ```
 
-**JSON Schema Directly**
+**直接使用 JSON Schema**
 
 
 
@@ -457,7 +465,7 @@ response = requests.post(
 print_highlight(response.json())
 ```
 
-### Regular expression
+### 正则表达式
 
 
 
@@ -485,7 +493,7 @@ response = requests.post(
 print_highlight(response.json())
 ```
 
-### Structural Tag
+### 结构标签
 
 
 
@@ -579,7 +587,7 @@ print_highlight(response.json())
 terminate_process(server_process)
 ```
 
-## Offline Engine API
+## 离线引擎 API
 
 
 
@@ -594,7 +602,7 @@ llm = sgl.Engine(
 ### JSON
 
 
-**Using Pydantic**
+**使用 Pydantic**
 
 
 
@@ -630,7 +638,7 @@ for prompt, output in zip(prompts, outputs):
     print_highlight(f"Validated output: {capital_info.model_dump_json()}")
 ```
 
-**JSON Schema Directly**
+**直接使用 JSON Schema**
 
 
 
@@ -690,7 +698,7 @@ for prompt, output in zip(prompts, outputs):
     print_highlight(f"Prompt: {prompt}\nGenerated text: {output['text']}")
 ```
 
-### Regular expression
+### 正则表达式
 
 
 
@@ -708,7 +716,7 @@ for prompt, output in zip(prompts, outputs):
     print_highlight(f"Prompt: {prompt}\nGenerated text: {output['text']}")
 ```
 
-### Structural Tag
+### 结构标签
 
 
 

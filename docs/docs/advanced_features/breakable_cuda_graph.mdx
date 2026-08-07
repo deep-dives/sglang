@@ -1,24 +1,28 @@
 ---
-title: "Breakable CUDA Graph"
+title: "可断点 CUDA 图"
 metatags:
-    description: "Use Breakable CUDA Graph to insert targeted eager graph breaks for debugging and CUDA graph compatibility."
+    description: "使用可断点 CUDA 图（Breakable CUDA Graph）在指定位置插入 eager 图断点，用于调试与 CUDA 图兼容性处理。"
 ---
 
-## Motivation
+## 动机
 
-Standard CUDA graphs capture an entire forward pass as a single, opaque graph. This is great for performance, but creates two problems:
+标准 CUDA 图会把整个前向过程捕获成一张不透明的图。这有利于性能，但带来两个问题：
 
-1. **Debugging is hard.** When something goes wrong inside a captured graph (wrong outputs, numerical mismatches, crashes), there is no way to step through the operations or insert print statements because the graph replays as a monolithic unit.
+1. **调试困难。** 当捕获的图内部出问题时（输出错误、数值不匹配、崩溃），由于图作为一个整体单元重放，你无法单步执行其中的操作，也无法插入打印语句。
 
-2. **Some ops are incompatible.** Certain operations — dynamic control flow, host-device synchronization, JIT compilation, or ops that change behavior across iterations — cannot be captured into a CUDA graph at all. Today, the only workaround is to disable CUDA graphs entirely, which sacrifices the kernel launch overhead savings for the rest of the model.
+2. **部分算子不兼容。** 某些操作——动态控制流、主机-设备同步、JIT 编译，或跨迭代行为变化的算子——根本无法被捕获进 CUDA 图。目前唯一的变通办法是完全禁用 CUDA 图，但这会牺牲模型其余部分节省下来的 kernel 启动开销。
 
-**Breakable CUDA Graph** solves both problems by allowing graph breaks to be inserted at specific points. The computation is split into multiple captured graph segments with eager (non-graph) execution in between. This preserves most of the CUDA graph performance benefit while allowing targeted operations to run outside the graph.
+**可断点 CUDA 图**通过允许在特定位置插入图断点同时解决这两个问题：计算被切分成多个捕获的图段，段与段之间用 eager（非图）执行衔接。这样既保留了 CUDA 图的大部分性能收益，又允许目标操作在图外运行。
 
-## Usage
+<Note>
+💡 AI Infra 学习笔记：CUDA 图的核心价值在于把大量 kernel 启动从「每步一次 CPU 调度」变成「一次录制、整体重放」，省掉每颗 kernel 约 5–10 µs 的启动开销——解码阶段 kernel 数量多、单颗又很短，这部分开销占比很高。但图的静态性（固定形状、固定地址）让它很难兼容动态控制流和调试；可断点 CUDA 图用「分段」在两者之间找平衡，是理解 CUDA 图能力边界的好案例。
+</Note>
 
-### Debug Mode: Run Everything Eagerly
+## 使用方法
 
-The simplest use case is debugging. The `--debug-cuda-graph` flag wraps the entire decode forward pass in a graph break, so every operation runs eagerly while still going through the full CUDA graph capture/replay code path. This lets you debug CUDA graph issues without changing model code.
+### 调试模式：全部以 eager 方式运行
+
+最简单的用途是调试。`--debug-cuda-graph` 参数把整个解码前向过程包在一个图断点里，于是每个操作都以 eager 方式运行，但仍走完整的 CUDA 图捕获/重放代码路径。这样你不用改模型代码就能调试 CUDA 图问题。
 
 ```bash
 python -m sglang.launch_server \
@@ -26,11 +30,11 @@ python -m sglang.launch_server \
     --debug-cuda-graph
 ```
 
-This mode is intended for debugging only — it eliminates the performance benefit of CUDA graphs since every op runs eagerly.
+该模式仅供调试——由于每个算子都以 eager 方式运行，它完全消除了 CUDA 图的性能收益。
 
-### Selective Graph Breaks in Model Code
+### 在模型代码中做选择性图断点
 
-For production use, you can mark specific functions as "non-graphable" using the `@eager_on_graph` decorator. During CUDA graph capture, these functions run eagerly between captured graph segments. Outside of capture, they behave normally.
+生产环境使用中，你可以用 `@eager_on_graph` 装饰器把特定函数标记为「不可入图」。在 CUDA 图捕获期间，这些函数会在各捕获图段之间以 eager 方式运行；在捕获之外，它们表现如常。
 
 ```python
 from sglang.srt.model_executor.runner_backend_utils.breakable_cuda_graph import eager_on_graph
@@ -41,7 +45,7 @@ def my_dynamic_op(x):
     return some_dynamic_operation(x)
 ```
 
-You can also insert a bare graph break (no computation) using the `break_graph()` helper:
+你也可以用 `break_graph()` 辅助函数插入一个不带计算的裸图断点：
 
 ```python
 from sglang.srt.model_executor.runner_backend_utils.breakable_cuda_graph import break_graph
@@ -53,7 +57,7 @@ def forward(self, x):
     return x
 ```
 
-To enable breakable CUDA graph at the environment level (without debug mode), set the environment variable:
+要在环境层面启用可断点 CUDA 图（不用调试模式），设置环境变量：
 
 ```bash
 export SGLANG_USE_BREAKABLE_CUDA_GRAPH=1
@@ -61,7 +65,7 @@ python -m sglang.launch_server \
     --model meta-llama/Llama-3.1-8B-Instruct
 ```
 
-### Server Args
+### 服务端参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -71,32 +75,32 @@ python -m sglang.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--debug-cuda-graph</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>False</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Enable debug/eager mode. Wraps the entire forward pass in a graph break so every op runs eagerly through the capture/replay path.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>启用调试/eager 模式。把整个前向过程包在一个图断点里，让每个算子都通过捕获/重放路径以 eager 方式运行。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>SGLANG_USE_BREAKABLE_CUDA_GRAPH</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>0</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Environment variable. Enables breakable CUDA graph without debug mode. Required for <code>@eager_on_graph</code> decorators to take effect.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>环境变量。在不使用调试模式的情况下启用可断点 CUDA 图。`@eager_on_graph` 装饰器生效需要它。</td>
     </tr>
   </tbody>
 </table>
 
-## How It Works
+## 工作原理
 
-### Capture
+### 捕获
 
-Breakable CUDA graph extends PyTorch's `torch.cuda.CUDAGraph` by splitting a single capture into multiple segments separated by graph breaks.
+可断点 CUDA 图扩展了 PyTorch 的 `torch.cuda.CUDAGraph`，把一次捕获拆分成被图断点分隔的多个段。
 
-During capture, the flow is:
+捕获期间的流程如下：
 
 ```
 Begin capture (segment 1)
@@ -110,11 +114,11 @@ Begin capture (segment 1)
 End capture (segment N)
 ```
 
-Each segment is independently instantiated as a CUDA graph executable. The non-graph functions and their argument references are stored for replay.
+每个段都被独立实例化为一个可执行的 CUDA 图。非图函数及其参数引用会被保存下来，供重放时使用。
 
-### Replay
+### 重放
 
-During replay:
+重放期间：
 
 ```
 For each segment i:
@@ -123,38 +127,42 @@ For each segment i:
 Launch final CUDA graph segment
 ```
 
-The non-graph functions are re-invoked with the same tensor references as capture time. Since these references point to the CUDA graph's static input/output buffers, they see updated values on each replay.
+非图函数会以捕获时相同的 tensor 引用被再次调用。由于这些引用指向 CUDA 图的静态输入/输出缓冲区，每次重放时它们都能看到更新后的值。
 
-### Output Writeback
+### 输出写回
 
-When a non-graph function produces output during replay, the result must be written back into the same tensor buffers that downstream graph segments reference. The mechanism handles:
+当非图函数在重放期间产生输出时，结果必须写回下游图段所引用的同一批 tensor 缓冲区。该机制处理以下几种情况：
 
-- **Plain tensors**: In-place `copy_()` into the original buffer.
-- **Structured outputs** (dataclasses, objects with tensor attributes): Tensor fields are copied in-place; non-tensor fields are replaced.
-- **Dicts of tensors**: Tensor values are copied in-place; non-tensor values are replaced.
+- **普通 tensor**：原地 `copy_()` 进原缓冲区。
+- **结构化输出**（dataclass、带 tensor 属性的对象）：tensor 字段原地拷贝；非 tensor 字段直接替换。
+- **tensor 字典**：tensor 值原地拷贝；非 tensor 值直接替换。
 
-### Stream Fork/Join Tracking
+### 流的分叉/汇合跟踪
 
-Some models fork work onto secondary CUDA streams (e.g., for overlapped computation). Breakable CUDA graph hooks `torch.cuda.Stream.wait_stream` to track which streams are forked from the capture stream. When a graph break occurs, all forked streams are automatically joined back before ending the capture segment, and re-forked after beginning the next segment.
+有些模型会把工作分叉到次要 CUDA 流上（例如用于计算重叠）。可断点 CUDA 图通过挂钩 `torch.cuda.Stream.wait_stream` 来跟踪哪些流从捕获流分叉出去。发生图断点时，所有分叉的流都会在结束当前捕获段之前被自动汇合回来，并在下一段开始后重新分叉。
 
-## Compatibility
+<Note>
+💡 AI Infra 学习笔记：分段图的难点在于「段间数据如何交接」：非图函数在 eager 下运行、产出新的 tensor，必须把结果写回下游图段引用的静态缓冲区（就地 copy），才能保证重放时数据连续。流的派生与汇合跟踪同理——图捕获期间派生出的流必须在段结束时汇合回捕获流，否则执行顺序无法保证。这些细节正是 CUDA 图工程化中「捕获失败」最常见的来源。
+</Note>
 
-- **CUDA and ROCm/HIP.** Breakable CUDA graph runs on both NVIDIA and AMD GPUs. Other platforms (NPU, CPU, MPS, XPU) are unsupported; there `--debug-cuda-graph` is automatically disabled with a warning.
-- **Requires `cuda-python` on NVIDIA.** Stream-capture-status queries use the CUDA runtime via `cuda.bindings` (`pip install cuda-python`); the portable `torch.cuda.is_current_stream_capturing()` has proven unreliable on CUDA. On ROCm/HIP — where `cuda-python` is unavailable — the portable `torch.cuda` API (which maps to the HIP runtime) is used instead.
-- **Not compatible with memory saver mode.** Cannot be used together with `SGLANG_MEMORY_SAVER_CUDA_GRAPH`.
+## 兼容性
 
-## Performance
+- **CUDA 与 ROCm/HIP。** 可断点 CUDA 图在 NVIDIA 和 AMD GPU 上都能运行。其他平台（NPU、CPU、MPS、XPU）不受支持；在这些平台上 `--debug-cuda-graph` 会被自动禁用并给出警告。
+- **NVIDIA 上需要 `cuda-python`。** 流捕获状态查询通过 `cuda.bindings`（`pip install cuda-python`）使用 CUDA 运行时；可移植的 `torch.cuda.is_current_stream_capturing()` 在 CUDA 上已被证明不可靠。在 ROCm/HIP——`cuda-python` 不可用——则改用可移植的 `torch.cuda` API（其映射到 HIP 运行时）。
+- **与内存节省模式不兼容。** 不能与 `SGLANG_MEMORY_SAVER_CUDA_GRAPH` 一起使用。
 
-When no graph breaks are inserted, breakable CUDA graph has minimal overhead compared to standard CUDA graph — the capture/replay path is nearly identical.
+## 性能
 
-Each graph break adds:
-- One `cudaGraphLaunch` call (to replay the segment before the break)
-- One eager Python function call
-- One `cudaStreamBeginCapture` / `cudaStreamEndCapture` pair during capture
+当不插入任何图断点时，可断点 CUDA 图相比标准 CUDA 图的开销极小——捕获/重放路径几乎完全相同。
 
-For typical use cases with a small number of graph breaks, the overhead is negligible compared to the saved kernel launch overhead from the captured segments.
+每个图断点会增加：
+- 一次 `cudaGraphLaunch` 调用（重放断点前的图段）
+- 一次 eager Python 函数调用
+- 捕获期间一对 `cudaStreamBeginCapture` / `cudaStreamEndCapture` 调用
 
-## Code Reference
+对于只有少量图断点的典型场景，相比捕获图段所节省的 kernel 启动开销，这部分开销可以忽略不计。
+
+## 代码参考
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -163,30 +171,30 @@ For typical use cases with a small number of graph breaks, the overhead is negli
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>File</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>文件</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/model_executor/runner_backend_utils/breakable_cuda_graph/breakable_cuda_graph.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Core implementation: <code>eager_on_graph</code>, <code>BreakableCUDAGraph</code>, <code>BreakableCUDAGraphCapture</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>核心实现：<code>eager_on_graph</code>、<code>BreakableCUDAGraph</code>、<code>BreakableCUDAGraphCapture</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/model_executor/runner_backend_utils/breakable_cuda_graph/cuda_utils.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>CUDA runtime binding utilities (NVIDIA stream-capture queries)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>CUDA 运行时绑定工具（NVIDIA 流捕获查询）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/model_executor/runner_backend/breakable_cuda_graph_backend.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Integration with CUDA graph runner backends</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>与 CUDA 图 runner 后端的集成</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/server_args.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--debug-cuda-graph</code> flag and environment variable handling</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>--debug-cuda-graph</code> 参数与环境变量处理</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/environ.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>SGLANG_USE_BREAKABLE_CUDA_GRAPH</code> environment variable definition</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>SGLANG_USE_BREAKABLE_CUDA_GRAPH</code> 环境变量定义</td>
     </tr>
   </tbody>
 </table>

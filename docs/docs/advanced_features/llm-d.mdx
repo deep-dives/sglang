@@ -1,41 +1,45 @@
 ---
 title: "llm-d"
 metatags:
-    description: "Run SGLang at fleet scale with llm-d: prefix-aware routing, distributed KV-cache management, prefill/decode disaggregation, SLO-aware autoscaling on Kubernetes."
+    description: "用 llm-d 在集群规模上运行 SGLang：前缀感知路由、分布式 KV 缓存管理、预填充/解码分离部署、Kubernetes 上的 SLO 感知自动扩缩容。"
 ---
 
-[llm-d](https://llm-d.ai/) is a Kubernetes-native distributed inference framework for serving large language models at scale across a fleet of inference servers. SGLang is a supported inference engine in llm-d: llm-d coordinates a fleet of SGLang instances across a cluster so that performance holds up under real production traffic, achieving the fastest "time to state-of-the-art (SOTA) performance" for key OSS models across most hardware accelerators.
+[llm-d](https://llm-d.ai/) 是一个 Kubernetes 原生的分布式推理框架，用于在跨大量推理服务器的集群上规模化服务大语言模型。SGLang 是 llm-d 支持的推理引擎之一：llm-d 在集群中协调一批 SGLang 实例，使性能在真实生产流量下依然稳定，在大多数硬件加速器上为关键开源模型实现最快的「达到 SOTA 性能的时间」。
 
-llm-d is a [CNCF Sandbox project](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/) founded by Red Hat, Google Cloud, IBM Research, CoreWeave, and NVIDIA.
+llm-d 是一个由 Red Hat、Google Cloud、IBM Research、CoreWeave 和 NVIDIA 共同发起的 [CNCF Sandbox 项目](https://www.cncf.io/blog/2026/03/24/welcome-llm-d-to-the-cncf-evolving-kubernetes-into-sota-ai-infrastructure/)。
 
-## What llm-d adds to an SGLang deployment
+## llm-d 为 SGLang 部署带来了什么
 
-A single SGLang server is fast, and RadixAttention already maximizes cache reuse within each replica. But at scale the picture changes: across many replicas, cache locality breaks under round-robin load balancing as related requests scatter and radix-cache hit rates collapse, long prompts inflate time-to-first-token, and accelerators sit underused. llm-d adds the cluster-level layer that the engine does not aim to provide on its own:
+单个 SGLang 服务器很快，RadixAttention 也已经在每个副本内把缓存复用做到极致。但到了集群规模，情况就变了：跨多个副本时，round-robin 负载均衡会破坏缓存局部性——相关请求被打散，Radix 缓存命中率崩塌，长提示词拉高首 token 延迟，加速器也闲置未被充分利用。llm-d 补上了引擎自身不打算提供的集群级一层：
 
-- **[Prefix-aware routing](https://llm-d.ai/docs/guides/precise-prefix-cache-aware).** Instead of round-robin, the llm-d Router scores each replica on prefix-cache locality and current load, routing each request to the replica most likely to already hold its prefix — raising RadixAttention hit rates on multi-turn and shared-prefix workloads while avoiding saturated servers.
-- **[Distributed KV-cache management](https://llm-d.ai/docs/guides#advanced-kv-cache-management).** A global index tracks which token blocks live on which replica, and tiered offloading spills cache to CPU memory or local SSD, extending the working set beyond accelerator HBM.
-- **[Prefill/decode disaggregation](https://llm-d.ai/docs/guides/pd-disaggregation).** Prompt processing and token generation run on separate workers, with KV-cache moved over high-speed interconnects, lowering TTFT and steadying per-token latency on long prompts.
-- **[SLO-aware autoscaling](https://llm-d.ai/docs/guides/workload-autoscaling) and [flow control](https://llm-d.ai/docs/guides/flow-control).** Scale SGLang pools on real inference signals (queue depth, true demand) rather than raw GPU utilization, with multi-tenant fairness and priority dispatch.
-- **One control plane for mixed fleets.** llm-d schedules across engines, so platform teams can serve SGLang and vLLM pools behind the same gateway, policies, and observability instead of running parallel stacks.
+- **[前缀感知路由](https://llm-d.ai/docs/guides/precise-prefix-cache-aware)。** 不再用 round-robin，llm-d Router 会按前缀缓存局部性和当前负载为每个副本打分，把每个请求路由到最可能已持有其前缀的副本——在多轮对话和共享前缀工作负载上提升 RadixAttention 命中率，同时避开已饱和的服务器。
+- **[分布式 KV 缓存管理](https://llm-d.ai/docs/guides#advanced-kv-cache-management)。** 一个全局索引跟踪哪些 token 块位于哪个副本上，分级卸载会把缓存溢出到 CPU 内存或本地 SSD，把工作集扩展到加速器 HBM 之外。
+- **[预填充/解码分离部署](https://llm-d.ai/docs/guides/pd-disaggregation)。** 提示词处理与 token 生成在不同 worker 上运行，KV 缓存通过高速互联传输，降低 TTFT 并让长提示词的逐 token 延迟更稳定。
+- **[SLO 感知自动扩缩容](https://llm-d.ai/docs/guides/workload-autoscaling)与[流量控制](https://llm-d.ai/docs/guides/flow-control)。** 基于真实推理信号（队列深度、真实需求）而非原始 GPU 利用率来扩缩 SGLang 池，并支持多租户公平与优先级分发。
+- **混合集群的统一控制面。** llm-d 跨引擎调度，平台团队可以在同一套网关、策略与可观测性后面服务 SGLang 与 vLLM 池，而不必维护并行的多套技术栈。
 
-These capabilities are composable. Most teams start by adding prefix-aware routing over an existing SGLang pool, then layer in the rest as specific bottlenecks appear.
+这些能力可以组合使用。大多数团队先从在现有 SGLang 池上添加前缀感知路由开始，然后随着具体瓶颈的出现再逐层叠加其余能力。
 
-## Kubernetes-native gateway
+<Note>
+💡 AI Infra 学习笔记：llm-d 回答了「单机引擎之外的最后一公里」：引擎内的 RadixAttention 只保证单副本缓存，跨副本的缓存命中要靠集群路由。前缀感知路由 + 分布式 KV 缓存分层（HBM→CPU→SSD）+ PD 分离 + SLO 自动扩缩，构成生产级集群推理的标准四件套。理解这条链路能帮你把「推理引擎优化」从单机视角扩展到集群调度视角——这是 AI Infra 面试中高级岗位常考的话题。
+</Note>
 
-llm-d builds on the Gateway API Inference Extension, so SGLang pools are managed through standard Kubernetes resources (Gateway, HTTPRoute, InferencePool) and work with supported gateway providers such as Istio, GKE Inference Gateway, and agentgateway, rather than a bespoke routing tier.
+## Kubernetes 原生网关
 
-## Performance
+llm-d 构建在 Gateway API Inference Extension 之上，因此 SGLang 池通过标准 Kubernetes 资源（Gateway、HTTPRoute、InferencePool）管理，并与受支持的网关提供方（如 Istio、GKE Inference Gateway、agentgateway）协同工作，而不是使用一套定制的路由层。
 
-llm-d publishes reproducible benchmarks from production-scale deployments on [Prism](https://prism.llm-d.ai/). One representative result: prefix-aware routing delivered **3x higher output throughput and 2x faster TTFT** than round-robin load balancing (Llama 3.1 70B). The mechanism carries over directly to SGLang, where RadixAttention makes the cluster-level cache hit rate a function of routing.
+## 性能
 
-## Get started
+llm-d 在 [Prism](https://prism.llm-d.ai/) 上发布来自生产规模部署的可复现基准测试。一个代表性结果：相比 round-robin 负载均衡（Llama 3.1 70B），前缀感知路由带来了**3 倍的输出吞吐提升和 2 倍更快的 TTFT**。这一机制直接适用于 SGLang——在 SGLang 中，RadixAttention 让集群级的缓存命中率成为路由的函数。
 
-- **Deploy the optimized baseline with the [Quickstart](https://llm-d.ai/docs/getting-started/quickstart), selecting SGLang as the inference server.** It stands up an intelligent router (the llm-d Router) over an SGLang pool on Kubernetes in a tested configuration.
-- Browse the [well-lit path guides](https://llm-d.ai/docs/guides), each a tested recipe for one of the capabilities above, and add the optimization that fits your workload.
-- Read the [Introduction](https://llm-d.ai/docs/getting-started) and [Architecture overview](https://llm-d.ai/docs/architecture) to see how the scheduler, gateway, and model servers wrap your SGLang deployment.
+## 快速开始
 
-Questions and contributions are welcome on [GitHub](https://github.com/llm-d/llm-d) and [Slack](https://llm-d.ai/slack).
+- **用[快速入门](https://llm-d.ai/docs/getting-started/quickstart)部署优化基线，选择 SGLang 作为推理服务器。** 它会在 Kubernetes 上以经过测试的配置，在 SGLang 池之上部署一个智能路由器（llm-d Router）。
+- 浏览[成熟路径指南](https://llm-d.ai/docs/guides)，每篇都是上述某项能力的经过测试的配方，按需添加适合你工作负载的优化。
+- 阅读[简介](https://llm-d.ai/docs/getting-started)和[架构概览](https://llm-d.ai/docs/architecture)，了解调度器、网关和模型服务器如何包裹你的 SGLang 部署。
 
-## Current scope
+欢迎在 [GitHub](https://github.com/llm-d/llm-d) 和 [Slack](https://llm-d.ai/slack) 上提问与贡献。
 
-SGLang is supported across the well-lit paths — including intelligent inference scheduling, precise prefix-cache routing (SGLang publishes KV-cache events that the llm-d Router subscribes to), tiered KV-cache management, prefill/decode disaggregation, flow control, and autoscaling. The one current exception is Multi-Node Wide Expert Parallelism, which is vLLM-specific today. See the llm-d documentation for the latest per-engine support status.
+## 当前支持范围
+
+SGLang 在成熟路径上均受支持——包括智能推理调度、精确前缀缓存路由（SGLang 发布 llm-d Router 订阅的 KV 缓存事件）、分级 KV 缓存管理、预填充/解码分离部署、流量控制和自动扩缩容。目前唯一的例外是多节点宽专家并行（Multi-Node Wide Expert Parallelism），它目前是 vLLM 专属的能力。各引擎的最新支持状态请参见 llm-d 文档。

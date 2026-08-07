@@ -1,17 +1,22 @@
 ---
-title: "Expert Parallelism"
+title: "专家并行"
 metatags:
-    description: "SGLang Expert Parallelism: distribute MoE experts across GPUs, DeepEP all-to-all, grouped GEMMs, TBO/SBO overlap, EPLB load balancing."
+    description: "SGLang 专家并行：把 MoE 专家分布到多块 GPU 上，DeepEP all-to-all、分组 GEMM、TBO/SBO 重叠、EPLB 负载均衡。"
 ---
-Expert Parallelism (EP) in SGLang distributes expert weights across multiple devices in Mixture-of-Experts (MoE) models, addressing memory bottlenecks and enabling efficient scaling for high-performance inference. It is particularly vital for serving large-scale MoE models where tokens are dynamically routed to specialized experts across GPUs. By leveraging optimized all-to-all communication and grouped matrix multiplications (GEMMs), EP reduces latency, boosts throughput, and minimizes idle GPU time. SGLang's EP offers strong extensibility through its modular framework, allowing seamless integration of custom kernels, backends, and optimizations without refactoring core logic, supporting diverse hardware and quantization schemes.
+SGLang 中的专家并行（EP）把混合专家（MoE）模型中的专家权重分布到多块设备上，解决内存瓶颈并实现高性能推理的高效扩展。它对服务大规模 MoE 模型尤其重要——这类模型中，token 会被动态路由到分布在多块 GPU 上的专门专家。借助优化的 all-to-all 通信和分组矩阵乘法（GEMM），EP 能降低延迟、提升吞吐并最小化 GPU 空闲时间。SGLang 的 EP 通过模块化框架提供很强的可扩展性，可以在不改动核心逻辑的前提下无缝集成自定义 kernel、后端和优化，支持多种硬件与量化方案。
 
-## Supported Backends and Selection Guidance
+<Note>
+💡 AI Infra 学习笔记：专家并行（EP）解决的是 MoE 模型的两个问题：一是权重放不下——几百个专家里只有一部分被激活，没必要复制到每块 GPU；二是负载不均衡——不同 token 路由到不同专家，各 GPU 上专家的工作量差异大。EP 把专家按需分布到各设备，token 通过 all-to-all 通信「分发-计算-回收」（dispatch-combine），配合分组 GEMM 提升矩阵计算的批量效率。EP 与 TP 的核心区别：TP 切分单个算子的权重、每个算子都要通信；EP 只切分专家，通信只在 MoE 层发生一次。
+</Note>
 
-SGLang's EP integrates diverse, highly efficient backends for different use cases, allowing fine-grained control over performance trade-offs. Users specify backends via command-line flags:
-- `--moe-a2a-backend`: Selects the backend for all-to-all communication.
-- `--moe-runner-backend`: Selects the backend for MoE computation.
 
-### Backends for All-to-All Communication
+## 支持的后端与选择指引
+
+SGLang 的 EP 为不同场景集成了多样且高效的后端，允许对性能权衡做细粒度控制。用户通过命令行参数指定后端：
+- `--moe-a2a-backend`：选择 all-to-all 通信的后端。
+- `--moe-runner-backend`：选择 MoE 计算的后端。
+
+### All-to-All 通信的后端
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -21,60 +26,60 @@ SGLang's EP integrates diverse, highly efficient backends for different use case
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Use Cases</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>适用场景</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`none` (default)**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Disables all-to-all for EP. Uses All-Reduce or All-Gather for token dispatch.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Hybrid EP and TP setups.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`none`（默认）**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>禁用 EP 的 all-to-all。用 All-Reduce 或 All-Gather 做 token 分发。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>EP 与 TP 混合设置。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deepep`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepEP, a communication library for efficient token shuffling in MoE models.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Large-scale EP deployments.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepEP，一个用于 MoE 模型高效 token 洗牌的通信库。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>大规模 EP 部署。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`mooncake`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>An extension of DeepEP for elastic inference, leveraging RDMA for high-performance data transfers.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Elastic EP serving.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepEP 的弹性推理扩展，利用 RDMA 做高性能数据传输。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>弹性 EP 推理服务。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>nixl</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><a href="https://github.com/ai-dynamo/nixl/tree/main/examples/device/ep">NIXL-EP</a>, an elastic EP communication library built on NVIDIA's <a href="https://github.com/ai-dynamo/nixl">NIXL</a> framework with native RDMA and NVLink support.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Elastic EP serving with fault tolerance and dynamic scaling.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><a href="https://github.com/ai-dynamo/nixl/tree/main/examples/device/ep">NIXL-EP</a>，一个基于 NVIDIA <a href="https://github.com/ai-dynamo/nixl">NIXL</a> 框架的弹性 EP 通信库，原生支持 RDMA 与 NVLink。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>带故障容错与动态扩缩容的弹性 EP 推理服务。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>mori</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MORI-EP, AMD's native all-to-all communication implementation optimized for ROCm.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>AMD GPU deployments.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MORI-EP，AMD 为 ROCm 优化的原生 all-to-all 通信实现。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>AMD GPU 部署。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`flashinfer`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Flashinfer implementation of all-to-all.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Large-scale EP deployments.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer 的 all-to-all 实现。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>大规模 EP 部署。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`ascend_fuseep`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ascend NPU native fused all-to-all communication.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Ascend NPU deployments.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Ascend NPU 原生的融合 all-to-all 通信。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Ascend NPU 部署。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`pplx`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><a href="https://github.com/perplexityai/pplx-kernels">pplx-kernels</a>, Perplexity's NVSHMEM-based all-to-all dispatch/combine kernels. Low-latency (masked) only; targets FP8 (DeepGEMM) MoE models on Hopper. Requires NVSHMEM 3.2.5, <code>nvshmem4py</code>, <code>cuda-python</code>, and a prebuilt <code>libpplx_kernels.so</code> (<code>sm_90a</code>).</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Low-latency decode EP on Hopper.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><a href="https://github.com/perplexityai/pplx-kernels">pplx-kernels</a>，Perplexity 基于 NVSHMEM 的 all-to-all 分发/回收 kernel。仅支持低延迟（masked）模式；面向 Hopper 上 FP8（DeepGEMM）的 MoE 模型。需要 NVSHMEM 3.2.5、<code>nvshmem4py</code>、<code>cuda-python</code> 以及预构建的 <code>libpplx_kernels.so</code>（<code>sm_90a</code>）。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Hopper 上的低延迟解码 EP。</td>
     </tr>
   </tbody>
 </table>
 
-DeepEP and Mooncake backends support two modes for token dispatch: `normal` mode (optimized for prefill workloads with high throughput) and `low_latency` mode (optimized for decode workloads with low latency and CUDA Graph compatibility). MORI backend only supports `normal` mode now. NIXL-EP and PPLX currently operate in low-latency mode with CUDA Graph support (PPLX reuses the DeepEP low-latency masked expert-compute path). Users are recommended to set `--deepep-mode auto` to enable automatic dispatch mode switching during runtime. Setting `--deepep-mode normal` or `--deepep-mode low_latency` is useful for debugging or development purposes.
+DeepEP 和 Mooncake 后端支持两种 token 分发模式：`normal` 模式（为高吞吐的预填充工作负载优化）和 `low_latency` 模式（为低延迟、兼容 CUDA 图的解码工作负载优化）。MORI 后端目前只支持 `normal` 模式。NIXL-EP 和 PPLX 目前在低延迟模式下运行并支持 CUDA 图（PPLX 复用 DeepEP 的低延迟 masked 专家计算路径）。建议用户设置 `--deepep-mode auto`，让运行时自动切换分发模式。设置 `--deepep-mode normal` 或 `--deepep-mode low_latency` 则适合调试或开发。
 
-Currently, DeepEP, Mooncake, NIXL-EP, `ascend_fuseep`, `pplx` and MORI only support cases where `ep_size = tp_size`. For hybrid EP and TP (i.e., `ep_size < tp_size`), only the `none` backend (All-Reduce or All-Gather-based dispatching) is supported. Note that `pplx` additionally requires `--enable-dp-attention` with at least 2 DP groups (i.e., `tp_size / attention_tp_size > 1`); otherwise pplx-kernels' AllToAll cannot be constructed.
+目前，DeepEP、Mooncake、NIXL-EP、`ascend_fuseep`、`pplx` 和 MORI 只支持 `ep_size = tp_size` 的情况。对于 EP 与 TP 混合（即 `ep_size < tp_size`），只支持 `none` 后端（基于 All-Reduce 或 All-Gather 的分发）。注意 `pplx` 还需要 `--enable-dp-attention` 且至少有 2 个 DP 组（即 `tp_size / attention_tp_size > 1`）；否则无法构建 pplx-kernels 的 AllToAll。
 
-### Backends for MoE Computation
+### MoE 计算的后端
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -84,81 +89,81 @@ Currently, DeepEP, Mooncake, NIXL-EP, `ascend_fuseep`, `pplx` and MORI only supp
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Backend</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Use Cases</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>后端</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>适用场景</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`auto` (default)**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Automatically selects the optimal backend based on model architecture, hardware (e.g., NVIDIA architecture like Ampere, Hopper, Blackwell), quantization scheme (e.g., FP8, FP4), and runtime conditions.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>General-purpose deployments; ensures compatibility and performance without user intervention.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`auto`（默认）**</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>根据模型架构、硬件（例如 Ampere、Hopper、Blackwell 等 NVIDIA 架构）、量化方案（例如 FP8、FP4）和运行时条件自动选择最优后端。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>通用部署；无需用户干预即可保证兼容性与性能。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`triton`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Triton-based implementation for grouped GEMMs. To achieve higher performance, it's highly recommended to create <a href="https://github.com/sgl-project/sglang/blob/main/benchmark/kernels/fused_moe_triton/README.md">tuned configurations</a>.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Custom kernel development or scenarios requiring high extensibility with Torch compilation support.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>基于 Triton 的分组 GEMM 实现。为了更高性能，强烈建议创建<a href="https://github.com/sgl-project/sglang/blob/main/benchmark/kernels/fused_moe_triton/README.md">调优配置</a>。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>自定义 kernel 开发，或需要高可扩展性并支持 Torch 编译的场景。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`deep_gemm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>DeepGEMM backend optimized for MoE matrix multiplications, supporting contiguous layouts for prefill and masked layouts for decode; often JIT-compiled for performance.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Large-scale EP deployments with FP8 block-wise quantization.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>为 MoE 矩阵乘法优化的 DeepGEMM 后端，支持预填充的连续布局与解码的 masked 布局；通常为性能做 JIT 编译。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>带 FP8 分块量化的大规模 EP 部署。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`cutlass`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>CUTLASS-based backend for efficient GEMMs.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>NVIDIA architectures with CUTLASS support.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>基于 CUTLASS 的高效 GEMM 后端。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>支持 CUTLASS 的 NVIDIA 架构。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`flashinfer_trtllm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer integrated with TensorRT-LLM for accelerated MoE computations, supporting FP4 communication operators and high-performance GEMMs.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Blackwell with TRT-LLM.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer 与 TensorRT-LLM 集成，加速 MoE 计算，支持 FP4 通信算子与高性能 GEMM。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>搭配 TRT-LLM 的 Blackwell。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>flashinfer_trtllm_routed</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer integrated with TensorRT-LLM for accelerated routed MoE computations, consuming SGLang-computed top-k expert assignments and weights. Compatible with flashinfer all-to-all.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Blackwell with TRT-LLM.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer 与 TensorRT-LLM 集成，加速 routed MoE 计算，使用 SGLang 算出的 top-k 专家分配与权重。与 flashinfer all-to-all 兼容。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>搭配 TRT-LLM 的 Blackwell。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`flashinfer_cutlass`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer combined with CUTLASS for high-performance grouped GEMMs in MoE layers, handling FP4/FP8 quantization efficiently.  Compatible with flashinfer all-to-all.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Blackwell with FP4/FP8 models.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer 与 CUTLASS 结合，在 MoE 层做高性能分组 GEMM，高效处理 FP4/FP8 量化。与 flashinfer all-to-all 兼容。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>搭配 FP4/FP8 模型的 Blackwell。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`flashinfer_mxfp4`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer variant optimized for MXFP4 (mixed FP4) quantization in MoE runners, focusing on memory-efficient low-precision inference.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Low-precision models with MXFP4.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>为 MoE runner 中 MXFP4（混合 FP4）量化优化的 FlashInfer 变体，专注内存高效的低精度推理。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>使用 MXFP4 的低精度模型。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`flashinfer_cutedsl`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer with a custom DSL for flexible and efficient MoE kernel generation, integrated with ModelOpt FP4 quantization. Compatible with flashinfer all-to-all.</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Low-precision models with NVFP4.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>FlashInfer 配合自定义 DSL，灵活高效地生成 MoE kernel，并集成 ModelOpt FP4 量化。与 flashinfer all-to-all 兼容。</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>使用 NVFP4 的低精度模型。</td>
     </tr>
   </tbody>
 </table>
 
-### Examples
+### 示例
 
-Launch with DeepEP and DeepGEMM for DeepSeek-V3:
+用 DeepEP 与 DeepGEMM 为 DeepSeek-V3 启动服务：
 
 ```bash Command
 python -m sglang.launch_server --model-path deepseek-ai/DeepSeek-V3 --moe-a2a-backend deepep --moe-runner-backend deep_gemm --tp 8 --ep 8
 ```
 
-## Extensible EP Framework
+## 可扩展的 EP 框架
 
-SGLang's EP framework provides modular abstractions for easy integration of custom kernels, backends, and optimizations. It decouples the MoE forward pass into stages (dispatch → pre-permute → core runner → post-permute → combine), enabling seamless extensions without refactoring core logic.
+SGLang 的 EP 框架提供模块化抽象，便于集成自定义 kernel、后端和优化。它把 MoE 前向过程解耦为多个阶段（dispatch → pre-permute → core runner → post-permute → combine），从而无需重构核心逻辑即可无缝扩展。
 
-### Framework Overview
+### 框架概览
 
-The framework centers on `FusedMoE` as the unified entry point for a single, extensible structure. Key components include:
-- **Dispatcher**: Manages dispatch/combine for backends like DeepEP (implements `BaseDispatcher` subclasses).
-- **MoeRunner**: Orchestrates grouped-GEMM execution via `MoeRunnerCore` implementations (e.g., `TritonRunnerCore`).
-- **PermuteMethodPool**: Auto-registers layout conversions (e.g., pre/post-permute via `register_pre_permute` and `register_post_permute` for dynamic modes, or `register_fused_func` for static, torch.compile-compatible fused operations).
-- **TopK Router**: Backend-agnostic expert selection.
+框架以 `FusedMoE` 为核心，作为统一的、可扩展结构的入口。关键组件包括：
+- **Dispatcher**：管理 DeepEP 等后端的分发/回收（实现 `BaseDispatcher` 子类）。
+- **MoeRunner**：通过 `MoeRunnerCore` 实现（如 `TritonRunnerCore`）编排分组 GEMM 的执行。
+- **PermuteMethodPool**：自动注册布局转换（例如动态模式下通过 `register_pre_permute` 和 `register_post_permute` 做 pre/post-permute，或用 `register_fused_func` 做静态的、兼容 torch.compile 的融合操作）。
+- **TopK Router**：与后端无关的专家选择。
 
-This design supports multiple backends via `--moe-a2a-backend` and `--moe-runner-backend`, with quantization integrated through a standardized `apply()` method. The computation flow ensures modularity:
+这种设计通过 `--moe-a2a-backend` 和 `--moe-runner-backend` 支持多个后端，量化则通过标准化的 `apply()` 方法集成。计算流程保证了模块化：
 
 ```text Output
 [input_hidden_states]
@@ -193,31 +198,36 @@ This design supports multiple backends via `--moe-a2a-backend` and `--moe-runner
 [final_hidden_states]
 ```
 
-For details, see the [MoE Refactor Roadmap](https://github.com/sgl-project/sglang/issues/8715).
+更多细节参见 [MoE 重构路线图](https://github.com/sgl-project/sglang/issues/8715)。
 
-### Implementing New Backends
+### 实现新后端
 
-To add a new backend:
-1. For a new all-to-all dispatcher, implement a `BaseDispatcher` subclass with `dispatch` and `combine` methods.
-2. For a new MoE runner backend, define a `MoeRunnerCore` subclass for core operations (e.g., grouped GEMMs).
-3. Define new input/output formats for the dispatcher or model runner (e.g., `RunnerInput`, `RunnerOutput`).
-4. Register permute/unpermute methods to ensure compatibility:
-   - **Fused Mode** (static, torch.compile-compatible): Use `register_fused_func` for end-to-end operations.
-   - **Permute Mode** (dynamic): Register `register_pre_permute` and `register_post_permute` for flexible layouts.
+要新增一个后端：
+1. 对于新的 all-to-all 分发器，实现一个带 `dispatch` 和 `combine` 方法的 `BaseDispatcher` 子类。
+2. 对于新的 MoE runner 后端，为核心操作（如分组 GEMM）定义一个 `MoeRunnerCore` 子类。
+3. 为分发器或模型 runner 定义新的输入/输出格式（例如 `RunnerInput`、`RunnerOutput`）。
+4. 注册 permute/unpermute 方法以保证兼容：
+   - **Fused 模式**（静态、兼容 torch.compile）：用 `register_fused_func` 处理端到端操作。
+   - **Permute 模式**（动态）：注册 `register_pre_permute` 和 `register_post_permute` 以支持灵活的布局。
 
-See the [MoE Refactor Implementation PR](https://github.com/sgl-project/sglang/pull/9269) for full changes, including type hints and config expansions.
+完整改动参见 [MoE 重构实现 PR](https://github.com/sgl-project/sglang/pull/9269)，包括类型提示与配置扩展。
 
-### Examples
+### 示例
 
-For an example implementation, see [moe_runner/triton.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/layers/moe/moe_runner/triton.py), which demonstrates Triton-based grouped GEMMs with registered fused and permutation functions.
+示例实现参见 [moe_runner/triton.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/layers/moe/moe_runner/triton.py)，它演示了带注册 fused 与 permute 函数的基于 Triton 的分组 GEMM。
 
-## Computation and Communication Overlap
+## 计算与通信重叠
 
-SGLang's EP employs advanced overlap techniques to hide communication latency behind computation, maximizing GPU utilization in MoE layers.
+SGLang 的 EP 采用先进的重叠技术，把通信延迟隐藏在计算背后，最大化 MoE 层的 GPU 利用率。
 
-### Two-Batch Overlap (TBO)
+<Note>
+💡 AI Infra 学习笔记：EP 的性能关键在「通信与计算重叠」。MoE 层的 token 分发（all-to-all）要经过网络，如果等通信完再算，GPU 会空转。TBO 把请求拆成两个微批，让一批的注意力计算与另一批的分发/回收通信交错；SBO 则让单个批内的共享专家计算与通信重叠。理解「用计算掩盖通信」是分布式推理优化的核心思路，也是面试高频考点。
+</Note>
 
-TBO splits requests into micro-batches, interleaving attention computation with dispatch/combine operations. Yield points in the execution graph allow pausing for overlaps, increasing overall throughput without peak memory spikes:
+
+### 双批重叠（TBO）
+
+TBO 把请求拆成微批次，把注意力计算与分发/回收操作交错执行。执行图中的让出点（yield point）允许暂停以进行重叠，从而在不引起峰值内存飙升的情况下提升整体吞吐：
 
 ```python Example
 operations = [
@@ -230,53 +240,53 @@ operations = [
 ]
 ```
 
-Users need to specify `--enable-two-batch-overlap` to unlock up to 2x throughput. For details, see the [Large-Scale EP Blog](https://lmsys.org/blog/2025-05-05-large-scale-ep/#two-batch-overlap).
+用户需要指定 `--enable-two-batch-overlap` 才能解锁最高 2 倍的吞吐。更多细节参见[大规模 EP 博客](https://lmsys.org/blog/2025-05-05-large-scale-ep/#two-batch-overlap)。
 
-### Single-Batch Overlap (SBO)
+### 单批重叠（SBO）
 
-SGLang introduces a dispatcher-hook system for Single-Batch Overlap (SBO), enabling the overlap of operations within a single batch—such as shared experts computation with communication—while decentralizing logic to enhance modularity. These hooks execute before and after the `dispatch` and `combine` operations without modifying core MoE modules. This design simplifies interfaces, reduces coupling, and improves extensibility. For implementation details and an example of overlapping shared experts with DeepEP's combine operation, refer to [PR #13327](https://github.com/sgl-project/sglang/pull/13327). Users can set `--enable-single-batch-overlap` to enable this feature.
-
-
-## Workload Balancer
-
-SGLang integrates the [Expert Parallelism Load Balancer (EPLB)](https://github.com/deepseek-ai/EPLB) from DeepSeek to address routing imbalances in MoE models. By analyzing expert activation statistics, EPLB computes an optimal expert arrangement, strategically placing or replicating experts to minimize GPU utilization variance, reduce idle cycles, and enhance scalability.
-
-To enable EPLB, use the flags `--enable-eplb`. For optimal performance, increase batch sizes to stabilize activation statistics and configure periodic rebalancing (e.g., every 1000 requests) to adapt to evolving workloads. Simulations demonstrate significant improvements in load balancedness (ratio of mean to max computation time), correlating strongly with throughput gains.
-
-For more details, refer to the [EPLB Section in the Large-Scale EP Blog](https://lmsys.org/blog/2025-05-05-large-scale-ep/#expert-parallelism-load-balancer) and the [EPLB Repository](https://github.com/deepseek-ai/eplb).
+SGLang 为单批重叠（SBO）引入了一套分发器钩子系统，可以在单个批内实现操作重叠——例如共享专家计算与通信重叠——同时把逻辑分散化以增强模块性。这些钩子在 `dispatch` 和 `combine` 操作前后执行，无需修改核心 MoE 模块。这种设计简化了接口、降低了耦合、提升了可扩展性。实现细节以及共享专家与 DeepEP combine 操作重叠的示例，参见 [PR #13327](https://github.com/sgl-project/sglang/pull/13327)。用户可设置 `--enable-single-batch-overlap` 启用该特性。
 
 
-## Ascend NPU Guidance
-### Guidance on SGLang configuration in Ascend NPU
-- `--moe-a2a-backend` only supports `deepep` and `ascend_fuseep` backends,
+## 工作负载均衡器
 
-    - `deepep`: The mechanism is consistent with the above description.
+SGLang 集成了 DeepSeek 的[专家并行负载均衡器（EPLB）](https://github.com/deepseek-ai/EPLB)，用于解决 MoE 模型中的路由不均衡问题。通过分析专家激活统计，EPLB 计算出最优的专家排布，策略性地放置或复制专家，以最小化 GPU 利用率方差、减少空闲周期并增强可扩展性。
 
-    - `ascend_fuseep`: Offer a large fused operator which integrates all operations between dispatch and combine to boost MoE computation. Only used for decode stage in PD Disaggregation Mode.
+启用 EPLB 使用参数 `--enable-eplb`。为了最佳性能，增大批大小以稳定激活统计，并配置周期性再均衡（例如每 1000 个请求）以适应不断变化的工作负载。模拟表明，负载均衡度（平均计算时间与最大计算时间之比）有显著提升，且与吞吐增益强相关。
 
-- `--moe-runner-backend` parameter does not need to be configured.
+更多细节参见[大规模 EP 博客中的 EPLB 一节](https://lmsys.org/blog/2025-05-05-large-scale-ep/#expert-parallelism-load-balancer)和 [EPLB 仓库](https://github.com/deepseek-ai/eplb)。
 
-- `--deepep-mode`:
 
-    - In PD mixed mode, please set `--deepep-mode auto`.
+## Ascend NPU 指南
+### Ascend NPU 上 SGLang 配置指南
+- `--moe-a2a-backend` 仅支持 `deepep` 和 `ascend_fuseep` 后端，
 
-    - In PD Disaggregation Mode, prefill instance sets `--deepep-mode normal`, and decode instance sets `--deepep-mode low_latency`.
+    - `deepep`：机制与上述描述一致。
 
-### DeepEP Ascend Introduction
-DeepEP Ascend is the adapted version of the DeepEP communication library for Huawei Ascend NPUs, specifically designed for Mixture-of-Experts (MoE) model Expert Parallelism (EP).
-It supports the Ant-moving Function (Split the sequence length into rounds for streaming batch transmission) to optimize the buffer size occupied during collective communication in prefill stage, especially for long sequences.
+    - `ascend_fuseep`：提供一个大型融合算子，把 dispatch 与 combine 之间的所有操作整合起来以加速 MoE 计算。仅在 PD 分离模式的解码阶段使用。
 
-Ant-moving Function can be enabled for both the dispatch and combine phases via the following environment variables:
+- `--moe-runner-backend` 参数无需配置。
 
-- `DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS`: Enable ant-moving function in dispatch stage. Indicates the number of tokens transmitted per round on each rank, default 8192.
+- `--deepep-mode`：
 
-- `DEEPEP_NORMAL_LONG_SEQ_ROUND`: Enable ant-moving function in dispatch stage. Indicates the number of rounds transmitted on each rank, default 1.
+    - 在 PD 混合模式下，请设置 `--deepep-mode auto`。
 
-- `DEEPEP_NORMAL_COMBINE_ENABLE_LONG_SEQ`: Enable ant-moving function in combine stage, default 0 (means disabled).
+    - 在 PD 分离模式下，预填充实例设置 `--deepep-mode normal`，解码实例设置 `--deepep-mode low_latency`。
 
-`DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS * DEEPEP_NORMAL_LONG_SEQ_ROUND` means input sequence length. When the input sequence length exceeds 8192, it is recommended to enable the ant-moving function in both dispatch and combine phase.
+### DeepEP Ascend 介绍
+DeepEP Ascend 是 DeepEP 通信库面向华为 Ascend NPU 的适配版本，专为混合专家（MoE）模型的专家并行（EP）设计。
+它支持「蚂蚁搬家」函数（把序列长度拆成多轮，做流式分批传输），以优化预填充阶段集体通信占用的缓冲区大小，尤其适用于长序列。
 
-The environment variable `HCCL_BUFFSIZE` is used to configure the buffer size (MB) actually allocated. Its calculation formula is as follows:
+可以通过以下环境变量在分发与回收两个阶段启用「蚂蚁搬家」函数：
+
+- `DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS`：在分发阶段启用蚂蚁搬家函数。表示每个 rank 每轮传输的 token 数，默认 8192。
+
+- `DEEPEP_NORMAL_LONG_SEQ_ROUND`：在分发阶段启用蚂蚁搬家函数。表示每个 rank 传输的轮数，默认 1。
+
+- `DEEPEP_NORMAL_COMBINE_ENABLE_LONG_SEQ`：在回收阶段启用蚂蚁搬家函数，默认 0（表示禁用）。
+
+`DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS * DEEPEP_NORMAL_LONG_SEQ_ROUND` 即输入序列长度。当输入序列长度超过 8192 时，建议在分发和回收两个阶段都启用蚂蚁搬家函数。
+
+环境变量 `HCCL_BUFFSIZE` 用于配置实际分配的缓冲区大小（MB）。其计算公式如下：
 ```text Output
 # Enable Ant-moving Function
 HCCL_BUFFSIZE >= 2 * (102MB + 4MB + DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS * (hidden_size + hidden_size + hidden_size) * topk) + PADDING_BUFFSIZE
@@ -284,12 +294,12 @@ HCCL_BUFFSIZE >= 2 * (102MB + 4MB + DEEPEP_NORMAL_LONG_SEQ_PER_ROUND_TOKENS * (h
 # Disable Ant-moving Function
 HCCL_BUFFSIZE >= 2 * (102MB + 4MB + TOTAL_SEQ_LEN * (hidden_size + hidden_size) * topk) + PADDING_BUFFSIZE
 ```
-Wherein the parameters are described as follows:
+其中各参数说明如下：
 
-- `hidden_size`: hidden size in model config.
+- `hidden_size`：模型配置中的隐藏层大小。
 
-- `topk`: The number of selected routing experts.
+- `topk`：选中的路由专家数量。
 
-- `TOTAL_SEQ_LEN`: input sequence length.
+- `TOTAL_SEQ_LEN`：输入序列长度。
 
-- `PADDING_BUFFSIZE`: A value of 20 or greater is recommended.
+- `PADDING_BUFFSIZE`：建议取值 20 或更大。

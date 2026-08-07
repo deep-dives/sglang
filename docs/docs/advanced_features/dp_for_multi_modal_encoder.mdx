@@ -1,24 +1,27 @@
 ---
-title: "DP for Multi-Modal Encoder in SGLang"
+title: "SGLang 中多模态编码器的数据并行"
 metatags:
-    description: "Data parallelism for VLM vision encoder in SGLang: reduce TTFT, boost throughput. Supports Qwen2.5-VL, Qwen3-VL, InternVL, GLM-4.5V/4.6V."
+    description: "SGLang 中 VLM 视觉编码器的数据并行：降低 TTFT、提升吞吐。支持 Qwen2.5-VL、Qwen3-VL、InternVL、GLM-4.5V/4.6V。"
 ---
-A typical VLM architecture involves two main components: an multi-modal encoder and a text decoder.
+典型的 VLM 架构包含两个主要组件：多模态编码器与文本解码器。
 
-Most VLMs utilize a Vision Transformer (ViT) as their multi-modal encoder, it is responsible for processing visual data, extracting features (objects, colors, textures, etc.), and transforming them into a format that can be understood by the model.
+大多数 VLM 用视觉 transformer（ViT）作为多模态编码器，负责处理视觉数据、提取特征（物体、颜色、纹理等），并把它们转换成模型能理解的格式。
 
-The text deocoder is based on LLM. It processes textual data and generates output based on the encoded visual features.
+文本解码器基于 LLM。它处理文本数据，并根据编码后的视觉特征生成输出。
 
-However, since the size of ViT is very small compared to language decoders,
-there is relatively little gain from TP. On the other hand, TP incurs significant communication
-overhead because of all-reduce being performed after every layer.
+然而，由于 ViT 相比语言解码器小得多，从 TP 中获得的收益相对有限。另一方面，TP 因为每一层之后都要做 all-reduce，会带来显著的通信开销。
 
-Placing the ViT in data parallel while keeping the LLM in tensor parallel consistently lowers TTFT and boosts end-to-end throughput. In this hybrid layout, the vision front-end becomes parallel and lightweight, while scarce interconnect bandwidth and collective ops are reserved for the LLM.
+让 ViT 走数据并行、同时让 LLM 保持张量并行，能稳定地降低 TTFT 并提升端到端吞吐。在这种混合布局下，视觉前端变得并行且轻量，而宝贵的互联带宽和集合通信算子都留给了 LLM。
 
-Data parallelism replicates the entire model across multiple GPU sets and processes different batches of requests in parallel.
+<Note>
+💡 AI Infra 学习笔记：多模态引擎的并行布局要按「组件大小」差异化设计：ViT 参数少、计算密度低，给它做 TP 收益很小、还要每层 all-reduce 通信；LLM 才是算力和显存的大头。于是把 ViT 复制成多份做数据并行（batch 级 DP），把通信资源让给 LLM 的 TP——这就是「混合并行」在异构组件上的典型应用。TTFT 下降来自视觉编码被并行摊薄，端到端吞吐提升来自视觉与文本处理互不阻塞。
+</Note>
 
-## Command Example
-You can enable batch-level DP by setting `mm-enable-dp-encoder`, for example:
+数据并行把整个模型复制到多组 GPU 上，并并行处理不同的请求批次。
+
+## 命令示例
+
+你可以通过设置 `mm-enable-dp-encoder` 启用批级 DP，例如：
 ```shell Command
 python3 -m sglang.launch_server \
     --model-path Qwen/Qwen2.5-VL-7B-Instruct \
@@ -26,7 +29,7 @@ python3 -m sglang.launch_server \
     --mm-enable-dp-encoder
 ```
 
-## Known supported models
+## 已知支持的模型
 - Qwen2.5-VL (&lt;https://github.com/sgl-project/sglang/pull/13126&gt;)
 - Qwen3-VL (&lt;https://github.com/sgl-project/sglang/pull/13724&gt;)
 - InternVL (&lt;https://github.com/sgl-project/sglang/pull/13925&gt;)

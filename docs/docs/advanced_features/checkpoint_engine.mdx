@@ -1,43 +1,47 @@
 ---
-title: "Checkpoint Engine Integration"
+title: "检查点引擎集成"
 metatags:
-    description: "SGLang checkpoint engine: distributed model weight loading, parallel multi-node setup, broadcast and P2P modes. Reduces loading time for large models."
+    description: "SGLang 检查点引擎：分布式模型权重加载、多节点并行加载、broadcast 与 P2P 模式。缩短大模型的加载时间。"
 ---
-The SGLang checkpoint engine integration provides an efficient way to load model weights using a distributed checkpoint loading system. This feature significantly reduces model loading time, especially for large models and multi-node setups, by parallelizing the weight loading process across multiple processes and nodes.
+SGLang 的检查点引擎集成提供了一种高效的方式，通过分布式检查点加载系统来加载模型权重。该特性在多个进程和节点之间并行化权重加载过程，能显著缩短模型加载时间，尤其是大模型和多节点场景。
 
-## Overview
+## 概览
 
-The checkpoint engine integration allows SGLang to:
-- Load model weights in parallel using multiple processes
-- Distribute weight loading across multiple nodes to increase effective disk bandwidth
-- Overlap weight loading with other initialization tasks like CUDA graph capture
-- Support both single-node and multi-node deployments
+检查点引擎集成让 SGLang 可以：
+- 用多个进程并行加载模型权重
+- 把权重加载分布到多个节点上，提升有效的磁盘带宽
+- 把权重加载与其他初始化任务（如 CUDA graph 捕获）重叠执行
+- 同时支持单节点和多节点部署
 
-## Installation
+<Note>
+💡 AI Infra 学习笔记：大模型（几十到几百 B 参数）的权重可能有几十到几百 GB，从磁盘读出、拷进显存往往是服务启动的"冷启动"瓶颈——用户等模型可用的时间主要花在这。检查点引擎的思路是"分工加载"：多节点各读一部分权重再互相广播/点对点分发，等于把磁盘带宽叠加起来；再用 dummy 权重先把显存布局和 CUDA graph 建好，等真实权重到了再填进去，把加载和初始化重叠起来。这对应了推理系统里"启动时延"（time-to-first-token 之前的部署等待）优化，是生产环境必须考虑的一环。
+</Note>
 
-First, install the checkpoint engine package:
+## 安装
+
+先安装检查点引擎包：
 
 ```bash Command
 pip install 'checkpoint-engine[p2p]'
 ```
 
-## Architecture
+## 架构
 
-The system consists of two main components:
+系统由两大组件组成：
 
-1. **SGLang Server**: Runs with `--wait-for-initial-weights` flag to wait for weights before becoming ready
-2. **Checkpoint Engine Workers**: Separate processes (managed by torchrun) that load and distribute model weights
+1. **SGLang 服务端**：带 `--wait-for-initial-weights` 参数运行，就绪前等待权重到达
+2. **检查点引擎 Worker**：独立的进程（由 torchrun 管理），负责加载和分发模型权重
 
-The checkpoint engine uses a parameter server architecture with support for:
-- **Broadcast mode**: Weights are broadcast from loading processes to inference processes
-- **P2P mode**: Direct peer-to-peer weight transfer between processes
-- **All mode**: Combination of both broadcast and P2P methods
+检查点引擎采用参数服务器架构，支持：
+- **Broadcast 模式**：权重从加载进程广播到推理进程
+- **P2P 模式**：进程之间直接点对点传输权重
+- **All 模式**：broadcast 和 P2P 两种方式的组合
 
-## Usage Examples
+## 使用示例
 
-### Single Node Setup
+### 单节点配置
 
-**Terminal 1 - Launch SGLang Server:**
+**终端 1 - 启动 SGLang 服务端：**
 ```bash Command
 python -m sglang.launch_server \
     --model-path Qwen/Qwen3-8B \
@@ -46,9 +50,9 @@ python -m sglang.launch_server \
     --wait-for-initial-weights
 ```
 
-**Terminal 2 - Run Checkpoint Engine:**
+**终端 2 - 运行检查点引擎：**
 
-Using sglang entrypoint:
+用 sglang 入口点：
 ```bash Command
 python -m sglang.srt.checkpoint_engine.update \
     --update-method broadcast \
@@ -56,7 +60,7 @@ python -m sglang.srt.checkpoint_engine.update \
     --inference-parallel-size 8
 ```
 
-Using torchrun directly:
+直接使用 torchrun：
 ```bash Command
 torchrun --nproc-per-node 8 \
     examples/checkpoint_engine/update.py \
@@ -65,11 +69,11 @@ torchrun --nproc-per-node 8 \
     --inference-parallel-size 8
 ```
 
-### Multi-Node Setup (2 Nodes)
+### 多节点配置（2 个节点）
 
-**Node 0:**
+**节点 0：**
 
-Launch SGLang server:
+启动 SGLang 服务端：
 ```bash Command
 python -m sglang.launch_server \
     --model-path Qwen/Qwen3-8B \
@@ -79,9 +83,9 @@ python -m sglang.launch_server \
     --host [IP]
 ```
 
-Run checkpoint engine:
+运行检查点引擎：
 
-Using sglang entrypoint (recommended):
+用 sglang 入口点（推荐）：
 ```bash Command
 python -m sglang.srt.checkpoint_engine.update \
     --update-method broadcast \
@@ -89,7 +93,7 @@ python -m sglang.srt.checkpoint_engine.update \
     --inference-parallel-size 8
 ```
 
-Using torchrun directly:
+直接使用 torchrun：
 ```bash Command
 torchrun --nproc-per-node 8 \
     --nnodes 2 \
@@ -102,9 +106,9 @@ torchrun --nproc-per-node 8 \
     --inference-parallel-size 8
 ```
 
-**Node 1:**
+**节点 1：**
 
-Launch SGLang server:
+启动 SGLang 服务端：
 ```bash Command
 python -m sglang.launch_server \
     --model-path Qwen/Qwen3-8B \
@@ -114,9 +118,9 @@ python -m sglang.launch_server \
     --host [IP]
 ```
 
-Run checkpoint engine:
+运行检查点引擎：
 
-Using sglang entrypoint (recommended):
+用 sglang 入口点（推荐）：
 ```bash Command
 python -m sglang.srt.checkpoint_engine.update \
     --update-method broadcast \
@@ -124,7 +128,7 @@ python -m sglang.srt.checkpoint_engine.update \
     --inference-parallel-size 8
 ```
 
-Using torchrun directly:
+直接使用 torchrun：
 ```bash Command
 torchrun --nproc-per-node 8 \
     --nnodes 2 \
@@ -137,11 +141,11 @@ torchrun --nproc-per-node 8 \
     --inference-parallel-size 8
 ```
 
-### Multi-Node Setup with Tensor Parallelism (TP=16)
+### 带张量并行的多节点配置（TP=16）
 
-**Node 0:**
+**节点 0：**
 
-Launch SGLang server:
+启动 SGLang 服务端：
 ```bash Command
 python -m sglang.launch_server \
     --model-path Qwen/Qwen3-8B \
@@ -154,9 +158,9 @@ python -m sglang.launch_server \
     --node-rank 0
 ```
 
-Run checkpoint engine:
+运行检查点引擎：
 
-Using sglang entrypoint (recommended):
+用 sglang 入口点（推荐）：
 ```bash Command
 python -m sglang.srt.checkpoint_engine.update \
     --update-method broadcast \
@@ -164,7 +168,7 @@ python -m sglang.srt.checkpoint_engine.update \
     --inference-parallel-size 16
 ```
 
-Using torchrun directly:
+直接使用 torchrun：
 ```bash Command
 torchrun --nproc-per-node 8 \
     --nnodes 2 \
@@ -177,9 +181,9 @@ torchrun --nproc-per-node 8 \
     --inference-parallel-size 16
 ```
 
-**Node 1:**
+**节点 1：**
 
-Launch SGLang server:
+启动 SGLang 服务端：
 ```bash Command
 python -m sglang.launch_server \
     --model-path Qwen/Qwen3-8B \
@@ -192,9 +196,9 @@ python -m sglang.launch_server \
     --node-rank 1
 ```
 
-Run checkpoint engine:
+运行检查点引擎：
 
-Using sglang entrypoint (recommended):
+用 sglang 入口点（推荐）：
 ```bash Command
 python -m sglang.srt.checkpoint_engine.update \
     --update-method broadcast \
@@ -202,7 +206,7 @@ python -m sglang.srt.checkpoint_engine.update \
     --inference-parallel-size 16
 ```
 
-Using torchrun directly:
+直接使用 torchrun：
 ```bash Command
 torchrun --nproc-per-node 8 \
     --nnodes 2 \
@@ -215,43 +219,47 @@ torchrun --nproc-per-node 8 \
     --inference-parallel-size 16
 ```
 
-## Configuration Options
+## 配置选项
 
-### SGLang Server Options
+### SGLang 服务端选项
 
-- `--load-format dummy`: Use dummy format for initial loading (allows overlapping with other tasks)
-- `--wait-for-initial-weights`: Wait for checkpoint engine to provide weights before becoming ready
-- `--host`: Host address for multi-node setups
-- `--dist-init-addr`: Distributed initialization address for tensor parallelism
+- `--load-format dummy`：初始加载使用 dummy 格式（允许与其他任务重叠）
+- `--wait-for-initial-weights`：就绪前等待检查点引擎提供权重
+- `--host`：多节点配置的主机地址
+- `--dist-init-addr`：张量并行的分布式初始化地址
 
-### Checkpoint Engine Options
+### 检查点引擎选项
 
-- `--update-method`: Weight update method (`broadcast`, `p2p`, or `all`)
-- `--checkpoint-path`: Path to model checkpoint directory
-- `--inference-parallel-size`: Number of inference parallel processes
-- `--endpoint`: SGLang server endpoint (default: `http://localhost:19730`)
-- `--checkpoint-name`: Name for the checkpoint (default: `my-checkpoint-iter-0`)
-- `--save-metas-file`: File to save checkpoint metadata
-- `--load-metas-file`: File to load checkpoint metadata from
-- `--uds`: Unix domain socket path for communication
-- `--weight-version`: Version identifier for weights
+- `--update-method`：权重更新方式（`broadcast`、`p2p` 或 `all`）
+- `--checkpoint-path`：模型检查点目录路径
+- `--inference-parallel-size`：推理并行进程数
+- `--endpoint`：SGLang 服务端端点（默认：`http://localhost:19730`）
+- `--checkpoint-name`：检查点名称（默认：`my-checkpoint-iter-0`）
+- `--save-metas-file`：保存检查点元数据的文件
+- `--load-metas-file`：从中加载检查点元数据的文件
+- `--uds`：通信用的 Unix domain socket 路径
+- `--weight-version`：权重的版本标识
 
-## Performance Benefits
+## 性能收益
 
-The checkpoint engine provides significant time savings in two main aspects:
+检查点引擎在两个主要方面带来显著的时间节省：
 
-1. **Multi-node Loading**: Each node only loads a portion of weights from disk, effectively increasing disk bandwidth. More participating nodes provide greater acceleration. Preliminary tests show 20-second acceleration when loading DeepSeek-R1 on H20-3e with two nodes.
+1. **多节点加载**：每个节点只从磁盘加载一部分权重，相当于提升了磁盘带宽。参与的节点越多，加速越大。初步测试显示，在 H20-3e 上用两个节点加载 DeepSeek-R1 能加速 20 秒。
 
-2. **Single Process Optimization**: Using dummy format allows overlapping disk-to-CPU transfer with CUDA graph capture and other initialization tasks, providing additional time savings.
+2. **单进程优化**：用 dummy 格式可以把磁盘到 CPU 的传输与 CUDA graph 捕获及其他初始化任务重叠，进一步节省时间。
 
-## Troubleshooting
+<Note>
+💡 AI Infra 学习笔记：这里的性能逻辑分两层：一是"并行读盘"——单节点磁盘带宽有限，多节点同时读各自的权重分片再互发，等效带宽随节点数线性增长；二是"重叠执行"——用 dummy 权重占好显存、跑完 CUDA graph 捕获等初始化，真实权重到了再覆写，把串行的启动流程变成流水线。这两招本质都是在优化"启动时延"，是部署大模型时的实际工程问题。
+</Note>
 
-- Ensure checkpoint engine package is installed: `pip install 'checkpoint-engine[p2p]'`
-- Verify network connectivity between nodes in multi-node setups
-- Check that the checkpoint path contains valid model files
-- Monitor logs for connection errors between SGLang server and checkpoint engine
-- Use `--sleep-time` parameter to add delays if needed for debugging
+## 故障排查
 
-## References
+- 确保已安装检查点引擎包：`pip install 'checkpoint-engine[p2p]'`
+- 多节点配置下检查节点之间的网络连通性
+- 检查检查点路径里是否包含有效的模型文件
+- 监控日志，排查 SGLang 服务端与检查点引擎之间的连接错误
+- 调试需要时可以用 `--sleep-time` 参数加延迟
 
-- [Checkpoint Engine Repository](https://github.com/MoonshotAI/checkpoint-engine)
+## 参考
+
+- [检查点引擎仓库](https://github.com/MoonshotAI/checkpoint-engine)

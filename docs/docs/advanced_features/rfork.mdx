@@ -1,13 +1,17 @@
 ---
 title: "R-Fork"
 metatags:
-    description: "SGLang R-Fork: zero-copy GPU-to-GPU weight loading, reduce boot-up time from minutes to seconds. NCCL and TransferEngine backends."
+    description: "SGLang R-Fork：GPU 到 GPU 的零拷贝权重加载，把启动时间从几分钟压缩到几秒。支持 NCCL 与 TransferEngine 后端。"
 ---
-R-Fork (Tensor Remote Fork) is a novel weight loading methodology that leverages efficient inter-node GPU-to-GPU data transfer path to load tensors from a running SGLang instance to a new instance with zero-copy. It can significantly optimize the SGLang instance boot-up time by reducing model weights loading from several minutes to mere seconds.
+R-Fork（Tensor Remote Fork）是一种新颖的权重加载方法，它利用高效的节点间 GPU 到 GPU 数据传输通路，从一台正在运行的 SGLang 实例把张量零拷贝加载到新实例。它能显著优化 SGLang 实例的启动时间，把模型权重加载从几分钟压缩到短短几秒。
 
-To learn more details about R-Fork, please check **<a href="https://lmsys.org/blog/2025-12-10-rfork/"> R-Fork blog </a>**
+要了解更多 R-Fork 的细节，请看 **<a href="https://lmsys.org/blog/2025-12-10-rfork/"> R-Fork 博客 </a>**。
 
-## Usage
+<Note>
+💡 AI Infra 学习笔记：模型权重加载是大模型服务冷启动的主要耗时——动辄几十 GB 的权重从磁盘读入就要几分钟。R-Fork 的思路是直接从另一台已持有相同权重的运行中实例上，通过 GPU 间高速链路（如 NCCL）零拷贝复制权重，把启动时间从分钟级压到秒级，适合频繁扩缩容、需要快速拉起新副本的场景。
+</Note>
+
+## 用法
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -16,50 +20,54 @@ To learn more details about R-Fork, please check **<a href="https://lmsys.org/bl
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Usage</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>用法</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>load-format</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>set to `remote_instance` to enable R-Fork.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>设为 `remote_instance` 以启用 R-Fork。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>remote-instance-weight-loader-backend</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>nccl</code>, <code>transfer_engine</code>, or <code>modelexpress</code>. Default is <code>nccl</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>nccl</code>、<code>transfer_engine</code> 或 <code>modelexpress</code>。默认为 <code>nccl</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>remote-instance-weight-loader-seed-instance-ip</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>IP address of the seed instance who will provide the model weight. Used by <code>nccl</code> and <code>transfer_engine</code> backends.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>提供模型权重的 seed 实例的 IP 地址。由 <code>nccl</code> 和 <code>transfer_engine</code> 后端使用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>remote-instance-weight-loader-seed-instance-service-port</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>the port that the seed instance's HTTP server is listening on. Used by <code>nccl</code> and <code>transfer_engine</code> backends.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>seed 实例 HTTP 服务监听的端口。由 <code>nccl</code> 和 <code>transfer_engine</code> 后端使用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>remote-instance-weight-loader-send-weights-group-ports</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>the list of available ports on the seed instance that will be used to build NCCL communication groups between seed and client instance. Only needed by <code>nccl</code> backend.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>seed 实例上可用于在 seed 与 client 实例之间建立 NCCL 通信组的可用端口列表。仅 <code>nccl</code> 后端需要。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>remote-instance-weight-loader-start-seed-via-transfer-engine</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>set to start seed service that supports TransferEngine as backend. Needed for seed instances when using <code>transfer_engine</code> as backend.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>设置为以 TransferEngine 作为后端启动 seed 服务。以 <code>transfer_engine</code> 作为后端时，seed 实例需要此项。</td>
     </tr>
 <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>modelexpress-config</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>JSON config for <code>modelexpress</code> backend. Keys: <code>"url"</code> (optional gRPC host:port override) and <code>"transport"</code> (<code>"nixl"</code> or <code>"transfer_engine"</code>, defaults to <code>"nixl"</code>).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于 <code>modelexpress</code> 后端的 JSON 配置。键：<code>"url"</code>（可选的 gRPC host:port 覆盖）与 <code>"transport"</code>（<code>"nixl"</code> 或 <code>"transfer_engine"</code>，默认为 <code>"nixl"</code>）。</td>
     </tr>
 </tbody>
 </table>
 
-### NCCL as backend
+<Note>
+💡 AI Infra 学习笔记：R-Fork 需要区分"seed 实例"（提供权重的一方）和"client 实例"（加载权重的一方）。NCCL 后端需要手动指定 seed 的 IP 与端口，而 ModelExpress 作为集中式协调服务，让实例自动注册与发现，省去了直连配置——这相当于把点对点复制演进成"注册中心"式的管理。
+</Note>
 
-seed instance:
+### 以 NCCL 作为后端
+
+seed 实例：
 ```shell Command
 python -m sglang.launch_server [args]
 ```
 
-client instance:
+client 实例：
 ```shell Command
 python -m sglang.launch_server [args] \
   --load-format remote_instance \
@@ -69,9 +77,9 @@ python -m sglang.launch_server [args] \
   --remote-instance-weight-loader-backend nccl
 ```
 
-### TransferEngine as backend
+### 以 TransferEngine 作为后端
 
-seed instance:
+seed 实例：
 ```shell Command
 python -m sglang.launch_server [args] \
   --remote-instance-weight-loader-start-seed-via-transfer-engine
@@ -85,13 +93,13 @@ python -m sglang.launch_server [args] \
   --remote-instance-weight-loader-backend transfer_engine
 ```
 
-### ModelExpress as backend
+### 以 ModelExpress 作为后端
 
-[ModelExpress](https://github.com/ai-dynamo/modelexpress) is a coordination service that manages P2P weight transfer metadata. It removes the need for direct seed IP/port configuration by providing a centralized registry that instances publish to and discover from. The ModelExpress Python package must be installed in the SGLang image.
+[ModelExpress](https://github.com/ai-dynamo/modelexpress) 是一个管理点对点权重传输元数据的协调服务。它通过集中式注册中心（实例向其中发布并从中发现彼此）免去了直接配置 seed IP/端口的需求。ModelExpress Python 包必须安装在 SGLang 镜像中。
 
-A running ModelExpress server is required. See the [ModelExpress documentation](https://github.com/ai-dynamo/modelexpress) for setup instructions.
+需要一个正在运行的 ModelExpress 服务端。搭建方法见 [ModelExpress 文档](https://github.com/ai-dynamo/modelexpress)。
 
-server instance:
+服务端实例：
 ```bash Command
 python -m sglang.launch_server [args] \
   --load-format remote_instance \
@@ -99,4 +107,4 @@ python -m sglang.launch_server [args] \
   --modelexpress-config '{"url": "[modelexpress_grpc_host:port]", "transport": "nixl"}'
 ```
 
-All SGLang instances use the same command shape. If no ready source exists, the instance loads weights natively and publishes metadata to ModelExpress. If a compatible source exists, it loads weights through ModelExpress P2P transfer. Set <code>"transport": "transfer_engine"</code> to use Mooncake TransferEngine instead of the default NIXL transport.
+所有 SGLang 实例使用相同的命令形式。如果不存在已就绪的权重来源，该实例会原生加载权重，并把元数据发布到 ModelExpress；如果存在兼容的权重来源，它就会通过 ModelExpress 的点对点传输加载权重。设置 <code>"transport": "transfer_engine"</code> 可以使用 Mooncake TransferEngine，而不是默认的 NIXL 传输。

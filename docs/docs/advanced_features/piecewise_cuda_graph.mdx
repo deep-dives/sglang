@@ -1,27 +1,31 @@
 ---
-title: "Piecewise CUDA Graph"
+title: "分片 CUDA 图"
 metatags:
-    description: "Use Piecewise CUDA Graph to reduce prefill and extend kernel launch overhead while supporting dynamic token shapes."
+    description: "使用分片 CUDA 图（Piecewise CUDA Graph）降低预填充与扩展（extend）阶段的 kernel 启动开销，同时支持动态 token 形状。"
 ---
 
-## Motivation
+## 动机
 
-Standard CUDA graphs capture the entire model forward pass as a single graph. This works well for decode (fixed batch size), but not for extend/prefill where the number of tokens varies across iterations.
+标准 CUDA 图把整个模型前向过程捕获成一张图。这对解码（固定批大小）很有效，但对扩展/预填充阶段不适用，因为那里的 token 数量会随迭代而变化。
 
-Piecewise CUDA Graph (PCG) solves this by splitting the model's computation graph into pieces (roughly one per layer) at "split points" (e.g., MoE dispatch ops). Each piece is captured as a separate CUDA graph for a set of pre-defined token lengths. At runtime, the input is padded to the nearest captured size, and each piece is replayed. This eliminates kernel launch overhead for prefill/extend while still supporting dynamic shapes.
+分片 CUDA 图（PCG）通过把模型的计算图在「切分点」（例如 MoE 的 dispatch 算子）处切成片段（大致每层一片）来解决这个问题。每个片段针对一组预定义的 token 长度分别捕获为一张 CUDA 图。运行时，输入被补齐到最近的已捕获大小，然后逐片重放。这样在仍然支持动态形状的同时，消除了预填充/扩展阶段的 kernel 启动开销。
 
-Recently we **enabled PCG by default**, which means that the old `--enable-piecewise-cuda-graph` flag is deprecated. Use `--disable-piecewise-cuda-graph` to turn it off.
+<Note>
+💡 AI Infra 学习笔记：预填充（prefill）与解码的 CUDA 图策略完全不同：解码批大小固定、可以整图捕获，而预填充的 token 数随请求变化，标准 CUDA 图无法直接套用。分片 CUDA 图（PCG）的思路是「把模型切成段，按一组预定义的 token 长度分别捕获，运行时向上取整补齐后重放」——用少量显存换取 kernel 启动开销的下降，同时保留动态形状能力。这是「形状固定 vs 动态」这一 CUDA 图核心矛盾的典型解法。
+</Note>
 
-## Usage
+最近我们**默认启用了 PCG**，这意味着旧的 `--enable-piecewise-cuda-graph` 参数已弃用。用 `--disable-piecewise-cuda-graph` 关闭它。
 
-PCG is enabled by default for supported configurations. No extra flags needed:
+## 使用方法
+
+在受支持的配置下，PCG 默认启用，无需额外参数：
 
 ```bash
 python3 -m sglang.launch_server \
     --model-path meta-llama/Llama-3.1-8B-Instruct
 ```
 
-### Disable PCG
+### 关闭 PCG
 
 ```bash
 python3 -m sglang.launch_server \
@@ -29,7 +33,7 @@ python3 -m sglang.launch_server \
     --disable-piecewise-cuda-graph
 ```
 
-### Custom capture sizes
+### 自定义捕获大小
 
 ```bash
 python3 -m sglang.launch_server \
@@ -37,7 +41,7 @@ python3 -m sglang.launch_server \
     --piecewise-cuda-graph-max-tokens 2048
 ```
 
-### Server Args
+### 服务端参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -47,52 +51,52 @@ python3 -m sglang.launch_server \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--disable-piecewise-cuda-graph</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>False</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Disable PCG for extend/prefill.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>对扩展/预填充阶段禁用 PCG。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--enforce-piecewise-cuda-graph</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>False</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Force-enable PCG, skipping all auto-disable conditions. For testing only.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>强制启用 PCG，跳过所有自动禁用条件。仅供测试。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--piecewise-cuda-graph-max-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>None</code> (auto)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Maximum token count to capture. Defaults to <code>chunked_prefill_size</code> (non-MLA) or <code>2048</code> (MLA).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>None</code>（自动）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>要捕获的最大 token 数。默认为 <code>chunked_prefill_size</code>（非 MLA）或 <code>2048</code>（MLA）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--piecewise-cuda-graph-tokens</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>None</code> (auto)</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Explicit list of token lengths to capture. Auto-generated if not set.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>None</code>（自动）</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>要捕获的 token 长度显式列表。未设置时自动生成。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>--piecewise-cuda-graph-compiler</code></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>"eager"</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Compiler backend for the captured subgraphs. Choices: <code>eager</code>, <code>inductor</code>.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>捕获子图的编译后端。可选：<code>eager</code>、<code>inductor</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><del><code>--enable-piecewise-cuda-graph</code></del></td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>—</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><strong>Deprecated.</strong> PCG is now enabled by default. Use <code>--enforce-piecewise-cuda-graph</code> to skip auto-disable conditions.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><strong>已弃用。</strong> PCG 现已默认启用。用 <code>--enforce-piecewise-cuda-graph</code> 可跳过自动禁用条件。</td>
     </tr>
   </tbody>
 </table>
 
-## Bug Report
+## 问题反馈
 
-PCG is enabled by default but is still in an experimental stage. Since PCG relies on `torch.compile` to trace the model's forward pass, most bugs are introduced by torch compile tracing failures (e.g., untraceable ops, dynamic control flow, or graph breaks). If you encounter any issues related to PCG, please disable it by adding `--disable-piecewise-cuda-graph` to your launch command and report the bug at [GitHub Issues](https://github.com/sgl-project/sglang/issues/new/choose). We greatly appreciate your help in improving this feature.
+PCG 默认启用但仍处于实验阶段。由于 PCG 依赖 `torch.compile` 追踪模型的前向过程，大多数 bug 来自 torch.compile 追踪失败（例如不可追踪的算子、动态控制流或图断点）。如果遇到与 PCG 相关的问题，请在启动命令中加上 `--disable-piecewise-cuda-graph` 关闭它，并在 [GitHub Issues](https://github.com/sgl-project/sglang/issues/new/choose) 反馈。非常感谢你帮助改进这一特性。
 
-### For Users
+### 面向用户
 
-If you see an error message like the following during server startup, it is a PCG bug:
+如果在服务端启动时看到类似下面的报错，那是一个 PCG 的 bug：
 
 ```
 Piecewise CUDA Graph is enabled by default as an experimental feature.
@@ -100,19 +104,20 @@ To work around this error, add --disable-piecewise-cuda-graph to your launch com
 Please report this issue at https://github.com/sgl-project/sglang/issues/new/choose
 ```
 
-To work around it, add `--disable-piecewise-cuda-graph` to your launch command. When filing a bug report, please include:
-1. The full error traceback
-2. Model name and quantization method
-3. Launch command with all arguments
-4. GPU type and driver version
+要绕过它，在启动命令中加上 `--disable-piecewise-cuda-graph`。提交 bug 报告时请包含：
 
-### For Developers
+1. 完整的错误堆栈
+2. 模型名称与量化方法
+3. 带全部参数的启动命令
+4. GPU 型号与驱动版本
 
-Since PCG relies on `torch.compile` to trace the model's forward pass, newly developed CUDA kernels (both JIT kernels and sgl-kernels) are typically not compatible with `torch.compile` out of the box. The tracing will fail on untraceable operations such as JIT compilation, file I/O, or dynamic module loading inside the kernel.
+### 面向开发者
 
-To make a kernel compatible with PCG, you need to register it as a custom op using `register_custom_op` from `sglang.srt.utils.custom_op`. This wraps the kernel as an opaque node in the compiled graph so that `torch.compile` will not trace inside it.
+由于 PCG 依赖 `torch.compile` 追踪模型的前向过程，新开发的 CUDA kernel（包括 JIT kernel 和 sgl-kernels）通常无法直接与 `torch.compile` 兼容。追踪会在不可追踪的操作上失败，例如 kernel 内部的 JIT 编译、文件 I/O 或动态模块加载。
 
-**Example usage (JIT kernel):**
+要让 kernel 与 PCG 兼容，需要用 `sglang.srt.utils.custom_op` 中的 `register_custom_op` 把它注册为自定义算子。这会把 kernel 包装成编译图中的不透明节点，使 `torch.compile` 不会追踪其内部。
+
+**示例用法（JIT kernel）：**
 
 ```python
 from sglang.srt.utils.custom_op import register_custom_op
@@ -127,7 +132,7 @@ def per_token_group_quant_8bit(
     # kernel implementation ...
 ```
 
-**Example usage (operator with output):**
+**示例用法（带输出的算子）：**
 
 ```python
 # out_shape indicates which argument has the same shape as the output
@@ -136,13 +141,13 @@ def add(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return x.add_(y)
 ```
 
-For wrapping external library functions (e.g., FlashInfer kernels), use `register_custom_op_from_extern` instead. See `python/sglang/srt/utils/custom_op.py` for full API documentation.
+如需包装外部库函数（例如 FlashInfer kernel），改用 `register_custom_op_from_extern`。完整 API 文档参见 `python/sglang/srt/utils/custom_op.py`。
 
-## How it works
+## 工作原理
 
-### Torch compile backend
+### Torch compile 后端
 
-PCG uses `torch.compile` with a custom backend (`SGLangBackend`) to split and compile the model's forward pass. The flow is:
+PCG 使用带自定义后端（`SGLangBackend`）的 `torch.compile` 来切分并编译模型的前向过程。流程如下：
 
 ```
 model.forward wrapper
@@ -154,40 +159,39 @@ model.forward wrapper
 → runtime dispatch: eager split ops + per-piece capture/replay
 ```
 
-- **Install**: `install_torch_compiled()` replaces `model.forward` with a wrapper function. When `is_in_piecewise_cuda_graph()` returns True, the wrapper dispatches to the compiled callable; otherwise it falls back to the original forward. The first invocation through this path triggers Dynamo tracing and graph compilation — CUDA graph replay only happens after the capture phase completes.
+<Note>
+💡 AI Infra 学习笔记：PCG 与 torch.compile 深度绑定：它用 Dynamo 把模型前向变成 FX 图，在切分点切开，再逐段编译+捕获。这意味着新增 kernel 必须用 `register_custom_op` 包装成不透明节点才能兼容——这是推理引擎接入编译器的通用工程模式：把「编译器看不懂的自研 kernel」藏进自定义算子，避免追踪失败。
+</Note>
 
-- **Split**: When `torch.compile` traces the model, `SGLangBackend` receives the FX graph and calls `split_graph()`. Ops listed in `CompilationConfig.split_ops` are treated as split points, so the graph is cut at each one. These split-op submodules are left to run eagerly at runtime, while the surrounding submodules are compiled and wrapped by `CUDAPiecewiseBackend`. The result is a top-level "stitching graph" (`split_gm`) with children such as `submod_0`, `submod_1`, … interleaving capturable subgraphs and eager split-op submodules.
+- **安装**：`install_torch_compiled()` 用包装函数替换 `model.forward`。当 `is_in_piecewise_cuda_graph()` 返回 True 时，包装器分发到编译后的可调用对象；否则回退到原始 forward。第一次通过该路径调用会触发 Dynamo 追踪和图编译——CUDA 图重放只在捕获阶段完成后才发生。
+- **切分**：当 `torch.compile` 追踪模型时，`SGLangBackend` 收到 FX 图并调用 `split_graph()`。`CompilationConfig.split_ops` 中列出的算子被当作切分点，图在每处被切开。这些切分算子子模块在运行时保持 eager 执行，而周围的子模块被编译并由 `CUDAPiecewiseBackend` 包装。结果是顶层「缝合图」（`split_gm`），其子节点如 `submod_0`、`submod_1`、……交替穿插着可捕获子图和 eager 的切分算子子模块。
+- **替换**：`PiecewiseCompileInterpreter` 遍历 `split_gm` 中每个可捕获子模块，为其按通用（动态）形状编译，并原地替换为 `CUDAPiecewiseBackend` 实例。切分算子子模块（例如注意力、all-reduce）保持原样，运行时以 eager 方式执行。
+- **分发**：运行时，调用 `split_gm` 会执行缝合图，按顺序调用每个子模块。切分算子子模块以 eager 方式运行。每个 `CUDAPiecewiseBackend` 子模块经历三个阶段：
+  - **编译预热**——运行通用形状的编译路径。
+  - **捕获**——对每个捕获大小，先跑一次预热，再录制一张 CUDA 图。
+  - **稳态重放**——每次前向都重放捕获的 CUDA 图。
 
-- **Replace**: `PiecewiseCompileInterpreter` iterates over each capturable submodule in `split_gm`, compiles it for general (dynamic) shapes, and replaces it in-place with a `CUDAPiecewiseBackend` instance. Split-op submodules (e.g., attention, all-reduce) are left as-is and run eagerly at runtime.
+### 分片 CUDA 图 runner
 
-- **Dispatch**: At runtime, calling `split_gm` executes the stitching graph, which calls each submodule in order. Split-op submodules run eagerly. Each `CUDAPiecewiseBackend` submodule goes through three phases:
-  - **Compile warmup** — runs the general-shape compiled path.
-  - **Capture** — for each capture size, runs one warmup pass then records a CUDA graph.
-  - **Steady-state replay** — replays the captured CUDA graph for each forward pass.
+`PiecewiseCudaGraphRunner` 通过三个阶段编排完整生命周期：
 
-### Piecewise cuda graph runner
+- **编译**——先用一次虚拟前向预热 JIT kernel，再用 `torch.compile` 包装模型，触发 Dynamo 追踪来切分 FX 图，并为每个子图片段创建 `CUDAPiecewiseBackend` 实例。
+- **捕获**——按倒序（从大到小）遍历捕获大小。对每个大小，前向运行两次（一次预热、一次 CUDA 图捕获）。
+- **重放**——运行时，通过二分查找找到 >= 实际 token 数的最小已捕获大小，把输入用零填充拷入静态缓冲区，重放捕获的 CUDA 图，再把输出切回实际 token 数。
 
-`PiecewiseCudaGraphRunner` orchestrates the full lifecycle through three phases:
+### 内存优化
 
-- **Compile** — Warms up JIT kernels with a dummy forward pass, then wraps the model with `torch.compile`, triggering Dynamo tracing to split the FX graph and create `CUDAPiecewiseBackend` instances for each subgraph piece.
+PCG 的内存开销来自两部分：**torch 内存分配器**和**非 torch 内存**。
 
-- **Capture** — Iterates over capture sizes in reverse order (largest first). For each size, runs the forward pass twice (one warmup, one CUDA graph capture).
+得益于多项优化，torch 内存分配器的开销可以忽略：全局共享内存池在所有 CUDA 图 runner 和捕获大小之间复用；捕获按倒序（从大到小）进行，较小的图会复用较大图分配的内存；最后一个子图的输出 tensor 以弱引用保存，以最大化内存复用。
 
-- **Replay** — At runtime, finds the smallest captured size >= actual token count via binary search, copies inputs into static buffers with zero-padding, replays the captured CUDA graphs, and slices outputs back to the actual token count.
+主要的内存开销来自非 torch 内存——CUDA 图对象本身需要 GPU 显存来存储录制的 kernel 启动参数和内部状态。该开销随捕获大小数量增长，这也是 `piecewise_cuda_graph_max_tokens` 默认被保守封顶的原因。
 
-### Memory optimization
+### 形状配置
 
-The memory cost of PCG comes from two parts: **torch memory allocator** and **non-torch memory**.
+分片 CUDA 图为一组 token 数量预先捕获图。运行时，实际 token 数向上取整到最近的已捕获大小（通过二分查找），并重放对应的图。如果 token 数超过最大的已捕获大小，运行时回退到普通（非图）前向路径。
 
-The torch memory allocator overhead is trivial thanks to several optimizations: a global shared memory pool is reused across all CUDA graph runners and capture sizes, capture is done in reverse order (large to small) so smaller graphs reuse memory allocated by larger ones, and output tensors of the last subgraph are stored as weak references to maximize memory reuse.
-
-The main memory overhead comes from non-torch memory — the CUDA graph objects themselves require GPU memory to store the recorded kernel launch parameters and internal state. This overhead scales with the number of captured sizes, which is why `piecewise_cuda_graph_max_tokens` is capped conservatively by default.
-
-### Shape configuration
-
-Piecewise CUDA graph pre-captures graphs for a set of token counts. At runtime, the actual token count is rounded up to the nearest captured size (via binary search), and the corresponding graph is replayed. If the token count exceeds the largest captured size, the runtime falls back to the normal (non-graph) forward path.
-
-The default capture schedule is auto-generated with increasing granularity:
+默认捕获调度自动生成，粒度逐渐增大：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -196,8 +200,8 @@ The default capture schedule is auto-generated with increasing granularity:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Token range</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Step size</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Token 范围</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>步长</th>
     </tr>
   </thead>
   <tbody>
@@ -228,28 +232,28 @@ The default capture schedule is auto-generated with increasing granularity:
   </tbody>
 </table>
 
-For the auto-generated schedule, sizes are capped at `--piecewise-cuda-graph-max-tokens`. The default cap is `chunked_prefill_size` for non-MLA models and `2048` for MLA backend models. If `--max-total-tokens` is set, the cap is further limited to not exceed it. Additionally, Llama-2 models are auto-capped at 4096 tokens as a temporary workaround.
+对于自动生成的调度，大小以 `--piecewise-cuda-graph-max-tokens` 为上限。默认上限对非 MLA 模型是 `chunked_prefill_size`，对 MLA 后端模型是 `2048`。如果设置了 `--max-total-tokens`，上限还会进一步限制，不超过它。此外，Llama-2 模型会被自动封顶在 4096 token，作为一个临时变通方案。
 
-## Compatibility
+## 兼容性
 
-PCG is auto-disabled in the following scenarios. We are actively working on expanding compatibility — support for many of these will be coming soon.
+PCG 在以下场景会被自动禁用。我们正在积极扩展兼容性——其中许多很快会得到支持。
 
-- Disabled model architectures (e.g., `DeepseekV32ForCausalLM`)
-- Speculative decoding
-- DP attention
-- Pipeline parallelism (`pp_size > 1`)
-- Non-CUDA hardware (AMD ROCm, Ascend NPU)
-- MoE A2A backend
+- 已禁用的模型架构（如 `DeepseekV32ForCausalLM`）
+- 投机解码
+- DP 注意力
+- 流水线并行（`pp_size > 1`）
+- 非 CUDA 硬件（AMD ROCm、Ascend NPU）
+- MoE A2A 后端
 - LoRA
-- Multimodal / VLM models
-- DLLM (diffusion LLM)
-- Deterministic inference
-- PD disaggregation
-- Expert distribution recorder / EPLB
+- 多模态 / VLM 模型
+- DLLM（扩散 LLM）
+- 确定性推理
+- PD 分离部署
+- 专家分布记录器 / EPLB
 
-Use `--enforce-piecewise-cuda-graph` to skip all auto-disable checks (for testing/debugging only).
+用 `--enforce-piecewise-cuda-graph` 跳过所有自动禁用检查（仅供测试/调试）。
 
-## Code Reference
+## 代码参考
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -258,42 +262,42 @@ Use `--enforce-piecewise-cuda-graph` to skip all auto-disable checks (for testin
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>File</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>文件</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/model_executor/runner_backend/tc_piecewise_cuda_graph_backend.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Backend implementation: compile, capture, replay</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>后端实现：编译、捕获、重放</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/compilation/compile.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>install_torch_compiled</code> trampoline</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>install_torch_compiled</code> 跳板函数</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/compilation/backend.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>SGLangBackend</code>, graph splitting, piecewise compilation</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>SGLangBackend</code>、图切分、分片编译</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/compilation/cuda_piecewise_backend.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Per-subgraph CUDA graph capture/replay</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每个子图的 CUDA 图捕获/重放</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/compilation/piecewise_context_manager.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Global context flags and <code>ForwardContext</code></td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>全局上下文标志与 <code>ForwardContext</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/compilation/compilation_config.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Capture sizes, split ops, compiler config</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>捕获大小、切分算子、编译器配置</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/utils/custom_op.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>register_custom_op</code> for torch.compile compatibility</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}><code>register_custom_op</code>，用于 torch.compile 兼容</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><code>python/sglang/srt/server_args.py</code></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Server arguments and auto-disable logic</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务端参数与自动禁用逻辑</td>
     </tr>
   </tbody>
 </table>

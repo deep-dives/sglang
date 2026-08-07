@@ -1,54 +1,59 @@
 ---
-title: "PD Disaggregation"
+title: "PD 分离部署"
 metatags:
-    description: "SGLang PD disaggregation: separate prefill and decode phases, Mooncake and NIXL transfer engines, multi-node DeepSeek deployment."
+    description: "SGLang PD 分离部署：分离预填充与解码阶段，Mooncake 与 NIXL 传输引擎，多节点 DeepSeek 部署。"
 ---
-## Why and What is PD Disaggregation?
+## 为什么需要 PD 分离、它是什么？
 
-Large Language Model (LLM) inference comprises two distinct phases: **Prefill** and **Decode**. The Prefill phase is computation-intensive, processing the entire input sequence, while the Decode phase is memory-intensive, managing the Key-Value (KV) cache for token generation. Traditionally, these phases are handled within a unified engine, where combined scheduling of prefill and decode batches introduces inefficiencies. To address these challenges, we introduce **Prefill and Decoding (PD) Disaggregation** in SGLang.
+大语言模型（LLM）推理包含两个截然不同的阶段：**预填充（Prefill）** 和 **解码（Decode）**。预填充阶段计算密集，处理整个输入序列；解码阶段内存密集，负责管理用于 token 生成的键值（KV）缓存。传统上，这两个阶段在同一个引擎内处理，预填充与解码批的混合调度会带来效率损失。为解决这些挑战，我们在 SGLang 中引入了 **PD 分离部署（Prefill and Decoding Disaggregation）**。
 
-### Issues with Unified Scheduling
+### 统一调度的弊端
 
-The conventional unified engine, which processes prefill and decode batches together, results in two significant problems:
+传统统一引擎同时处理预填充和解码批，会导致两个显著问题：
 
-1. **Prefill Interruption**: Incoming prefill batches frequently interrupt ongoing decode batches, causing substantial delays in token generation.
-2. **DP Attention Imbalance**: In data-parallel (DP) attention, one DP worker may process a prefill batch while another handles a decode batch simultaneously, leading to increased decode latency.
+1. **预填充打断**：新来的预填充批会频繁打断正在进行的解码批，造成 token 生成的明显延迟。
+2. **DP 注意力不均衡**：在数据并行（DP）注意力下，一个 DP worker 可能在处理预填充批，而另一个同时在处理解码批，导致解码延迟上升。
 
-PD Disaggregation resolves these by separating the two stages, enabling tailored optimizations for each.
+PD 分离部署通过分离这两个阶段来解决这些问题，从而可以对每个阶段做针对性优化。
 
-For the design details, please refer to [link](https://docs.google.com/document/d/1rQXJwKd5b9b1aOzLh98mnyMhBMhlxXA5ATZTHoQrwvc/edit?tab=t.0).
+设计细节请参见[此链接](https://docs.google.com/document/d/1rQXJwKd5b9b1aOzLh98mnyMhBMhlxXA5ATZTHoQrwvc/edit?tab=t.0)。
 
-Currently, we support Mooncake and NIXL as the transfer engine.
+目前，我们支持 Mooncake 和 NIXL 作为传输引擎。
 
-## Profiling in PD Disaggregation Mode
+<Note>
+💡 AI Infra 学习笔记：PD 分离的核心矛盾是「预填充吃算力、解码吃带宽」。合在一起时，大请求的预填充会周期性抢占解码资源，导致解码阶段的 token 间延迟（ITL）抖动；而且两类请求的计算特征差异大，很难同时把 GPU 用满。分离后，预填充实例专注高吞吐的矩阵计算、解码实例专注低延迟的 KV 访存，两者按各自特性独立扩缩容——这是大型推理服务（如 DeepSeek）标配的架构。关键挑战在于：预填充算完的 KV 缓存必须通过高速网络（RDMA/NVLink）搬给解码实例。
+</Note>
 
-When you need to profile prefill or decode workers in PD disaggregation mode, please refer to the [Profile In PD Disaggregation Mode](../developer_guide/benchmark_and_profiling#profile-in-pd-disaggregation-mode) section in the Benchmark and Profiling guide. Due to torch profiler limitations, prefill and decode workers must be profiled separately using dedicated command-line options.
 
-## Router Integration
+## PD 分离模式下的性能剖析
 
-For deploying PD disaggregation at scale with load balancing and fault tolerance, SGLang provides a router. The router can distribute requests between prefill and decode instances using various routing policies. For detailed information on setting up routing with PD disaggregation, including configuration options and deployment patterns, see the [SGLang Model Gateway (former Router)](./sgl_model_gateway#prefill-decode-disaggregation).
+在 PD 分离模式下对预填充或解码 worker 做性能剖析时，请参考《基准测试与性能剖析》指南中的 [PD 分离模式下的剖析](../developer_guide/benchmark_and_profiling#profile-in-pd-disaggregation-mode) 一节。由于 torch profiler 的限制，预填充和解码 worker 必须使用各自的专用命令行选项单独剖析。
+
+## 路由器集成
+
+为了以带负载均衡和故障容错的方式规模化部署 PD 分离，SGLang 提供了一个路由器。路由器可以用多种路由策略在预填充和解码实例之间分发请求。关于 PD 分离下路由配置的详细信息，包括配置选项和部署模式，参见 [SGLang Model Gateway（原 Router）](./sgl_model_gateway#prefill-decode-disaggregation)。
 
 
 ## Mooncake
-### Requirements
+### 依赖
 
 ```bash
 uv pip install mooncake-transfer-engine
 ```
 
-### IB Device Configuration
+### IB 设备配置
 
-`--disaggregation-ib-device` supports the following formats when using the Mooncake backend:
+使用 Mooncake 后端时，`--disaggregation-ib-device` 支持以下格式：
 
-1. Shared device list for all GPUs: `mlx5_0` or `mlx5_0,mlx5_1`
-2. Per-GPU JSON mapping: `{"0": "mlx5_0,mlx5_1", "1": "mlx5_2,mlx5_3"}`
-3. Path to a JSON file containing the same per-GPU mapping
+1. 所有 GPU 共享的设备列表：`mlx5_0` 或 `mlx5_0,mlx5_1`
+2. 按 GPU 的 JSON 映射：`{"0": "mlx5_0,mlx5_1", "1": "mlx5_2,mlx5_3"}`
+3. 包含相同按 GPU 映射的 JSON 文件路径
 
-Each JSON value uses the same comma-separated device list format as the shared configuration.
+每个 JSON 值使用与共享配置相同的逗号分隔设备列表格式。
 
-### Usage
+### 使用方法
 
-### Llama Single Node
+### Llama 单节点
 
 ```bash
 python -m sglang.launch_server \
@@ -65,7 +70,7 @@ python -m sglang.launch_server \
 python -m sglang_router.launch_router --pd-disaggregation --prefill http://127.0.0.1:30000 --decode http://127.0.0.1:30001 --host 0.0.0.0 --port 8000
 ```
 
-### DeepSeek Multi-Node
+### DeepSeek 多节点
 
 ```bash
 # prefill 0
@@ -135,27 +140,27 @@ python -m sglang.launch_server \
   --mem-fraction-static 0.8 \
   --max-running-requests 128
 ```
-### Advanced Configuration
+### 高级配置
 
-PD Disaggregation with Mooncake supports the following environment variables for fine-grained control over system behavior.
+Mooncake 的 PD 分离支持以下环境变量，用于对系统行为做细粒度控制。
 
-#### NVLink Transport Configuration
-To enable NVLink transport for KV cache transfers with the mooncake backend (recommended for NVL72 deployments), set the following environment variables. Note that auxiliary data transfer will still use TCP as a temporary workaround.
+#### NVLink 传输配置
+要为 mooncake 后端的 KV 缓存传输启用 NVLink（推荐用于 NVL72 部署），设置以下环境变量。注意辅助数据传输暂时仍走 TCP，作为一个临时方案。
 
 ```bash Command
 export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK
 export MC_FORCE_MNNVL=True
 ```
 
-To utilize Intra-Node NVLink for KV cache transfers with the Mooncake backend (recommended for A100, H20, H100, etc.), set the following environment variables. Please note that auxiliary data still needs to be transferred via TCP.
+要利用 Mooncake 后端节点内（Intra-Node）NVLink 传输 KV 缓存（推荐用于 A100、H20、H100 等），设置以下环境变量。请注意辅助数据仍需要通过 TCP 传输。
 
 ```bash
 export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=INTRA_NODE_NVLINK
 export MC_INTRANODE_NVLINK=true
 ```
-The `SGLANG_MOONCAKE_CUSTOM_MEM_POOL` environment variable enables the custom memory pool. Supported values are `NVLINK` (or `True`), `BAREX`, and `INTRA_NODE_NVLINK`.
+`SGLANG_MOONCAKE_CUSTOM_MEM_POOL` 环境变量启用自定义内存池。支持的值有 `NVLINK`（或 `True`）、`BAREX` 和 `INTRA_NODE_NVLINK`。
 
-#### Prefill Server Configuration
+#### 预填充服务端配置
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
     <col style={{width: "33.3%"}} />
@@ -164,39 +169,39 @@ The `SGLANG_MOONCAKE_CUSTOM_MEM_POOL` environment variable enables the custom me
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_THREAD_POOL_SIZE`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Controls the total number of worker threads for KVCache transfer operations per TP rank</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>A dynamic value calculated by <code>int(0.75 * os.cpu_count()) // 8</code>, which is limited to be larger than 4 and less than 12 to ensure efficiency and prevent thread race conditions</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>控制每个 TP rank 用于 KV 缓存传输操作的工作线程总数</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>动态计算值：<code>int(0.75 * os.cpu_count()) // 8</code>，限制在大于 4、小于 12 的范围内，以保证效率并防止线程竞争</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_QUEUE_SIZE`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Sets the number of parallel transfer queues. KVCache transfer requests from multiple decode instances will be sharded into these queues so that they can share the threads and the transfer bandwidth at the same time. If it is set to <code>1</code>, then we transfer requests one by one according to fcfs strategy</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>设置并行传输队列数。来自多个解码实例的 KV 缓存传输请求会被分片到这些队列中，从而同时共享线程与传输带宽。若设为 <code>1</code>，则按 fcfs（先来先服务）策略逐个传输请求</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`4`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timeout (seconds) for receiving destination KV indices during request initialization</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>请求初始化期间接收目标 KV 索引的超时时间（秒）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`300`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><code>SGLANG_DISAGGREGATION_BOOTSTRAP_ENTRY_CLEANUP_INTERVAL</code></strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Interval (seconds) between cleanups of bootstrap entries</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>bootstrap 条目的清理间隔（秒）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>120</code></td>
     </tr>
 </tbody>
 </table>
 
-If a greater mean TTFT is acceptable, you can `export SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=600` (10 minutes) to relax the timeout condition.
-Please be aware that this setting will cause prefill instances to take a longer time to clean up the affected memory resources when a running decode node loses connection.
+如果可以接受更大的平均 TTFT，你可以 `export SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=600`（10 分钟）来放宽超时条件。
+请注意，当某个运行中的解码节点断连时，该设置会让预填充实例花更长时间清理受影响的显存资源。
 
-#### Decode Server Configuration
+#### 解码服务端配置
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
     <col style={{width: "33.3%"}} />
@@ -205,42 +210,47 @@ Please be aware that this setting will cause prefill instances to take a longer 
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_HEARTBEAT_INTERVAL`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Interval (seconds) between health checks to prefill bootstrap servers</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>对预填充 bootstrap 服务器健康检查的间隔（秒）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`5.0`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Consecutive heartbeat failures before marking prefill server offline</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>连续心跳失败多少次后判定预填充服务器离线</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`2`</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**`SGLANG_DISAGGREGATION_WAITING_TIMEOUT`**</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timeout (seconds) for receiving KV Cache after request initialization</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>请求初始化之后接收 KV 缓存的超时时间（秒）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>`300`</td>
     </tr>
   </tbody>
 </table>
 
-If a greater mean TTFT is acceptable, you can `export SGLANG_DISAGGREGATION_WAITING_TIMEOUT=600` (10 minutes) to relax the timeout condition.
+如果可以接受更大的平均 TTFT，你可以 `export SGLANG_DISAGGREGATION_WAITING_TIMEOUT=600`（10 分钟）来放宽超时条件。
 
 
-## Heterogeneous TP with GPU Staging Buffer
+## 异构 TP 与 GPU 暂存缓冲区
 
-When prefill and decode use different tensor parallelism (TP) sizes (e.g., prefill TP=4, decode DP attention with TP=1), the KV cache memory layout differs between the two sides. The **GPU staging buffer** solves this by gathering KV head slices into a contiguous buffer on the prefill side, performing bulk RDMA transfer, then scattering into the correct KV cache pages on the decode side. This provides **2–5x throughput improvement** over the default per-token slice approach at high concurrency and matches homogeneous TP baselines within ~5%.
+当预填充和解码使用不同的张量并行（TP）大小时（例如预填充 TP=4、解码用 TP=1 的 DP 注意力），两侧的 KV 缓存内存布局不同。**GPU 暂存缓冲区**的解决方案是：在预填充侧把 KV 头的分片收集到连续缓冲区，执行批量 RDMA 传输，然后在解码侧散布到正确的 KV 缓存页中。在高并发下，相比默认的逐 token 分片方式，它能带来 **2–5 倍的吞吐提升**，且与同构 TP 基线相比只差约 5%。
 
-Enable the staging buffer when prefill and decode use **different TP sizes** with the **Mooncake** transfer backend. When both sides use the same TP size, staging is automatically bypassed even if enabled.
+<Note>
+💡 AI Infra 学习笔记：异构 TP 是 PD 分离的高级形态——预填充和解码用不同规模的并行度（如预填充 TP=4、解码 TP=1 加 DP 注意力），各自贴近最优配置。代价是两侧 KV 缓存的张量分布不一致，跨节点搬运时不能再按「每个 TP rank 一一对应」传输，而要先在预填充侧聚合成连续缓冲、批量 RDMA、再在解码侧重新散布。这条「聚合-搬运-散布」链路是分布式推理里典型的布局转换优化。
+</Note>
 
-> **Note:** The staging buffer is designed for non-MLA models (e.g. GQA, MHA). MLA models (e.g. DeepSeek-V2/V3) should not enable this flag.
 
-### Environment Variables
+当预填充和解码使用**不同的 TP 大小**、且传输后端为 **Mooncake** 时，启用暂存缓冲区。当两侧使用相同 TP 大小时，即使启用，暂存也会被自动绕过。
+
+> **注意：** 暂存缓冲区是为非 MLA 模型（如 GQA、MHA）设计的。MLA 模型（如 DeepSeek-V2/V3）不应启用该参数。
+
+### 环境变量
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -250,26 +260,26 @@ Enable the staging buffer when prefill and decode use **different TP sizes** wit
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><code>SGLANG_DISAGG_STAGING_BUFFER</code></strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Enable GPU staging buffer for heterogeneous TP KV transfer</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>为异构 TP 的 KV 传输启用 GPU 暂存缓冲区</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>False</code></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><code>SGLANG_DISAGG_STAGING_POOL_SIZE_MB</code></strong></td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Decode-side ring buffer pool total size in MB</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>解码侧环形缓冲池的总大小（MB）</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}><code>4096</code></td>
     </tr>
   </tbody>
 </table>
 
-### Usage Example
+### 使用示例
 
 ```bash Command
 # Set staging buffer environment variables on BOTH prefill and decode
@@ -305,15 +315,15 @@ python -m sglang_router.launch_router \
 ```
 
 ## NIXL
-### Requirements
+### 依赖
 
-Install via pip.
+通过 pip 安装。
 
 ```bash
 pip install nixl
 ```
 
-Or build from source - may be required if you already have UCX installed.
+或者从源码构建——如果你已经安装了 UCX，可能需要这样做。
 
 ```bash
 git clone https://github.com/ai-dynamo/nixl.git
@@ -322,9 +332,9 @@ pip install . --config-settings=setup-args="-Ducx_path=/path/to/ucx"
 ```
 
 
-### Usage
+### 使用方法
 
-### Llama Single Node
+### Llama 单节点
 
 ```bash
 python -m sglang.launch_server \
@@ -341,7 +351,7 @@ python -m sglang.launch_server \
 python -m sglang_router.launch_router --pd-disaggregation --prefill http://127.0.0.1:30000 --decode http://127.0.0.1:30001 --host 0.0.0.0 --port 8000
 ```
 
-### DeepSeek Multi-Node
+### DeepSeek 多节点
 
 ```bash
 # prefill 0
@@ -412,17 +422,17 @@ python -m sglang.launch_server \
   --max-running-requests 128
 ```
 
-### Advanced Configuration
+### 高级配置
 
-#### NIXL Backend Selection
+#### NIXL 后端选择
 
-By default, NIXL uses the **UCX** backend for KV cache transfers. You can select a different NIXL plugin backend depending on your infrastructure using the environment variable `SGLANG_DISAGGREGATION_NIXL_BACKEND`.
+默认情况下，NIXL 使用 **UCX** 后端进行 KV 缓存传输。你可以通过环境变量 `SGLANG_DISAGGREGATION_NIXL_BACKEND` 根据你的基础设施选择不同的 NIXL 插件后端。
 
-Example: `export SGLANG_DISAGGREGATION_NIXL_BACKEND=LIBFABRIC`
+示例：`export SGLANG_DISAGGREGATION_NIXL_BACKEND=LIBFABRIC`
 
-**Available backends:** UCX (default), LIBFABRIC, or any installed NIXL plugin.
+**可用的后端：** UCX（默认）、LIBFABRIC，或任何已安装的 NIXL 插件。
 
-Example usage:
+示例用法：
 ```bash
 export SGLANG_DISAGGREGATION_NIXL_BACKEND=LIBFABRIC
 python -m sglang.launch_server \
@@ -434,27 +444,27 @@ python -m sglang.launch_server \
 
 ## ASCEND
 
-### Usage
+### 使用方法
 
-Use ascend backend with [memfabric_hybrid](https://gitcode.com/Ascend/memfabric_hybrid) and ASCEND_MF_STORE_URL being set
+配合 [memfabric_hybrid](https://gitcode.com/Ascend/memfabric_hybrid) 使用 ascend 后端，并设置 ASCEND_MF_STORE_URL
 
 ```bash Command
 pip install memfabric-hybrid==1.0.0
 export ASCEND_MF_STORE_URL="tcp://xxx.xx.xxx.xxx:xxxx"
 ```
-Use mooncake backend, more details can be found in mooncake section.
+使用 mooncake 后端，更多细节见 mooncake 一节。
 ```bash
 export ENABLE_ASCEND_TRANSFER_WITH_MOONCAKE=true
 ```
-ASCEND_NPU_PHY_ID need to be set in container env
+ASCEND_NPU_PHY_ID 需要在容器环境中设置
 ```bash
 export ASCEND_NPU_PHY_ID=xxx
 ```
 
 
-### MIMO Single Node
+### MIMO 单节点
 
-#### prefill
+#### 预填充
 
 ```bash
 # high performance cpu
@@ -510,7 +520,7 @@ python3 -m sglang.launch_server \
         # 2>&1 | tee $SGLANG_LOG_PATH
 ```
 
-#### decode
+#### 解码
 
 ``` bash
 # high performance cpu
@@ -572,7 +582,7 @@ python3 -m sglang.launch_server \
 ```
 
 
-#### router
+#### 路由器
 
 ```bash
 python -m sglang_router.launch_router \
@@ -585,9 +595,9 @@ python -m sglang_router.launch_router \
     --mini-lb \
 ```
 
-### DeepSeek Multi-Node
+### DeepSeek 多节点
 
-#### Environment
+#### 环境
 ```bash
 echo performance | tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor
 sysctl -w vm.swappiness=0
@@ -631,7 +641,7 @@ echo "${LOCAL_HOST2}"
 ```
 
 
-#### prefill
+#### 预填充
 
 ```bash
 MODEL_PATH=/path/to/deepseekr1_w4a8_pertoken
@@ -656,7 +666,7 @@ do
 done
 ```
 
-#### decode
+#### 解码
 
 ```bash
 MODEL_PATH=/path/to/deepseekr1_w4a8_pertoken
@@ -687,7 +697,7 @@ done
 ```
 
 
-#### router
+#### 路由器
 
 ```bash
 python -m  sglang_router.launch_router --prefill ${P_IP}:8000 \

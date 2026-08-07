@@ -1,71 +1,82 @@
 ---
-title: "Pipeline Parallelism for Long Context"
+title: "面向长上下文的流水线并行"
 metatags:
-    description: "SGLang pipeline parallelism: reduce TTFT for ultra-long sequences, dynamic chunking, async P2P communication, multi-node deployment."
+    description: "SGLang 流水线并行：降低超长序列的 TTFT，动态分块、异步 P2P 通信、多节点部署。"
 ---
-## Why Pipeline Parallelism?
+## 为什么需要流水线并行？
 
-As Large Language Models (LLMs) scale toward trillion-parameter architectures and "infinite" context windows, the underlying serving infrastructure must evolve toward more granular, cross-node parallelization strategies. While KV cache techniques effectively mitigate redundant computation, they cannot circumvent the prohibitive Time to First Token (TTFT) inherent in ultra-long sequences with extremely large initial Input Token Length (ITL). Although Tensor Parallelism (TP) remains the conventional approach for intra-node scaling, it frequently encounters communication bottlenecks during multi-node deployments. On the other hand, pipeline parallelism only requires cross-node communication at the boundaries of each pipeline stage, which can achieve better computation-communication overlap compared to a large TP. Therefore, it is also a promising parallelization strategy for improving throughput.
+随着大语言模型（LLM）向万亿参数架构和「无限」上下文窗口演进，底层推理基础设施也必须转向更细粒度、跨节点的并行化策略。虽然 KV 缓存技术能有效缓解冗余计算，但它无法规避超长序列（初始输入 token 长度 ITL 极大）固有的高昂首 token 延迟（TTFT）。张量并行（TP）仍是节点内扩展的常规手段，但在多节点部署时常常遇到通信瓶颈。相比之下，流水线并行只在每个流水线阶段的边界发生跨节点通信，相比大规模 TP 能实现更好的计算-通信重叠。因此它也是提升吞吐的一个有前景的并行化策略。
 
-Detailed analysis can be found in this [blog](https://lmsys.org/blog/2026-01-15-chunked-pipeline/).
+详细分析见这篇[博客](https://lmsys.org/blog/2026-01-15-chunked-pipeline/)。
 
-## Implementation Refactoring based on Async Communication
-With Dynamic Chunked Prefill, pipeline parallelism has the potential to reduce the TTFT of long-context inputs. For each request, its input tokens can be partitioned into multiple chunks, each no longer than the chunked prefill size. Different chunks of the same request can be processed simultaneously by different nodes, thus parallelizing the processing and reducing TTFT. SGLang has supported Pipeline Parallelism (#5724) for some time and made it compatible with the PD Disaggregation feature (#8846), but the implementation was not perfect and had significant room for performance improvements.
+<Note>
+💡 AI Infra 学习笔记：三种并行各有侧重——TP 把单层权重切到多卡、通信密集；PP 把模型按层切成若干段、每段放不同节点，只在段边界传激活值和中间结果，通信量小得多；DP 则复制整模型并行处理不同请求。对超长上下文，PP 的关键价值是「分块流水」：一个长请求的输入可以拆成多个 chunk，让不同节点同时处理不同 chunk，从而并行化预填充、显著压降 TTFT。代价是流水线可能产生「气泡」（某些阶段空闲等待），这正是动态分块要解决的难题。
+</Note>
 
-To eliminate this performance hazard, SGLang implements a Micro-batching Event Loop with non-blocking asynchronous peer-to-peer (P2P) communication to overlap GPU computation with CPU metadata processing and PP communication. This ensures that while one micro-batch is being computed on the GPU, the next one is already being prepared and moved into position effectively, ensuring the pipeline remains as saturated as possible. This approach was first proposed in #7979 and has been redesigned and included in #11852.
+## 基于异步通信的实现重构
 
-The key mechanisms of the implementation include:
+借助动态分块预填充，流水线并行有望降低长上下文输入的 TTFT。对每个请求，其输入 token 可以被划分为多个 chunk，每个不超过分块预填充大小。同一请求的不同 chunk 可以由不同节点同时处理，从而并行化处理、降低 TTFT。SGLang 支持流水线并行（#5724）已有一段时间，并使其兼容 PD 分离部署特性（#8846），但此前的实现并不完善，仍有很大的性能提升空间。
 
-* **Decoupled Sync/Async Logic in the Event Loop:** The scheduler uses `async_send` in `_pp_send_pyobj_to_next_stage`. Instead of waiting for a transfer to complete, it returns a `P2PWork` handle. The actual synchronization (`P2PWork.work.wait()`) is deferred until `_pp_commit_comm_work` is called, allowing the CPU to perform other work—like scheduling the next batch or processing metadata—while data is in flight.
-* **Multi-Stream Execution:** In addition to the main `default_stream`, which serves as the synchronization stream, SGLang utilizes dedicated `forward_stream` and `copy_stream` to execute forward pass GPU computation and Data-to-Host (D2H) memory transfers separately for better overlapping. While `_pp_launch_batch` is executing the current micro-batch on the GPU for the current stage, the CPU processes the previous micro-batch's results using `_pp_process_batch_result`.
+为了消除这个性能隐患，SGLang 实现了一个带非阻塞异步点对点（P2P）通信的微批事件循环，让 GPU 计算与 CPU 元数据处理、PP 通信重叠。这保证了当某个微批在 GPU 上计算时，下一个微批已经在被准备并移入就位，尽可能保持流水线饱和。该方案最初在 #7979 中提出，并在 #11852 中重新设计后纳入。
 
-## Guidance about Dynamic Chunking
+实现的关键机制包括：
 
-### Why Dynamic Chunking
-Chunked prefill with a fixed size can cause bubbles in the pipeline, especially when the pp size is large. The main reason behind this phenomenon is that the model has a non-uniform running time, even though each chunk size is identical (brought by the Transformer structure). The larger the prefix sequence length, the longer the running time of the chunk. And these bubbles will be propagated to the next stage, and will significantly degrade the scale efficiency of larger pp ranks.
+- **事件循环中解耦的同步/异步逻辑：** 调度器在 `_pp_send_pyobj_to_next_stage` 中使用 `async_send`。它不等待传输完成，而是返回一个 `P2PWork` 句柄。真正的同步（`P2PWork.work.wait()`）被推迟到调用 `_pp_commit_comm_work` 时才执行，这样在数据还在传输途中时，CPU 可以做其他工作——比如调度下一批或处理元数据。
+- **多流执行：** 除了作为同步流的主 `default_stream`，SGLang 还利用专用的 `forward_stream` 和 `copy_stream`，分别执行前向 GPU 计算与数据到主机（D2H）的内存传输，以获得更好的重叠。当 `_pp_launch_batch` 在当前阶段的 GPU 上执行当前微批时，CPU 用 `_pp_process_batch_result` 处理上一个微批的结果。
 
-To address this issue, SGLang introduces a dynamic chunking mechanism to predict the optimal size for the next chunk such that it satisfies this condition:
+## 关于动态分块的指导
+
+### 为什么要动态分块
+
+固定大小的分块预填充会在流水线中造成气泡，尤其是当 pp 规模较大时。这一现象的主要原因是：即使每个 chunk 大小相同（由 Transformer 结构带来的），模型各层的运行时间也不均匀。前缀序列越长，chunk 的运行时间越长。这些气泡会传播到下一阶段，显著降低较大 pp rank 的扩展效率。
+
+为解决这个问题，SGLang 引入了动态分块机制，预测下一个 chunk 的最优大小，使其满足如下条件：
 
 Runtime(L + Next Chunk Size) - Runtime(L) = Runtime(Initial Chunk Size)
 
-where ***L*** denotes the Prefix Sequence Length. By profiling a series of requests with different ITLs, we model the cumulative runtime as a quadratic function of sequence length. Using this model, we solve the optimal next chunk size for any given prefix length ***L***. Since the computation complexity of the Attention mechanism scales with ***L***, the next chunk size will be progressively reduced as ***L*** grows to maintain an aligned chunk execution time across pipeline stages.
+其中 ***L*** 表示前缀序列长度。通过对一系列不同 ITL 的请求做性能剖析，我们把累计运行时间建模为序列长度的二次函数。利用这个模型，我们可以对任意给定前缀长度 ***L*** 求解出最优的下一 chunk 大小。由于注意力机制的计算复杂度随 ***L*** 增长，随着 ***L*** 增大，下一 chunk 大小会逐步减小，以保持各流水线阶段的 chunk 执行时间对齐。
 
-Based on this method, the scheduler can predict and dynamically reduce the chunk size during runtime to minimize the bubbles caused by the stage misalignment. To be noticed, the scheduler does not use the raw predicted value. To facilitate efficient KVCache memory management and ensure affinity with hardware execution efficiency, the value is aligned downward to the nearest multiple of max(`--page-size`, 64).
+基于这一方法，调度器可以在运行时预测并动态减小 chunk 大小，以最小化阶段错位造成的气泡。需要注意的是，调度器并不直接使用原始预测值。为了便于 KV 缓存的高效内存管理并保证与硬件执行效率对齐，该值会向下对齐到 max(`--page-size`, 64) 的最近倍数。
 
+### 分块预填充大小与平滑因子
 
-### Chunked Prefill Size and Smoothing Factor
+启用 `--enable-dynamic-chunking` 后，序列的每个 chunk 大小会根据二次模型动态确定——该模型基于初始 chunk 长度的估算运行时间预测下一个 chunk 大小。这种情况下，我们用 `--chunked-prefill-size` 设置初始 chunk 大小。切换到动态分块模式时，初始 chunk 大小（`--chunked-prefill-size`）应设为比原分块预填充大小更大一些的值，这样 chunk 数量不会过多。
 
-When `--enable-dynamic-chunking` is enabled, each chunk size of a sequence is determined dynamically based on the quadratic model that predicts the next chunk size based on the estimated runtime of the initial chunk length. In this case, we use `--chunked-prefill-size` to set up the initial chunk size. When switching to the dynamic chunking mode, the initial chunk size (`--chunked-prefill-size`) should be set to a larger value comparable to the original chunked prefill size, so that there won't be too many chunks.
+**`SGLANG_DYNAMIC_CHUNKING_SMOOTH_FACTOR`** 是一个环境变量，控制动态分块算法的平滑因子，默认为 0.75。它决定预填充阶段 chunk 大小可以变化多少。值越大，chunk 大小变化越激进，可能带来更好性能，但也意味着更大的 chunk 大小波动（末尾的 chunk 可能变得很小，导致性能下降）和更多的总 chunk 数。设为 1 时，chunk 大小会严格按上述预测下一个 chunk 大小的二次模型调整。值越小，chunk 大小变化越保守，可能导致更小的 chunk 波动和更少的总 chunk 数。设为 0 时，chunk 大小不做动态调整，与固定分块预填充大小的传统方式相同。
 
-**`SGLANG_DYNAMIC_CHUNKING_SMOOTH_FACTOR`** is an environmental variable that controls the smoothing factor for the dynamic chunking algorithm, defaulting to 0.75. It determines how much the chunk size can change during the prefill phase. A larger value means a more aggressive chunk size change, which may lead to better performance but also to greater chunk size changes (the chunk size at the end may become very small, which could lead to performance degradation) and more total chunks. When it is set to 1, the chunk size will be adjusted strictly based on the aforementioned quadratic model that predicts the next chunk size. A smaller value means a more conservative chunk size change, which may lead to smaller chunk size changes and fewer total chunks. When it is set to 0, the chunk size will not be adjusted dynamically, so it is identical to the traditional way with a fixed chunked prefill size.
+由于硬件、模型和目标工作负载的差异，静态配置很少在所有场景下都是最优的。因此，切换到动态分块模式时，要达到峰值性能需要一定程度的超参数调优。
 
-Due to the variation in hardware, models, and target workloads, a static configuration is seldom optimal across all scenarios. Consequently, achieving peak performance necessitates a degree of hyperparameter tuning when switching to the dynamic chunking mode.
+<Note>
+💡 AI Infra 学习笔记：动态分块解决的是「流水线气泡」问题：固定 chunk 大小下，由于注意力复杂度随序列长度增长，越靠后的 chunk 运行越久，各阶段执行时间错位、出现空闲气泡。动态分块用「运行时间的二次模型」预测每个下一 chunk 的最优大小，让每个 chunk 的执行时间大致相等。平滑因子（smooth factor）则控制预测的激进程度——这是「理论模型 + 工程节流」结合调优的典型例子。
+</Note>
 
-**Tuning Guidance for Dynamic Chunked Prefill**
+**动态分块预填充的调优指导**
 
-* **Step 1 \- Iterate to find the optimal fixed chunked prefill size for the targeted PP size**: Different PP sizes for targeted ITL may have different optimal chunked prefill sizes. Therefore, users should iterate to obtain the baseline according to the available resources for scaling.
-* **Step 2 \- Initial Chunk Size Selection for Dynamic Chunking**: Set the initial size to 2× or 3× the optimal fixed chunked prefill size. This reduces the total number of chunks and prevents "tail chunks" from underutilizing hardware. To maintain efficiency for extremely large Input Token Lengths (ITL), the dynamic predictor automatically ensures subsequent chunks are at least 1/4 of this initial size. In addition, it is recommended to use a larger initial chunk size (e.g., 4× the optimal fixed chunked prefill size) for such cases as well.
-* **Step 3 \- Smooth Factor Adjustment**: This factor controls how strictly the chunk size adjusts the prediction given by the quadratic performance fitting model.
-  * 1.0: Follows the model strictly.
-  * **0.6 – 0.85 (Recommended)**: Typical range for the best balance between dynamic scaling and hardware stability. Through experiments, we find that a range between 0.6 and 0.85 typically yields the best performance for dynamic chunking.
-  * 0: Disables dynamic adjustment, reverting to traditional fixed-size chunking.
-* **Another small optimization tip:** Put the larger partition in the higher PP rank when the layers are not evenly divisible across ranks. It can increase the GPU utilization when a larger PP rank is waiting for the previous stage’s result, hence reducing the bubbles on higher PP ranks. If we take DeepSeek-V3.1 as an example, `SGLANG_PP_LAYER_PARTITION=15,15,15,16` usually performs better than `16,15,15,15`.
+- **第 1 步 —— 迭代找出目标 PP 规模下的最优固定分块预填充大小**：不同 PP 规模针对目标 ITL 可能有不同的最优分块预填充大小。因此，用户应根据可用于扩展的资源迭代出基线。
+- **第 2 步 —— 动态分块的初始 chunk 大小选择**：把初始大小设为最优固定分块预填充大小的 2× 或 3×。这能减少总 chunk 数量，并避免「尾部 chunk」对硬件利用不足。为了在极大输入 token 长度（ITL）下保持效率，动态预测器会自动确保后续 chunk 至少为该初始大小的 1/4。此外，这类场景也建议使用更大的初始 chunk 大小（例如最优固定分块预填充大小的 4×）。
+- **第 3 步 —— 平滑因子调整**：该因子控制 chunk 大小在多大程度上严格遵循二次性能拟合模型给出的预测。
+  - 1.0：严格遵循模型。
+  - **0.6 – 0.85（推荐）**：在动态扩展与硬件稳定性之间取得最佳平衡的典型区间。通过实验，我们发现 0.6 到 0.85 通常能给动态分块带来最佳性能。
+  - 0：禁用动态调整，回退到传统的固定大小分块。
+- **另一个小优化技巧：** 当层数无法在各 rank 间均分时，把较大的分片放到更高位的 PP rank。这能提升高 PP rank 等待上一阶段结果时的 GPU 利用率，从而减少高位 PP rank 上的气泡。以 DeepSeek-V3.1 为例，`SGLANG_PP_LAYER_PARTITION=15,15,15,16` 通常比 `16,15,15,15` 表现更好。
 
-## Best Practice for Long Context
+## 长上下文的最佳实践
 
-### Tuning the Chunked Prefill Size
-Optimizing the chunked prefill size is crucial for balancing pipeline efficiency and resource utilization. The ideal size depends on factors including model architecture, hardware configuration, and typical input lengths. We recommend starting with a small chunk size, such as 4K, and gradually increasing it until you find the optimal size for your specific use case (Different targeted ITL and PP Sizes may have different optimal chunked prefill sizes. Therefore, users should iterate to obtain the baseline according to the available resources for scaling). Alternatively, you can analyze the hardware capacity and determine the optimal chunk size based on the roofline model.
+### 调优分块预填充大小
 
-### Enable Dynamic Chunking and Adjust Smoothing Factor for Ultra-long ITL
-SGLang also offers a dynamic chunking solution that could further improve performance. This feature is currently an experimental feature that requires a certain amount of tuning experimentation and may not be suitable for all workloads. In addition, fine-tuning the smoothing factor can help optimize performance for specific workloads and model characteristics.
+优化分块预填充大小对于平衡流水线效率与资源利用率至关重要。理想大小取决于模型架构、硬件配置和典型输入长度等因素。我们建议从小 chunk 大小（如 4K）开始，逐步增大，直到找到适合你具体用例的最优大小（不同目标 ITL 和 PP 规模可能有不同的最优分块预填充大小，因此用户应根据可用于扩展的资源迭代出基线）。或者，你可以分析硬件能力，基于 roofline 模型确定最优 chunk 大小。
 
-### Case Study on NVIDIA H20
+### 为超长 ITL 启用动态分块并调整平滑因子
 
-When evaluating pipeline parallelism with fixed chunked prefill sizes from 2K to 16K, experiment results show that a 4K chunk size delivered optimal prefill TTFT performance for the DeepSeek-V3.1, and a 6K chunk size delivered optimal prefill TTFT performance for the Qwen3-235B-A22B-FP8.
+SGLang 还提供了一种能进一步提升性能的动态分块方案。该特性目前属于实验性功能，需要一定量的调优实验，可能并不适合所有工作负载。此外，精细调整平滑因子有助于针对特定工作负载和模型特性优化性能。
 
-When enabling dynamic chunking, we first scale the optimal fixed chunked prefill size by a factor of 3 as the initial chunk size. Through experimentation, we found that a multiplier of 2-3 provides an appropriate balance—avoiding excessive initial pipeline bubbles while ensuring that subsequent chunks don't become too small as context length increases. With the default dynamic chunking smoothing factor of 0.75, we performed parameter tuning and determined that a value of 0.65 works optimally with the 12K initial chunk size for the DeepSeek-V3.1, while a value of 0.8 works optimally with the 18K initial chunk size for the Qwen3-235B-A22B-FP8.
+### NVIDIA H20 上的案例研究
 
-#### DeepSeek-V3.1 with 128K Input Token Length
+在评估 2K 到 16K 固定分块预填充大小的流水线并行时，实验结果表明：对 DeepSeek-V3.1，4K chunk 大小带来最优的预填充 TTFT 性能；对 Qwen3-235B-A22B-FP8，6K chunk 大小带来最优的预填充 TTFT 性能。
+
+启用动态分块时，我们先把最优固定分块预填充大小乘以 3 作为初始 chunk 大小。通过实验，我们发现 2-3 倍乘数能提供恰当的平衡——既避免过大的初始流水线气泡，又确保随着上下文变长后续 chunk 不会过小。在默认动态分块平滑因子 0.75 下，我们做了参数调优，确定：对 DeepSeek-V3.1，配合 12K 初始 chunk 大小，0.65 表现最佳；对 Qwen3-235B-A22B-FP8，配合 18K 初始 chunk 大小，0.8 表现最佳。
+
+#### 128K 输入 token 长度的 DeepSeek-V3.1
 ```bash Command
 # prefill node 0 (fixed chunked prefill size)
 python3 -m sglang.launch_server \
@@ -89,7 +100,7 @@ python3 -m sglang.launch_server \
   --max-running-requests 128 --chunked-prefill-size 12288 --enable-dynamic-chunking
 ```
 
-#### Qwen3-235B-A22B-FP8 with 128K Input Token Length
+#### 128K 输入 token 长度的 Qwen3-235B-A22B-FP8
 ```bash Command
 # prefill node 0 (fixed chunked prefill size)
 python3 -m sglang.launch_server \
@@ -113,7 +124,8 @@ python3 -m sglang.launch_server \
   --max-running-requests 128 --chunked-prefill-size 18432 --enable-dynamic-chunking
 ```
 
-Note: `--disable-radix-cache` is enabled only for reproducible benchmarking purposes. It is not recommended to use it in production.
+注意：启用 `--disable-radix-cache` 只是为了可复现的基准测试。不建议在生产环境使用它。
 
-## Best Practice for Pipeline Parallelism with PD Disaggregation
-To be added. Stay tuned for the latest updates on Pipeline Parallelism with PD Disaggregation.
+## 流水线并行与 PD 分离的最佳实践
+
+待补充。敬请关注流水线并行与 PD 分离的最新更新。

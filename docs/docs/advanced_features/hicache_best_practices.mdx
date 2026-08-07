@@ -1,15 +1,19 @@
 ---
-title: "SGLang HiCache Best Practices"
+title: "SGLang HiCache 最佳实践"
 metatags:
-    description: "HiCache configuration guide: memory layout, prefetch policies, PD disaggregation, HF3FS and Mooncake deployment, custom storage backends."
+    description: "HiCache 配置指南：内存布局、预取策略、PD 分离、HF3FS 与 Mooncake 部署、自定义存储后端。"
 ---
-## Why HiCache Matters
+## 为什么 HiCache 重要
 
-SGLang HiCache extends the traditional RadixAttention with a three-tier hierarchical KV caching system that dramatically improves performance for long-context and multi-turn conversation scenarios. By intelligently managing KV caches across GPU memory, host memory, and external storage backends, HiCache addresses the fundamental capacity bottleneck that limits cache hit rates in conventional systems.
+SGLang HiCache 用三层分层 KV 缓存系统扩展了传统的 RadixAttention，大幅提升长上下文与多轮对话场景的性能。通过在 GPU 显存、主机内存与外部存储后端之间智能地管理 KV 缓存，HiCache 解决了限制传统系统缓存命中率的根本容量瓶颈。
 
-## Configuration Guidelines
+<Note>
+💡 AI Infra 学习笔记：缓存命中率（hit rate）是推理引擎最重要的性能指标之一——命中前缀缓存意味着跳过整段预填充计算，直接决定 TTFT 和吞吐量。HiCache 的核心思想是"显存不够，分层来凑"：把 KV 缓存按访问热度分层放置（GPU → CPU → 存储），热点留在最快的一层，冷数据下沉到容量更大的层次，从而在有限显存里最大化命中率。
+</Note>
 
-## Core HiCache Parameters
+## 配置指南
+
+## 核心 HiCache 参数
 
 ```bash Command
 # Essential HiCache flags
@@ -22,13 +26,13 @@ SGLang HiCache extends the traditional RadixAttention with a three-tier hierarch
 --hicache-storage-backend             # Optional storage backend (e.g., hf3fs, mooncake, etc.)
 ```
 
-Notes:
+注意事项：
 
-- Besides configuring `--hicache-storage-backend` at startup, SGLang also supports **runtime attach/detach** of the HiCache storage backend (no restart required) via HTTP admin endpoints. See [Runtime Attach/Detach HiCache Storage Backend](./hicache_storage_runtime_attach_detach).
+- 除了在启动时配置 `--hicache-storage-backend`，SGLang 还支持通过 HTTP 管理端点对 HiCache 存储后端做**运行时挂载/卸载**（无需重启）。见 [HiCache 存储后端运行时挂载/卸载](./hicache_storage_runtime_attach_detach)。
 
-## Key Configurations with Storage Backends Enabled
+## 启用存储后端时的关键配置
 
-### Memory Layout Optimization
+### 内存布局优化
 
 ```bash Command
 # Page-first: Optimized for I/O efficiency with zero-copy (recommended with kernel backend)
@@ -38,28 +42,28 @@ Notes:
 # Layer-first
 --hicache-mem-layout layer_first
 ```
-**Layout Compatibility:**
-- `page_first`: Only compatible with `kernel` I/O backend, automatically switches to `layer_first` with `direct` backend
-- `page_first_direct`: Specifically designed for `direct` I/O backend with optimized memory organization
+**布局兼容性：**
+- `page_first`：只兼容 `kernel` I/O 后端，使用 `direct` 后端时会自动切换为 `layer_first`
+- `page_first_direct`：专为 `direct` I/O 后端设计，内存组织方式经过优化
 
-### Heterogeneous TP Support (GQA/MHA models)
+### 异构 TP 支持（GQA/MHA 模型）
 
-HiCache storage supports cross-cluster KV reuse when different deployments use different TP sizes (for example, `tp=4` and `tp=8`) and share the same storage backend namespace.
+当不同的部署使用不同的 TP 规模（例如 `tp=4` 与 `tp=8`）但共享同一个存储后端命名空间时，HiCache 存储支持跨集群的 KV 复用。
 
-Use `tp_lcm_size` in `--hicache-storage-backend-extra-config`:
+在 `--hicache-storage-backend-extra-config` 中使用 `tp_lcm_size`：
 
 ```bash Command
 # Example: heterogeneous TP = {4, 8}, so lcm = 8
 --hicache-storage-backend-extra-config '{"tp_lcm_size": 8}'
 ```
 
-Guidelines:
+准则：
 
-- Set `tp_lcm_size` to the least common multiple (LCM) of all TP sizes that will share the same HiCache storage.
-- For MHA models with Mooncake and `page_head` layout, HiCache will split head shards based on `tp_lcm_size` to make keys reusable across heterogeneous TP deployments.
-- If all clusters use the same TP size, this option is not needed.
+- 把 `tp_lcm_size` 设为所有共享同一 HiCache 存储的 TP 规模的最小公倍数（LCM）。
+- 对于使用 Mooncake 和 `page_head` 布局的 MHA 模型，HiCache 会根据 `tp_lcm_size` 拆分头分片（head shard），使 key 能在异构 TP 部署之间复用。
+- 如果所有集群使用相同的 TP 规模，则不需要该选项。
 
-### Prefetch Policies
+### 预取策略
 
 ```bash Command
 # Best-effort: Terminate prefetch when needed
@@ -70,12 +74,16 @@ Guidelines:
 --hicache-storage-prefetch-policy timeout
 ```
 
-### Integration with PD Disaggregation
+<Note>
+💡 AI Infra 学习笔记：把 KV 从存储拉回 GPU 需要时间，因此引擎会"预取"（prefetch）——在请求还没真正开始计算前，先异步把需要的 KV 搬上显存。`best_effort` 在有新请求要处理时随时中止预取，延迟低但命中率打折；`wait_complete` 保证搬完再算，命中率最高但可能拖慢首 token；`timeout` 是两者之间的折中。预取策略本质上是"等缓存 vs 赶时间"的取舍。
+</Note>
 
-HiCache works seamlessly with PD Disaggregation. You can choose between two configurations:
+### 与 PD 分离的集成
 
-1. **Prefill-only HiCache**: Enable HiCache only on Prefill nodes, allowing KV cache sharing among Prefill instances
-2. **Full HiCache with async offloading**: Enable HiCache on Prefill nodes and async KV cache offloading on Decode nodes, allowing Prefill nodes to reuse KV caches from Decode nodes in multi-turn dialogue scenarios
+HiCache 与 PD 分离无缝配合。你可以在两种配置中选择：
+
+1. **仅 Prefill 节点启用 HiCache**：只在 Prefill 节点上启用 HiCache，让 KV 缓存在各 Prefill 实例之间共享
+2. **完整 HiCache + 异步卸载**：在 Prefill 节点上启用 HiCache，并在 Decode 节点上启用 KV 缓存异步卸载，让多轮对话场景中的 Prefill 节点能复用 Decode 节点的 KV 缓存
 
 ```bash Command
 # Prefill node with HiCache enabled for cross-prefill sharing (ideal for SystemPrompt scenarios)
@@ -122,10 +130,13 @@ python3 -m sglang.launch_server \
   --disaggregation-transfer-backend mooncake
 ```
 
+<Note>
+💡 AI Infra 学习笔记：PD 分离把预填充和解码拆到不同节点，各自的显存压力完全不同——Prefill 节点大量产生 KV，Decode 节点则要长期持有 KV。把 HiCache 与 PD 分离结合：Prefill 节点写完 KV 就交给共享存储，多轮对话的下一轮可以从别的节点/存储直接复用，不必重新计算整段历史。这是超长上下文场景下"让 KV 在集群里流动起来"的关键架构。
+</Note>
 
-### Deployment with HF3FS
+### 使用 HF3FS 部署
 
-Here is an example of deploying DeepSeek-R1 with HiCache-HF3FS. For more details, see the [HF3FS Documentation](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/hf3fs/docs/README.md).
+下面是用 HiCache-HF3FS 部署 DeepSeek-R1 的示例。更多细节见 [HF3FS 文档](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/hf3fs/docs/README.md)。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -148,9 +159,9 @@ python3 -m sglang.launch_server \
   --hicache-storage-prefetch-policy wait_complete \
 ```
 
-### Deployment with Mooncake
+### 使用 Mooncake 部署 {#deployment-with-mooncake}
 
-Here is an example of deploying Qwen3-235B-A22B-Instruct-2507 with Mooncake. For more details, see the [Mooncake Documentation](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/mooncake_store/README.md).
+下面是用 Mooncake 部署 Qwen3-235B-A22B-Instruct-2507 的示例。更多细节见 [Mooncake 文档](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/mooncake_store/README.md)。
 
 ```bash Command
 # Set Mooncake environment variables
@@ -175,22 +186,22 @@ python3 -m sglang.launch_server \
 ```
 
 
-## Custom Storage Backend Integration
+## 自定义存储后端集成
 
-To integrate a new storage backend:
+要接入一个新的存储后端：
 
-1. **Implement three core methods:**
-   - `get(key)`: Retrieve value by key
-   - `exists(key)`: Check key existence
-   - `set(key, value)`: Store key-value pair
+1. **实现三个核心方法：**
+   - `get(key)`：按键取值
+   - `exists(key)`：检查键是否存在
+   - `set(key, value)`：存储键值对
 
-2. **Register your backend:** Add your storage backend to the HiCache [BackendFactory](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/backend_factory.py#L188)
+2. **注册你的后端：** 把存储后端注册到 HiCache 的 [BackendFactory](https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/mem_cache/storage/backend_factory.py#L188)
 
-The HiCache controller handles all scheduling and synchronization automatically.
+HiCache 控制器会自动处理所有调度与同步。
 
-### Dynamic Backend Loading
+### 动态加载后端
 
-Alternatively, you can use dynamic loading to avoid hard-coding your backend in the repository:
+另外，你也可以用动态加载，避免把后端硬编码进仓库：
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -200,20 +211,20 @@ python3 -m sglang.launch_server \
   --hicache-storage-backend-extra-config '{"backend_name":"custom_backend_name", "module_path": "your_module_path", "class_name": "YourHiCacheClassName"}'
 ```
 
-**Configuration Parameters:**
-- `--hicache-storage-backend`: Set to `dynamic`
-- `--hicache-storage-backend-extra-config`: JSON configuration with:
-  - `backend_name`: Custom backend identifier
-  - `module_path`: Python module path to your implementation
-  - `class_name`: Your HiCache implementation class name
-  - `interface_v1`: 0 (disable) or 1 (enable) to control usage of batch_get_v1 and batch_set_v1 methods
+**配置参数：**
+- `--hicache-storage-backend`：设为 `dynamic`
+- `--hicache-storage-backend-extra-config`：JSON 配置，包含：
+  - `backend_name`：自定义后端标识符
+  - `module_path`：你的实现的 Python 模块路径
+  - `class_name`：你的 HiCache 实现类名
+  - `interface_v1`：0（禁用）或 1（启用），用于控制是否使用 batch_get_v1 与 batch_set_v1 方法
 
 
-## Community and Support
+## 社区与支持
 
-- **GitHub Issues**: Report bugs and feature requests
-- **Slack Channel**: Join community discussions in #sgl-kv-cache-store
-- **Documentation**: Refer to storage backend-specific guides
+- **GitHub Issues**：报告 bug 与功能请求
+- **Slack 频道**：在 #sgl-kv-cache-store 参与社区讨论
+- **文档**：参考各存储后端专门的指南
 
 ***
-*This document will be continuously updated based on community feedback and new features. Contributions and suggestions are welcome!*
+*本文档会基于社区反馈与新功能持续更新。欢迎贡献与建议！*
