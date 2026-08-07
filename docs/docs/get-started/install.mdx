@@ -1,23 +1,23 @@
 ---
-title: Installation
-description: Install SGLang with pip/uv, source, Docker, Kubernetes, and cloud deployment options.
+title: 安装
+description: 通过 pip/uv、源码、Docker、Kubernetes 以及云平台等方式安装 SGLang。
 keywords:
   - installation
   - sglang
   - pip
   - docker
 ---
-You can install SGLang using one of the methods below.
-This page primarily applies to common NVIDIA GPU platforms.
-For other or newer platforms, please refer to the dedicated pages for [AMD GPUs](../hardware-platforms/amd_gpu), [Apple Metal](../hardware-platforms/apple_metal), [Intel Xeon CPUs](../hardware-platforms/cpu_server), [Google TPU](../hardware-platforms/tpu), [NVIDIA DGX Spark](https://lmsys.org/blog/2025-11-03-gpt-oss-on-nvidia-dgx-spark/), [NVIDIA Jetson](../hardware-platforms/nvidia_jetson), [Ascend NPUs](../hardware-platforms/ascend-npus/getting-started/installation), and [Intel XPU](../hardware-platforms/xpu).
+你可以通过以下任一方式安装 SGLang。
+本页主要适用于常见的 NVIDIA GPU 平台。
+其他或更新的平台请参考专门页面：[AMD GPU](../hardware-platforms/amd_gpu)、[Apple Metal](../hardware-platforms/apple_metal)、[Intel Xeon CPU](../hardware-platforms/cpu_server)、[Google TPU](../hardware-platforms/tpu)、[NVIDIA DGX Spark](https://lmsys.org/blog/2025-11-03-gpt-oss-on-nvidia-dgx-spark/)、[NVIDIA Jetson](../hardware-platforms/nvidia_jetson)、[Ascend NPU](../hardware-platforms/ascend-npus/getting-started/installation) 和 [Intel XPU](../hardware-platforms/xpu)。
 
 <Note>
-Prerequisites: Python 3.10 or higher.
+前置条件：Python 3.10 及以上版本。
 </Note>
 
-## Method 1: With pip or uv
+## 方法一：使用 pip 或 uv
 
-It is recommended to use uv for faster installation:
+推荐使用 uv 安装，速度更快：
 
 ```bash Command
 pip install --upgrade pip
@@ -25,7 +25,7 @@ pip install uv
 uv pip install --prerelease=allow sglang
 ```
 
-The major version of Cuda is 13 by default. To install sglang under Cuda 12 with pip or uv, please try the following commands:
+默认安装的 CUDA 主版本为 13。要在 CUDA 12 下用 pip 或 uv 安装 SGLang，请尝试以下命令：
 ```bash Command
 pip install --upgrade pip
 pip install uv
@@ -35,9 +35,9 @@ uv pip install --force-reinstall sglang-kernel --index-url https://docs.sglang.a
 uv pip install --force-reinstall sgl-deep-gemm --index-url https://docs.sglang.ai/whl/cu129/ --no-deps
 ```
 
-### Nightly builds
+### 每日构建版（Nightly）
 
-To pick up the latest features and fixes before the next stable release, install a nightly build. Nightly wheels are built from the latest `main` and published to the SGLang wheel index. Add that index with `--extra-index-url`, and combine `--prerelease=allow` with `--index-strategy unsafe-best-match` so uv considers the nightly (pre-release) version alongside PyPI:
+想在下一个稳定版发布前用到最新特性和修复，可以安装每日构建版。Nightly wheel 包由最新的 `main` 分支构建，并发布到 SGLang 的 wheel 索引。通过 `--extra-index-url` 添加该索引，并把 `--prerelease=allow` 与 `--index-strategy unsafe-best-match` 组合使用，这样 uv 就会把 nightly（预发布）版本与 PyPI 上的版本放在一起考虑：
 
 ```bash Command
 pip install --upgrade pip
@@ -45,41 +45,41 @@ pip install uv
 uv pip install --prerelease=allow --index-strategy unsafe-best-match --extra-index-url https://docs.sglang.ai/whl/cu130/ sglang
 ```
 
-To install a nightly build under Cuda 12, swap the index to `cu129`:
+要在 CUDA 12 下安装 nightly 版本，把索引换成 `cu129`：
 ```bash Command
 pip install --upgrade pip
 pip install uv
 uv pip install --prerelease=allow --index-strategy unsafe-best-match --extra-index-url https://docs.sglang.ai/whl/cu129/ sglang
 ```
 
-### Quick fixes to common problems
-- If you encounter `OSError: CUDA_HOME environment variable is not set`. Please set it to your CUDA install root with either of the following solutions:
-  1. Use `export CUDA_HOME=/usr/local/cuda-<your-cuda-version>` to set the `CUDA_HOME` environment variable.
-  2. Install FlashInfer first following [FlashInfer installation doc](https://docs.flashinfer.ai/installation.html), then install SGLang as described above.
+### 常见问题的快速修复
+- 如果遇到 `OSError: CUDA_HOME environment variable is not set`，请用以下任一方式把它设置到你的 CUDA 安装根目录：
+  1. 使用 `export CUDA_HOME=/usr/local/cuda-<your-cuda-version>` 设置 `CUDA_HOME` 环境变量。
+  2. 先按 [FlashInfer 安装文档](https://docs.flashinfer.ai/installation.html) 安装 FlashInfer，再按上述方式安装 SGLang。
 
-## Method 2: From source
+## 方法二：从源码安装
 
 ```bash Command
-# Use the last release branch
+# 使用最新的发布分支
 git clone -b v0.5.16 https://github.com/sgl-project/sglang.git
 cd sglang
 
-# Install the python packages
+# 安装 python 包
 pip install --upgrade pip
 pip install -e "python"
 ```
 
-**Quick fixes to common problems**
+**常见问题的快速修复**
 
-- If you want to develop SGLang, you can try the dev docker image. Please refer to [setup docker container](../developer_guide/development_guide_using_docker#setup-docker-container). The docker image is `lmsysorg/sglang:dev`.
+- 如果你想开发 SGLang，可以试试开发用 docker 镜像。请参考 [搭建 docker 容器](../developer_guide/development_guide_using_docker#setup-docker-container)。镜像名为 `lmsysorg/sglang:dev`。
 
-## Method 3: Using docker
+## 方法三：使用 docker
 
-The docker images are available on Docker Hub at [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags), built from [Dockerfile](https://github.com/sgl-project/sglang/tree/main/docker).
-Replace `<secret>` below with your huggingface hub [token](https://huggingface.co/docs/hub/en/security-tokens).
+Docker 镜像发布在 Docker Hub 的 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags)，由 [Dockerfile](https://github.com/sgl-project/sglang/tree/main/docker) 构建。
+把下面的 `<secret>` 替换成你的 huggingface hub [token](https://huggingface.co/docs/hub/en/security-tokens)。
 
 <Note>
-`latest` and `dev` are **mutable** tags: `latest` always points at the newest stable release, while `dev` is rebuilt daily from the latest `main` and includes build/development tools. Because they are overwritten over time, pin an immutable version tag for reproducible deployments — e.g. `lmsysorg/sglang:v0.5.16`. Browse all released versions on [Docker Hub](https://hub.docker.com/r/lmsysorg/sglang/tags).
+`latest` 和 `dev` 是**可变**标签：`latest` 始终指向最新的稳定版，`dev` 则每天从最新的 `main` 重新构建，并包含构建/开发工具。由于它们会随时间被覆盖，可复现的部署请固定一个不可变的版本标签——例如 `lmsysorg/sglang:v0.5.16`。在 [Docker Hub](https://hub.docker.com/r/lmsysorg/sglang/tags) 上可以浏览所有已发布版本。
 </Note>
 
 ```bash Command
@@ -93,7 +93,7 @@ docker run --gpus all \
     python3 -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct --host 0.0.0.0 --port 30000
 ```
 
-For production deployments, use the `runtime` variant which is significantly smaller (~40% reduction) by excluding build tools and development dependencies:
+生产部署建议使用 `runtime` 变体，它去掉了构建工具和开发依赖，体积显著更小（约减小 40%）：
 
 ```bash Command
 docker run --gpus all \
@@ -106,49 +106,49 @@ docker run --gpus all \
     python3 -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct --host 0.0.0.0 --port 30000
 ```
 
-You can also find the nightly docker images [here](https://hub.docker.com/r/lmsysorg/sglang/tags?name=nightly).
+你还可以在[这里](https://hub.docker.com/r/lmsysorg/sglang/tags?name=nightly)找到 nightly docker 镜像。
 
-Notes:
-- SGLang is shipped with CUDA 13 environment by default. To run SGLang on CUDA 12 environment, please use images with `-cu12` or `-cu129` suffix, such as `lmsysorg/sglang:latest-cu129` or `lmsysorg/sglang:dev-cu12`.
+注意事项：
+- SGLang 默认随 CUDA 13 环境一起发布。要在 CUDA 12 环境下运行 SGLang，请使用带 `-cu12` 或 `-cu129` 后缀的镜像，例如 `lmsysorg/sglang:latest-cu129` 或 `lmsysorg/sglang:dev-cu12`。
 
-## Method 4: Using Kubernetes
+## 方法四：使用 Kubernetes
 
-Please check out [OME](https://github.com/sgl-project/ome), a Kubernetes operator for enterprise-grade management and serving of large language models (LLMs).
+请查看 [OME](https://github.com/sgl-project/ome)——一个用于企业级大语言模型（LLM）管理与推理服务的 Kubernetes Operator。
 
-<Accordion title="More">
+<Accordion title="更多">
 
-1. Option 1: For single node serving (typically when the model size fits into GPUs on one node)
+1. 方案一：单节点推理服务（通常适用于模型大小能装进单个节点 GPU 的情况）
 
-   Execute command `kubectl apply -f docker/k8s-sglang-service.yaml`, to create k8s deployment and service, with llama-31-8b as example.
+   执行 `kubectl apply -f docker/k8s-sglang-service.yaml` 创建 k8s deployment 和 service，以 llama-31-8b 为例。
 
-2. Option 2: For multi-node serving (usually when a large model requires more than one GPU node, such as `DeepSeek-R1`)
+2. 方案二：多节点推理服务（通常适用于大模型需要多个 GPU 节点的情况，例如 `DeepSeek-R1`）
 
-   Modify the LLM model path and arguments as necessary, then execute command `kubectl apply -f docker/k8s-sglang-distributed-sts.yaml`, to create two nodes k8s statefulset and serving service.
-
-</Accordion>
-
-## Method 5: Using docker compose
-
-<Accordion title="More">
-
-> This method is recommended if you plan to serve it as a service.
-> A better approach is to use the [k8s-sglang-service.yaml](https://github.com/sgl-project/sglang/blob/main/docker/k8s-sglang-service.yaml).
-
-1. Copy the [compose.yml](https://github.com/sgl-project/sglang/blob/main/docker/compose.yaml) to your local machine
-2. Execute the command `docker compose up -d` in your terminal.
+   按需修改 LLM 模型路径和参数，然后执行 `kubectl apply -f docker/k8s-sglang-distributed-sts.yaml`，创建两节点的 k8s statefulset 和推理服务。
 
 </Accordion>
 
-## Method 6: Run on Kubernetes or Clouds with SkyPilot
+## 方法五：使用 docker compose
 
-<Accordion title="More">
+<Accordion title="更多">
 
-To deploy on Kubernetes or 12+ clouds, you can use [SkyPilot](https://github.com/skypilot-org/skypilot).
+> 如果你打算把它作为服务运行，推荐使用这个方法。
+> 更好的方式是使用 [k8s-sglang-service.yaml](https://github.com/sgl-project/sglang/blob/main/docker/k8s-sglang-service.yaml)。
 
-1. Install SkyPilot and set up Kubernetes cluster or cloud access: see [SkyPilot's documentation](https://skypilot.readthedocs.io/en/latest/getting-started/installation.html).
-2. Deploy on your own infra with a single command and get the HTTP API endpoint:
+1. 把 [compose.yml](https://github.com/sgl-project/sglang/blob/main/docker/compose.yaml) 复制到你的本地机器
+2. 在终端执行 `docker compose up -d`。
 
-<Accordion title={<>SkyPilot YAML: <code>sglang.yaml</code></>}>
+</Accordion>
+
+## 方法六：用 SkyPilot 在 Kubernetes 或云上运行
+
+<Accordion title="更多">
+
+要在 Kubernetes 或 12+ 个云平台上部署，可以使用 [SkyPilot](https://github.com/skypilot-org/skypilot)。
+
+1. 安装 SkyPilot 并配置 Kubernetes 集群或云平台访问：参见 [SkyPilot 文档](https://skypilot.readthedocs.io/en/latest/getting-started/installation.html)。
+2. 用一条命令部署到你自己的基础设施上，并获取 HTTP API 端点：
+
+<Accordion title={<>SkyPilot YAML：<code>sglang.yaml</code></>}>
 
 ```yaml Config
 # sglang.yaml
@@ -171,33 +171,33 @@ run: |
 </Accordion>
 
 ```bash Command
-# Deploy on any cloud or Kubernetes cluster. Use --cloud <cloud> to select a specific cloud provider.
+# 部署到任意云平台或 Kubernetes 集群。用 --cloud <cloud> 选择特定的云厂商。
 HF_TOKEN=<secret> sky launch -c sglang --env HF_TOKEN sglang.yaml
 
-# Get the HTTP API endpoint
+# 获取 HTTP API 端点
 sky status --endpoint 30000 sglang
 ```
 
-3. To further scale up your deployment with autoscaling and failure recovery, check out the [SkyServe + SGLang guide](https://github.com/skypilot-org/skypilot/tree/master/llm/sglang#serving-llama-2-with-sglang-for-more-traffic-using-skyserve).
+3. 想进一步通过自动扩缩容和故障恢复来扩展部署，请查看 [SkyServe + SGLang 指南](https://github.com/skypilot-org/skypilot/tree/master/llm/sglang#serving-llama-2-with-sglang-for-more-traffic-using-skyserve)。
 
 </Accordion>
 
-## Method 7: Run on AWS SageMaker
+## 方法七：在 AWS SageMaker 上运行
 
-<Accordion title="More">
+<Accordion title="更多">
 
-To deploy on SGLang on AWS SageMaker, check out [AWS SageMaker Inference](https://aws.amazon.com/sagemaker/ai/deploy)
+要在 AWS SageMaker 上部署 SGLang，请查看 [AWS SageMaker 推理](https://aws.amazon.com/sagemaker/ai/deploy)
 
-Amazon Web Services provide supports for SGLang containers along with routine security patching. For available SGLang containers, check out [AWS SGLang DLCs](https://aws.github.io/deep-learning-containers/reference/available_images/#sglang).
+Amazon Web Services 为 SGLang 容器提供支持，并会做常规安全补丁。可用的 SGLang 容器请查看 [AWS SGLang DLCs](https://aws.github.io/deep-learning-containers/reference/available_images/#sglang)。
 
-To deploy a pre-built SGLang Deep Learning Container without building your own image, see [Amazon SageMaker AI](/docs/basic_usage/aws_sagemaker).
+要直接部署预构建的 SGLang 深度学习容器（无需自己构建镜像），参见 [Amazon SageMaker AI](/docs/basic_usage/aws_sagemaker)。
 
-To host a model with your own container, follow the following steps:
+要用自己的容器托管模型，请按以下步骤操作：
 
-1. Build a docker container with [sagemaker.Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/sagemaker.Dockerfile) alongside the [serve](https://github.com/sgl-project/sglang/blob/main/docker/serve) script.
-2. Push your container onto AWS ECR.
+1. 用 [sagemaker.Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/sagemaker.Dockerfile) 和 [serve](https://github.com/sgl-project/sglang/blob/main/docker/serve) 脚本构建 docker 容器。
+2. 把你的容器推送到 AWS ECR。
 
-<Accordion title={<>Dockerfile Build Script: <code>build-and-push.sh</code></>}>
+<Accordion title={<>Dockerfile 构建脚本：<code>build-and-push.sh</code></>}>
 
 ```bash Command
 #!/bin/bash
@@ -227,15 +227,15 @@ echo "Build and push completed successfully!"
 
 </Accordion>
 
-3. Deploy a model for serving on AWS Sagemaker, refer to [deploy_and_serve_endpoint.py](https://github.com/sgl-project/sglang/blob/main/examples/sagemaker/deploy_and_serve_endpoint.py). For more information, check out [sagemaker-python-sdk](https://github.com/aws/sagemaker-python-sdk).
-   1. By default, the model server on SageMaker will run with the following command: `python3 -m sglang.launch_server --model-path opt/ml/model --host 0.0.0.0 --port 8080`. This is optimal for hosting your own model with SageMaker.
-   2. To modify your model serving parameters, the [serve](https://github.com/sgl-project/sglang/blob/main/docker/serve) script allows for all available options within `python3 -m sglang.launch_server --help` cli by specifying environment variables with prefix `SM_SGLANG_`.
-   3. The serve script will automatically convert all environment variables with prefix `SM_SGLANG_` from `SM_SGLANG_INPUT_ARGUMENT` into `--input-argument` to be parsed into `python3 -m sglang.launch_server` cli.
-   4. For example, to run [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) with reasoning parser, simply add additional environment variables `SM_SGLANG_MODEL_PATH=Qwen/Qwen3-0.6B` and `SM_SGLANG_REASONING_PARSER=qwen3`.
+3. 在 AWS Sagemaker 上部署模型进行推理，参见 [deploy_and_serve_endpoint.py](https://github.com/sgl-project/sglang/blob/main/examples/sagemaker/deploy_and_serve_endpoint.py)。更多信息请查看 [sagemaker-python-sdk](https://github.com/aws/sagemaker-python-sdk)。
+   1. 默认情况下，SageMaker 上的模型服务会运行以下命令：`python3 -m sglang.launch_server --model-path opt/ml/model --host 0.0.0.0 --port 8080`。这对在 SageMaker 上托管你自己的模型是最优的。
+   2. 要修改模型的推理服务参数，[serve](https://github.com/sgl-project/sglang/blob/main/docker/serve) 脚本支持 `python3 -m sglang.launch_server --help` 中列出的所有选项，只需设置带 `SM_SGLANG_` 前缀的环境变量。
+   3. serve 脚本会自动把所有带 `SM_SGLANG_` 前缀的环境变量从 `SM_SGLANG_INPUT_ARGUMENT` 转换为 `--input-argument`，供 `python3 -m sglang.launch_server` CLI 解析。
+   4. 例如，要用带推理解析器的方式运行 [Qwen/Qwen3-0.6B](https://huggingface.co/Qwen/Qwen3-0.6B)，只需额外设置环境变量 `SM_SGLANG_MODEL_PATH=Qwen/Qwen3-0.6B` 和 `SM_SGLANG_REASONING_PARSER=qwen3`。
 
 </Accordion>
 
-## Common Notes
+## 常见注意事项
 
-- [FlashInfer](https://github.com/flashinfer-ai/flashinfer) is the default attention kernel backend. It only supports sm75 and above. If you encounter any FlashInfer-related issues on sm75+ devices (e.g., T4, A10, A100, L4, L40S, H100), please switch to other kernels by adding `--attention-backend triton --sampling-backend pytorch` and open an issue on GitHub.
-- To reinstall flashinfer locally, use the following command: `pip3 install --upgrade flashinfer-python --force-reinstall --no-deps` and then delete the cache with `rm -rf ~/.cache/flashinfer`.
+- [FlashInfer](https://github.com/flashinfer-ai/flashinfer) 是默认的注意力 kernel 后端。它只支持 sm75 及以上的设备。如果你在 sm75+ 设备（例如 T4、A10、A100、L4、L40S、H100）上遇到 FlashInfer 相关问题，请通过添加 `--attention-backend triton --sampling-backend pytorch` 切换到其他 kernel，并在 GitHub 上提 issue。
+- 要在本地重装 flashinfer，使用命令：`pip3 install --upgrade flashinfer-python --force-reinstall --no-deps`，然后删除缓存 `rm -rf ~/.cache/flashinfer`。

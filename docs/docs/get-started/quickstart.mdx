@@ -1,37 +1,37 @@
 ---
-title: "Quickstart"
-description: "Get up and running with SGLang in minutes: install, launch a server, and send your first request."
+title: "快速上手"
+description: "几分钟内跑通 SGLang：安装、启动服务端、发送第一个请求。"
 ---
 
-## Overview
+## 概览
 
-This guide walks you through the entire flow of getting started with SGLang:
+本指南带你走完 SGLang 的完整上手流程：
 
-1. **Install** SGLang
-2. **Launch** an inference server
-3. **Send requests** using cURL, OpenAI Python client, Python `requests`, or the native SGLang API
+1. **安装** SGLang
+2. **启动**一个推理服务
+3. 使用 cURL、OpenAI Python 客户端、Python `requests` 或原生 SGLang API **发送请求**
 
-By the end, you'll have a working SGLang server responding to your prompts.
+学完本指南，你就有一个能响应你的提示词的 SGLang 服务在运行了。
 
 ---
 
-## Prerequisites
+## 前置条件
 
-- **Python**: 3.10 or higher
-- **GPU**: NVIDIA GPU with CUDA support (sm80 and above, e.g., A10, A100, L4, L40S, H100)
-- **OS**: Linux (recommended)
+- **Python**：3.10 及以上
+- **GPU**：支持 CUDA 的 NVIDIA GPU（sm80 及以上，例如 A10、A100、L4、L40S、H100）
+- **操作系统**：Linux（推荐）
 
 <Note>
-For other platforms, see the dedicated guides for [AMD GPUs](../hardware-platforms/amd_gpu), [Intel Xeon CPUs](../hardware-platforms/cpu_server), [Google TPUs](../hardware-platforms/tpu), [NVIDIA Jetson](../hardware-platforms/nvidia_jetson), [Ascend NPUs](../hardware-platforms/ascend-npus/getting-started/installation), and [Intel XPU](../hardware-platforms/xpu).
+其他平台请参考专门指南：[AMD GPU](../hardware-platforms/amd_gpu)、[Intel Xeon CPU](../hardware-platforms/cpu_server)、[Google TPU](../hardware-platforms/tpu)、[NVIDIA Jetson](../hardware-platforms/nvidia_jetson)、[Ascend NPU](../hardware-platforms/ascend-npus/getting-started/installation) 和 [Intel XPU](../hardware-platforms/xpu)。
 </Note>
 
 ---
 
-## Installation
+## 安装
 
 <Tabs>
-  <Tab title="Pip / uv (Recommended)">
-    We recommend using **uv** for faster installation:
+  <Tab title="Pip / uv（推荐）">
+    推荐使用 **uv** 安装，速度更快：
 
 ```bash
 pip install --upgrade pip
@@ -39,9 +39,9 @@ pip install uv
 uv pip install --prerelease=allow sglang
 ```
   </Tab>
-  <Tab title="From Source">
+  <Tab title="从源码安装">
 ```bash
-# Clone and install from source
+# 克隆并从源码安装
 git clone https://github.com/sgl-project/sglang.git
 cd sglang
 pip install --upgrade pip
@@ -49,9 +49,9 @@ pip install -e "python"
 ```
   </Tab>
   <Tab title="Docker">
-    The Docker images are available on Docker Hub at [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags).
+    Docker 镜像发布在 Docker Hub 的 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags)。
 
-    Replace `<secret>` with your [Hugging Face token](https://huggingface.co/docs/hub/en/security-tokens):
+    把 `<secret>` 替换成你的 [Hugging Face token](https://huggingface.co/docs/hub/en/security-tokens)：
 
     ```bash
     docker run --gpus all \
@@ -64,7 +64,7 @@ pip install -e "python"
         python3 -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct --host 0.0.0.0 --port 30000
     ```
 
-    For production deployments, use the smaller **runtime** variant (~40% size reduction):
+    生产部署建议使用更小的 **runtime** 变体（体积约减小 40%）：
 
     ```bash
     docker run --gpus all \
@@ -80,7 +80,7 @@ pip install -e "python"
 </Tabs>
 
 <Tip>
-If you encounter `OSError: CUDA_HOME environment variable is not set`, set it with:
+如果遇到 `OSError: CUDA_HOME environment variable is not set`，用以下命令设置它：
 ```bash
 export CUDA_HOME=/usr/local/cuda-<your-cuda-version>
 ```
@@ -88,34 +88,34 @@ export CUDA_HOME=/usr/local/cuda-<your-cuda-version>
 
 ---
 
-## Launch a Server
+## 启动服务端
 
-Start the SGLang server with a model. Here we use `qwen/qwen2.5-0.5b-instruct` as a lightweight example:
+用一个模型启动 SGLang 服务端。这里我们用 `qwen/qwen2.5-0.5b-instruct` 作为轻量示例：
 
 ```bash
 python3 -m sglang.launch_server --model-path qwen/qwen2.5-0.5b-instruct --host 0.0.0.0 --port 30000
 ```
 
-Wait until you see `The server is fired up and ready to roll!` in the terminal output.
+等到终端输出中出现 `The server is fired up and ready to roll!` 再继续。
 
 <Note>
-Once the server is running, API documentation is available at:
-- **Swagger UI**: `http://localhost:30000/docs`
-- **ReDoc**: `http://localhost:30000/redoc`
-- **OpenAPI Spec**: `http://localhost:30000/openapi.json`
+服务运行起来后，API 文档可以在以下地址查看：
+- **Swagger UI**：`http://localhost:30000/docs`
+- **ReDoc**：`http://localhost:30000/redoc`
+- **OpenAPI 规范**：`http://localhost:30000/openapi.json`
 </Note>
 
 <Info>
-The server automatically applies the chat template from the Hugging Face tokenizer. You can override it with `--chat-template` when launching.
+服务端会自动套用 Hugging Face 分词器中的对话模板。你也可以在启动时用 `--chat-template` 覆盖它。
 </Info>
 
 ---
 
-## Send Requests
+## 发送请求
 
-SGLang is fully **OpenAI API-compatible**, so you can use the same tools and libraries you already know.
+SGLang 完全**兼容 OpenAI API**，所以你可以直接使用已经熟悉的工具和库。
 
-### Using cURL
+### 使用 cURL
 
 ```bash
 curl http://localhost:30000/v1/chat/completions \
@@ -128,15 +128,15 @@ curl http://localhost:30000/v1/chat/completions \
   }'
 ```
 
-### Using OpenAI Python Client
+### 使用 OpenAI Python 客户端
 
-Install the OpenAI Python library if you haven't:
+如果还没安装，先安装 OpenAI Python 库：
 
 ```bash
 pip install openai
 ```
 
-Then send a request:
+然后发送请求：
 
 ```python Example
 import openai
@@ -155,7 +155,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-#### Streaming
+#### 流式输出
 
 ```python Example
 import openai
@@ -177,7 +177,7 @@ for chunk in response:
         print(chunk.choices[0].delta.content, end="", flush=True)
 ```
 
-### Using Python Requests
+### 使用 Python requests
 
 ```python Example
 import requests
@@ -193,9 +193,9 @@ response = requests.post(url, json=data)
 print(response.json())
 ```
 
-### Using the Native `/generate` API
+### 使用原生 `/generate` API
 
-SGLang also provides a native `/generate` endpoint for more flexibility.
+SGLang 还提供更灵活的原生 `/generate` 端点。
 
 ```python Example
 import requests
@@ -214,7 +214,7 @@ response = requests.post(
 print(response.json())
 ```
 
-#### Streaming with `/generate`
+#### `/generate` 的流式输出
 
 ```python Example
 import requests
@@ -247,9 +247,9 @@ for chunk in response.iter_lines(decode_unicode=False):
 
 ---
 
-## Offline Batch Inference (No Server)
+## 离线批量推理（不启动服务端）
 
-SGLang also supports offline batch inference using the `Engine` class directly -- no HTTP server required.
+SGLang 也支持直接用 `Engine` 类做离线批量推理——不需要 HTTP 服务端。
 
 ```python Example
 import sglang as sgl
@@ -275,28 +275,28 @@ llm.shutdown()
 
 ---
 
-## Common Troubleshooting
+## 常见问题排查
 
 <AccordionGroup>
-  <Accordion title="CUDA_HOME not set">
-    Set the `CUDA_HOME` environment variable to your CUDA install root:
+  <Accordion title="未设置 CUDA_HOME">
+    把 `CUDA_HOME` 环境变量设置为你的 CUDA 安装根目录：
     ```bash
     export CUDA_HOME=/usr/local/cuda-<your-cuda-version>
     ```
   </Accordion>
-  <Accordion title="FlashInfer issues on sm75+ devices">
-    Switch to alternative backends by adding these flags when launching the server:
+  <Accordion title="sm75+ 设备上的 FlashInfer 问题">
+    启动服务端时添加以下参数切换到其他后端：
     ```bash
     --attention-backend triton --sampling-backend pytorch
     ```
   </Accordion>
-  <Accordion title="Reinstalling FlashInfer">
+  <Accordion title="重装 FlashInfer">
     ```bash
     pip3 install --upgrade flashinfer-python --force-reinstall --no-deps
     rm -rf ~/.cache/flashinfer
     ```
   </Accordion>
-  <Accordion title="ptxas error on B300/GB300 (sm_103a)">
+  <Accordion title="B300/GB300（sm_103a）上的 ptxas 报错">
     ```bash
     export TRITON_PTXAS_PATH=/usr/local/cuda/bin/ptxas
     ```
@@ -306,27 +306,27 @@ llm.shutdown()
 ---
 
 {/*
-WIP, TBD linked later
-## What's Next?
+待办：后续补充链接
+## 下一步？
 
 <CardGroup cols={2}>
-  <Card title="OpenAI-Compatible APIs" href="../basic_usage/openai_api_completions">
-    Explore the full Chat Completions and Completions APIs, including multi-turn conversations.
+  <Card title="兼容 OpenAI 的 API" href="../basic_usage/openai_api_completions">
+    深入了解完整的 Chat Completions 与 Completions API，包括多轮对话。
   </Card>
-  <Card title="Vision Language Models" href="../basic_usage/openai_api_vision">
-    Send image inputs alongside text using OpenAI-compatible vision APIs.
+  <Card title="视觉语言模型" href="../basic_usage/openai_api_vision">
+    使用兼容 OpenAI 的视觉 API 随文本一起发送图像输入。
   </Card>
-  <Card title="Sampling Parameters" href="../basic_usage/sampling_params">
-    Fine-tune generation with temperature, top-p, frequency penalty, and more.
+  <Card title="采样参数" href="../basic_usage/sampling_params">
+    用 temperature、top-p、frequency penalty 等微调生成结果。
   </Card>
-  <Card title="Server Arguments" href="../advanced_features/server_arguments">
-    Customize server behavior with advanced launch arguments like tensor parallelism.
+  <Card title="服务端参数" href="../advanced_features/server_arguments">
+    用张量并行等高级启动参数定制服务端行为。
   </Card>
-  <Card title="Structured Outputs" href="../advanced_features/structured_outputs">
-    Constrain model output to JSON, regex, or EBNF grammars.
+  <Card title="结构化输出" href="../advanced_features/structured_outputs">
+    把模型输出约束为 JSON、regex 或 EBNF 语法。
   </Card>
-  <Card title="Ollama-Compatible API" href="../basic_usage/ollama_api">
-    Use the familiar Ollama CLI and Python library with SGLang as the backend.
+  <Card title="兼容 Ollama 的 API" href="../basic_usage/ollama_api">
+    用熟悉的 Ollama CLI 和 Python 库，以 SGLang 作为后端。
   </Card>
 </CardGroup>
 */}
