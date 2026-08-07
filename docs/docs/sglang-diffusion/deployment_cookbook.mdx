@@ -1,14 +1,14 @@
 ---
-title: "Deployment and Performance Modes"
-description: "Choose CPU offload, FSDP, CFG parallelism, SP, TP, and performance-mode presets in SGLang Diffusion."
+title: "部署与性能模式"
+description: "在 SGLang Diffusion 中选择 CPU 卸载、FSDP、CFG 并行、SP、TP 与性能模式预设。"
 tag: "preserve"
 ---
 
-This page gives practical defaults for choosing `--performance-mode`, CPU offload, FSDP, CFG parallelism, SP, and TP.
+本页给出选择 `--performance-mode`、CPU 卸载、FSDP、CFG 并行、SP 和 TP 的实用默认值。
 
-## Quick Rule
+## 快速规则
 
-Use the simplest setting that fits your memory target:
+在符合内存目标的前提下，用最简单的配置：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -17,42 +17,42 @@ Use the simplest setting that fits your memory target:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Goal</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Recommended setting</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>推荐配置</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Fastest single-GPU run when the model fits</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Disable CPU offload and do not use FSDP.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>模型装得下时，单 GPU 跑得最快</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>禁用 CPU 卸载，不使用 FSDP。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Lower single-GPU memory usage</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use component CPU offload, or layerwise DiT offload for supported Wan/MOVA models.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>降低单 GPU 内存占用</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用组件级 CPU 卸载，或对受支持的 Wan/MOVA 模型使用逐层 DiT 卸载。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Faster multi-GPU Qwen/Wan CFG generation</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use FSDP with CFG parallelism and disable CPU offload.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>多 GPU 上的 Qwen/Wan CFG 生成更快</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>使用带 CFG 并行的 FSDP，并禁用 CPU 卸载。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Sequence length or video-shape scaling</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Use SP/Ulysses/Ring when the model benefits from sequence parallelism.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>序列长度或视频尺寸扩展</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>当模型受益于序列并行时，使用 SP/Ulysses/Ring。</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>TP compatibility or encoder-heavy paths</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Set TP explicitly; do not treat TP as the default latency optimization.</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>TP 兼容性或编码器密集路径</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>显式设置 TP；不要把 TP 当作默认的延迟优化手段。</td>
     </tr>
   </tbody>
 </table>
 
-Base the decision on available memory on the selected GPU(s).
+决策依据是所选 GPU 上的可用内存。
 
-- For multi-GPU deployment: the least-free selected GPU is the bottleneck. A busy 80GiB GPU can behave like a much smaller GPU.
-- For single-GPU deployment: FSDP shards DiT weights across multiple GPUs. It is not useful for keeping a single-GPU deployment on one GPU; for that case use CPU offload.
+- 多 GPU 部署：选中的 GPU 中剩余内存最少的那块是瓶颈。一块满载的 80 GiB GPU 表现可能和一块小得多的 GPU 一样。
+- 单 GPU 部署：FSDP 会把 DiT 权重分片到多块 GPU 上。它不能用来把单 GPU 部署维持在单卡上；这种情况请用 CPU 卸载。
 
-## Performance Modes
+## 性能模式
 
-`--performance-mode` applies safe presets without overriding explicit offload, FSDP, or parallelism flags. `auto` is the default. Use `manual` when you need to keep performance-related server args under explicit user control. `--mode` is a short alias.
+`--performance-mode` 在**不覆盖**显式卸载、FSDP 或并行参数的前提下应用安全预设。`auto` 是默认值。当你需要把性能相关的服务端参数保持在显式用户控制下时，用 `manual`。`--mode` 是它的短别名。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -61,42 +61,42 @@ Base the decision on available memory on the selected GPU(s).
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Mode</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Meaning</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>含义</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`manual`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Keeps performance-related server args under explicit user control.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>把性能相关的服务端参数保持在显式用户控制下。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`auto`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Default. Keeps legacy safe offload defaults and uses FSDP/CFG only on validated multi-GPU deployments where FSDP can replace DiT offload.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>默认值。保留旧版安全的卸载默认值，并且只在经过验证的多 GPU 部署上（FSDP 可以替代 DiT 卸载时）使用 FSDP/CFG。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`speed`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Favors GPU-resident execution for lower latency and higher throughput. Disables CPU offload when unset and enables `torch.compile` by default unless explicitly disabled; may OOM.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>偏向 GPU 常驻执行，换取更低延迟和更高吞吐。未显式设置时禁用 CPU 卸载，并且默认启用 `torch.compile`（除非显式禁用）；可能 OOM。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`memory`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Favors lower GPU memory. Uses component offload, or Wan/MOVA layerwise DiT offload when supported.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>偏向更低的 GPU 内存占用。使用组件卸载，或对受支持的 Wan/MOVA 模型使用逐层 DiT 卸载。</td>
     </tr>
   </tbody>
 </table>
 
-`auto` checks selected GPU memory before applying FSDP. In multi-GPU runs it uses the least available memory across selected GPUs, and only turns on FSDP automatically when doing so can replace DiT offload. Text encoder, image encoder, and other component residency still follow the offload policy unless the model marks a high-memory resident path as safe. When the model default uses CFG and the user did not set a parallelism policy, `auto` may also enable CFG parallelism. `speed` intentionally does not check memory; it is the mode for users who prefer latency/throughput and accept OOM risk, and it will turn on `torch.compile` automatically unless `--enable-torch-compile false` is set explicitly.
+`auto` 在应用 FSDP 之前会检查所选 GPU 的内存。多 GPU 运行时，它取所选 GPU 中最小的可用内存，并且只有当这样做能替代 DiT 卸载时才会自动开启 FSDP。文本编码器、图像编码器及其他组件的驻留方式仍遵循卸载策略，除非模型把某个高内存驻留路径标记为安全。当模型默认使用 CFG 且用户没有设置并行策略时，`auto` 还可能启用 CFG 并行。`speed` 有意不检查内存；它适合更看重延迟/吞吐、能接受 OOM 风险的用户，并且除非显式设置了 `--enable-torch-compile false`，否则会自动开启 `torch.compile`。
 
-The modes tune residency for native pipeline components declared to the component residency manager. Today this covers the major DiT, text/image encoder, VAE, vocoder, and upsampler components; DiT can use layerwise offload when supported, while text encoders use either resident execution or component CPU offload. Do not assume text-encoder layerwise offload unless a model implements and validates it.
+这些模式会为向组件驻留管理器注册的原生流水线组件调节驻留方式。目前覆盖主要的 DiT、文本/图像编码器、VAE、声码器和上采样器组件；DiT 在受支持时可以使用逐层卸载，而文本编码器要么常驻执行、要么组件级 CPU 卸载。除非模型实现并验证了文本编码器的逐层卸载，否则不要假定它可用。
 
-When `torch.compile` is enabled, `--offload-during-compile` stays on by default. During compile warmup it temporarily offloads the DiT and evicts resident non-DiT components so `max-autotune` fits on tighter-memory GPUs, then restores the configured serving residency before real traffic.
+启用 `torch.compile` 时，`--offload-during-compile` 默认保持开启。在编译预热期间，它会临时卸载 DiT 并把常驻的非 DiT 组件逐出，让 `max-autotune` 在内存更紧的 GPU 上装得下，然后在真实流量到达前恢复配置好的服务驻留方式。
 
-Breakable CUDA graph is a separate manual opt-in for supported image pipelines. If you enable `--enable-breakable-cuda-graph`, declare every served resolution in `--warmup-resolutions` so warmup captures matching graph signatures.
+可打断 CUDA 图是受支持图像流水线的一个独立手动选项。如果你启用 `--enable-breakable-cuda-graph`，必须在 `--warmup-resolutions` 中声明每一个会服务的分辨率，让预热捕获到匹配的图签名。
 
 > [!NOTE]
-> The preset is intentionally coarse. A future continuous value such as `0.0` to `1.0` could express the speed-memory tradeoff more precisely, but it would need model-specific memory models and clearer user expectations. Until then, use the preset plus explicit flags for overrides.
+> 这个预设刻意比较粗糙。未来用 `0.0` 到 `1.0` 这样的连续值或许能更精确地表达速度-内存权衡，但那需要模型专属的内存模型和更清晰的用户预期。在那之前，请用预设外加显式参数来覆盖。
 
-Examples:
+示例：
 
 ```bash
 sglang generate \
@@ -111,7 +111,7 @@ sglang generate \
   --performance-mode memory
 ```
 
-Explicit flags win over the mode:
+显式参数优先于模式：
 
 ```bash
 sglang generate \
@@ -121,33 +121,37 @@ sglang generate \
   --use-fsdp-inference false
 ```
 
-In this example, `auto` will not re-enable FSDP. The same applies to parallelism; for example, `--enable-cfg-parallel false` keeps CFG parallelism disabled.
+在这个例子里，`auto` 不会重新启用 FSDP。并行参数同理；例如 `--enable-cfg-parallel false` 会让 CFG 并行保持关闭。
 
-## Interpreting The Levers
+## 理解这些杠杆
 
-**No offload** keeps model components resident on GPU. It is usually fastest when memory is sufficient.
+<Note>
+💡 AI Infra 学习笔记：部署模式本质上是几个"内存-延迟"权衡的旋钮。CPU 卸载把大组件搬到主存，显存占用降下来，但每次访问都要跨 PCIe 走一趟，延迟上升；FSDP 把权重分片到多卡、前向时 all-gather，适合多卡但引入通信；序列并行（SP）解决的是单卡装不下长序列激活的问题，代价是通信开销。性能模式预设（auto/speed/memory）只是把这些旋钮组合成安全默认值——调优时能说清"我卡在显存还是算力、该拧哪个旋钮"，比记住预设名更重要。
+</Note>
 
-**Component CPU offload** lowers GPU memory by moving large components to CPU. It is simple and robust, but it usually trades latency for memory.
+**不卸载** 让模型组件常驻 GPU。内存充足时它通常最快。
 
-**Layerwise DiT offload** lowers DiT memory further for supported Wan/MOVA models by moving DiT layers between CPU and GPU. It can be the best single-GPU memory mode, but may increase latency and lower throughput.
+**组件级 CPU 卸载** 通过把大组件搬到 CPU 来降低 GPU 内存。它简单可靠，但通常是以延迟换内存。
 
-**FSDP** shards DiT weights across multiple GPUs and all-gathers weights during forward. It can reduce DiT CPU offload cost on multi-GPU deployments, especially for validated Wan I2V workloads.
+**逐层 DiT 卸载** 对受支持的 Wan/MOVA 模型，通过在 CPU 与 GPU 之间搬运 DiT 层，进一步降低 DiT 内存。它可能是单 GPU 上最好的内存模式，但可能增加延迟、降低吞吐。
 
-FSDP sharding granularity matters. SGLang Diffusion prefers sharding direct repeated transformer block entries such as `transformer_blocks.0` or `blocks.0`. Coarser sharding lowers wrapper count but can increase all-gather peak memory; finer sharding can reduce transient memory but adds communication and scheduling overhead. If a model does not define an explicit sharding rule, the loader falls back to repeated block class names and common direct numbered block paths.
+**FSDP** 把 DiT 权重分片到多块 GPU，并在前向过程中对权重做 all-gather。它可以降低多 GPU 部署上的 DiT CPU 卸载开销，尤其是经过验证的 Wan I2V 负载。
 
-**CFG parallelism** splits positive and negative CFG branches across GPUs. For Qwen/Wan workloads with normal step counts, this is the most reliable multi-GPU speedup observed so far.
+FSDP 的分片粒度很关键。SGLang Diffusion 倾向于分片直接的重复 transformer 块条目，比如 `transformer_blocks.0` 或 `blocks.0`。更粗的分片会降低 wrapper 数量，但可能抬高 all-gather 峰值内存；更细的分片能降低瞬时内存，但会引入更多通信和调度开销。如果模型没有定义显式分片规则，加载器会回退到重复块类名和常见的直接编号块路径。
 
-**SP/Ulysses/Ring** splits sequence work. It can help video workloads, but validated Qwen/Wan runs showed CFG parallelism outperforming SP for latency.
+**CFG 并行** 把正/负 CFG 分支拆分到多块 GPU 上。对步数正常的 Qwen/Wan 负载，这是目前观察到的最可靠的多 GPU 加速手段。
 
-**TP** is supported for compatibility and some model structures, but current measurements do not make it the default latency path for Qwen/Wan.
+**SP/Ulysses/Ring** 拆分序列计算。它可能对视频负载有帮助，但经过验证的 Qwen/Wan 运行显示，在延迟方面 CFG 并行优于 SP。
 
-## Current Benchmark Takeaways
+**TP** 出于兼容性和某些模型结构而受支持，但目前的实测结果并不让它成为 Qwen/Wan 的默认延迟路径。
 
-Observed regular-scale trends:
+## 当前基准测试要点
 
-- Z-Image: single-GPU no-offload was faster than FSDP/SP in the tested setting; keep FSDP off unless memory or parallelism requires it.
-- Qwen-Image: keep the default non-FSDP path unless a specific FSDP/SP/Ring setting has been benchmarked on the target hardware.
-- Wan: FSDP can replace DiT offload on validated multi-GPU workloads, while text/image encoders may still need component offload. Keep model-specific precision checks before making FSDP automatic for a path.
-- Component offload mainly reduced memory; it did not improve latency in the tested no-offload-vs-offload runs.
+观察到的常规规模趋势：
 
-Always benchmark with your actual resolution, frame count, step count, and GPU type before locking production defaults.
+- Z-Image：在测试配置中，单 GPU 不卸载比 FSDP/SP 更快；除非内存或并行需要，否则保持 FSDP 关闭。
+- Qwen-Image：除非已经在目标硬件上对某个特定的 FSDP/SP/Ring 配置做过基准测试，否则保持默认的非 FSDP 路径。
+- Wan：在验证过的多 GPU 负载上，FSDP 可以替代 DiT 卸载，而文本/图像编码器可能仍需要组件卸载。在把某个路径的 FSDP 设为自动之前，先做模型专属的精度检查。
+- 组件卸载主要降低内存；在测试的不卸载 vs 卸载对比中，它并没有改善延迟。
+
+在锁定生产默认值之前，务必用你实际的分辨率、帧数、步数和 GPU 型号做基准测试。

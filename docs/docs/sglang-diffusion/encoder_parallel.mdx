@@ -1,69 +1,48 @@
 ---
-title: "Encoder Parallelism"
+title: "编码器并行"
 tag: "preserve"
 metatags:
-    description: "Configure how SGLang Diffusion spreads text and image encoding across GPUs: parallel folding, batch data-parallel encoding, or replication."
+    description: "配置 SGLang Diffusion 如何在 GPU 之间分摊文本与图像编码：并行折叠、批量数据并行编码，或复制。"
 ---
 
-While the DiT denoises, the text and image encoders are idle — and while they
-encode, the whole DiT replica is idle. `--encoder-parallel` decides how to use
-those otherwise-unused GPUs for the encoding stage.
+当 DiT 在去噪时，文本和图像编码器处于空闲——而当它们在编码时，整个 DiT 副本又在空转。`--encoder-parallel` 决定如何在编码阶段利用这些原本闲置的 GPU。
 
 ```bash
 --encoder-parallel {auto,fold,dp,replicate}
 ```
 
-| Mode | What it does | Use when |
+| 模式 | 作用 | 适用场景 |
 | --- | --- | --- |
-| `auto` | Picks `fold`, `dp`, or `replicate` per encoder from its width and the request's batch width | Default for `generate`; you want the decision made per encoder |
-| `fold` | TP-shards the encoder weights across the idle DiT replica | One wide encoder dominates a single-request encode |
-| `dp` | Each rank encodes its slice of the prompt batch, then the outputs are all-gathered | Default for `serve`; needs `--batching-max-size > 1` to engage |
-| `replicate` | Every rank encodes the whole batch redundantly | You want the encoding stage to match single-GPU numerics exactly |
+| `auto` | 根据编码器的宽度与请求的批宽度，为每个编码器选择 `fold`、`dp` 或 `replicate` | `generate` 的默认值；希望按编码器逐个做决策 |
+| `fold` | 将编码器权重以 TP 分片的形式切分到空闲的 DiT 副本上 | 单个宽编码器主导单请求的编码过程 |
+| `dp` | 每个 rank 编码提示词批次中属于自己的分片，然后对输出做 all-gather | `serve` 的默认值；需要 `--batching-max-size > 1` 才会生效 |
+| `replicate` | 每个 rank 冗余编码整个批次 | 希望编码阶段与单 GPU 数值完全一致 |
 
-The two accelerated modes are mutually exclusive per encoder: folding shards the
-weights for the lifetime of the loaded model, so a folded encoder cannot also be
-data-parallel.
+两个加速模式对每个编码器互斥：折叠会在模型加载后的整个生命周期内分片权重，因此被折叠的编码器不能再同时做数据并行。
 
-## Which Mode Wins
+<Note>
+💡 AI Infra 学习笔记：编码器并行解决的是"负载不对称"问题——扩散管线里 DiT 在绝大多数时间负责去噪，文本/图像编码器只在每轮生成开头忙一小会儿。fold 通过切分权重摊薄单个宽编码器（如 T5）的 GEMM；dp 让每个 rank 各编码一批提示词，靠批宽获得吞吐；replicate 则为了数值可复现。它和序列并行（切 DiT 的 latent 序列）是两条正交的并行维度。
+</Note>
 
-Measured on H100 across T5 (hidden 4096), Qwen3 (2560), and CLIP-L (768) at
-batch 1–8 and replica sizes 2 and 4:
+## 哪种模式更好
 
-- **Folding** pays when the encoder is wide enough that sharding its GEMMs beats
-  the per-layer all-reduce it adds. T5 gains; Qwen3 (+35%) and CLIP-L (+50%) get
-  slower, so folding is gated at hidden ≥ 4096. Its benefit also saturates as
-  the replica grows, since each rank's slice keeps shrinking.
-- **Data-parallel** pays only when the encode is compute-bound, which needs a
-  wide encoder (hidden ≥ 1024 — CLIP-L is slower at every batch and replica
-  measured) and more than one prompt in a single encode call.
-- **Replication** is the right answer whenever neither condition holds, which is
-  most single-request latency work.
+在 H100 上、批大小 1–8、副本规模 2 与 4 的情况下，对 T5（hidden 4096）、Qwen3（2560）与 CLIP-L（768）实测：
 
-`auto` encodes exactly these rules, so prefer it unless you are pinning a
-configuration you measured yourself.
+- **折叠** 在编码器足够宽、分片 GEMM 的收益能超过它新增的逐层 all-reduce 开销时才划算。T5 受益；Qwen3（+35%）与 CLIP-L（+50%）反而变慢，所以折叠被限制在 hidden ≥ 4096 时启用。它的收益也会随副本增大而饱和，因为每个 rank 的分片持续变小。
+- **数据并行** 只在编码是计算密集型时划算，这需要较宽的编码器（hidden ≥ 1024——实测 CLIP-L 在每种批大小和副本规模下都更慢）以及单次编码调用中包含多个提示词。
+- **复制** 是上述两个条件都不成立时的正确选择，而大多数单请求延迟敏感的工作都属于这种情况。
 
-## Numerics
+`auto` 正是按这些规则决策的，所以除非你要固定自己实测过的配置，否则优先用它。
 
-`fold` and `replicate` are bitwise-identical to single-GPU encoding: folding
-shards a GEMM and reduces it, which is the same arithmetic the unsharded kernel
-performs.
+## 数值行为
 
-`dp` is **not** bitwise-identical. Each rank runs the full unsharded encoder on
-a smaller batch, so the GEMM tiling and reduction order differ from the batched
-reference — the same floating-point reordering class as choosing a different
-attention backend or parallelism strategy, not a precision loss. The gathered
-result is mathematically equivalent, and per-request results stay deterministic
-for a fixed batch shape, but embeddings will not match a `replicate` run
-bit-for-bit, and long video sampling can amplify the difference into visible
-frame differences. Use `replicate` (or `fold`) when you need bit-exact
-reproducibility against a single-GPU reference, e.g. when refreshing consistency
-baselines.
+`fold` 与 `replicate` 与单 GPU 编码逐位一致：折叠只是把一个 GEMM 分片后再归约，与非分片 kernel 执行的算术完全相同。
 
-## Recommended Commands
+`dp` **不是**逐位一致的。每个 rank 在一个更小的批次上运行完整的不分片编码器，因此 GEMM 的分块与归约顺序不同于批量参考实现——这与换一个 Attention 后端或换一种并行策略造成的浮点重排序是同一类差异，并不是精度损失。汇总结果在数学上等价，固定批形状下每个请求的结果保持确定性，但嵌入不会与 `replicate` 运行结果逐位吻合，长视频采样还可能把差异放大成可见的画面差异。当你需要与单 GPU 参考逐位可复现（例如刷新一致性基线）时，请用 `replicate`（或 `fold`）。
 
-Throughput serving. `serve` already defaults to `dp`, but a single encode call
-must carry more than one prompt for it to engage, so raise the batching ceiling
-too — an encoder flag deliberately does not change DiT batching for you:
+## 推荐命令
+
+面向吞吐的服务化。`serve` 默认就是 `dp`，但单次编码调用必须携带多个提示词才会生效，所以要同时调高批处理上限——编码器参数刻意不会替你改动 DiT 的批处理设置：
 
 ```bash
 sglang serve \
@@ -74,7 +53,7 @@ sglang serve \
   --batching-max-size 2
 ```
 
-Single-request latency with one wide text encoder:
+带单个宽文本编码器的单请求延迟：
 
 ```bash
 sglang serve \
@@ -85,7 +64,7 @@ sglang serve \
   --encoder-parallel fold
 ```
 
-Bit-exact reproducibility against a single-GPU reference:
+与单 GPU 参考逐位可复现：
 
 ```bash
 sglang serve \
@@ -95,12 +74,8 @@ sglang serve \
   --encoder-parallel replicate
 ```
 
-## Interaction With Other Flags
+## 与其它参数的相互作用
 
-- **Tensor / data parallel**: `dp` requires a replicated encoder, so it is
-  skipped when `--tp-size > 1` or `--dp-size > 1`.
-- **Dynamic batching**: `dp` only pays with a wide batch, so selecting it raises
-  the default batching ceiling. See [Inference Batching](./dynamic_batching).
-- **Sequence parallelism**: independent — SP splits the DiT's latent sequence,
-  encoder parallelism splits the encoding stage. See
-  [Sequence Parallelism](./ring_sp_performance).
+- **张量 / 数据并行**：`dp` 需要复制的编码器，因此当 `--tp-size > 1` 或 `--dp-size > 1` 时会被跳过。
+- **动态批处理**：`dp` 只有在大批次下才划算，所以选择它会调高默认的批处理上限。参见 [推理批处理](./dynamic_batching)。
+- **序列并行**：两者相互独立——SP 切分 DiT 的 latent 序列，编码器并行切分编码阶段。参见 [序列并行](./ring_sp_performance)。

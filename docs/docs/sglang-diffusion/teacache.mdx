@@ -1,54 +1,59 @@
 ---
-title: "TeaCache Acceleration"
-description: "Configure TeaCache for temporal similarity-based diffusion acceleration."
+title: "TeaCache 加速"
+description: "配置 TeaCache，基于时间相似性加速扩散模型推理。"
 tag: "approx"
 ---
 
-> **Note**: This is one of two caching strategies available in SGLang.
-> For an overview of all caching options, see [caching](./caching-acceleration).
+> **注意**：这是 SGLang 提供的两种缓存策略之一。
+> 所有缓存方案的概览请参见 [缓存](./caching-acceleration)。
 
-TeaCache (Temporal similarity-based caching) accelerates diffusion inference by detecting when consecutive denoising steps are similar enough to skip computation entirely.
+TeaCache（基于时间相似性的缓存）通过检测连续去噪步骤是否足够相似来直接跳过计算，从而加速扩散模型推理。
 
-## Overview
+## 概览
 
-TeaCache works by:
-1. Tracking the L1 distance between modulated inputs across consecutive timesteps
-2. Accumulating the rescaled L1 distance over steps
-3. When accumulated distance is below a threshold, reusing the cached residual
-4. Using separate positive/negative caches for supported CFG model families
+TeaCache 的工作方式：
 
-## How It Works
+1. 跟踪连续时间步之间调制输入的 L1 距离
+2. 跨步骤累积缩放后的 L1 距离
+3. 当累积距离低于阈值时，复用缓存的残差
+4. 对受支持的 CFG 模型家族使用独立的正/负缓存
 
-### L1 Distance Tracking
+<Note>
+💡 AI Infra 学习笔记：TeaCache 属于"时间步级"的缓存——它假设扩散去噪过程中相邻步的输出变化很小（尤其在噪声接近收敛的阶段），于是用输入之间的 L1 距离作为"步间变化量"的廉价代理，变化量小就整步复用上一次的残差，跳过一次完整 DiT 前向。这比 Cache-DiT 的块级跳过更粗粒度，实现更简单，但同样以质量损失换速度。
+</Note>
 
-At each denoising step, TeaCache computes the relative L1 distance between the current and previous modulated inputs:
+## 工作原理
+
+### L1 距离跟踪
+
+在每个去噪步骤，TeaCache 计算当前与上一次调制输入之间的相对 L1 距离：
 
 ```text
 rel_l1 = |current - previous|.mean() / |previous|.mean()
 ```
 
-This distance is then rescaled using polynomial coefficients and accumulated:
+该距离随后用多项式系数缩放并累积：
 
 ```text
 accumulated += poly(coefficients)(rel_l1)
 ```
 
-### Cache Decision
+### 缓存决策
 
-- If `accumulated >= threshold`: Force computation, reset accumulator
-- If `accumulated < threshold`: Skip computation, use cached residual
+- 如果 `accumulated >= threshold`：强制执行计算，重置累加器
+- 如果 `accumulated < threshold`：跳过计算，使用缓存的残差
 
-### CFG Support
+### CFG 支持
 
-For models that support CFG cache separation, TeaCache maintains separate caches for positive and negative branches:
-- `previous_modulated_input` / `previous_residual` for positive branch
-- `previous_modulated_input_negative` / `previous_residual_negative` for negative branch
+对于支持 CFG 缓存分离的模型，TeaCache 为正负两个分支分别维护缓存：
+- 正分支：`previous_modulated_input` / `previous_residual`
+- 负分支：`previous_modulated_input_negative` / `previous_residual_negative`
 
-For models that do not support CFG separation, TeaCache is automatically disabled when CFG is enabled.
+对于不支持 CFG 分离的模型，当启用 CFG 时 TeaCache 会自动禁用。
 
-## Configuration
+## 配置
 
-TeaCache is configured via `TeaCacheParams` in the sampling parameters:
+TeaCache 通过采样参数中的 `TeaCacheParams` 配置：
 
 ```python
 from sglang.multimodal_gen.configs.sample.teacache import TeaCacheParams
@@ -59,7 +64,7 @@ params = TeaCacheParams(
 )
 ```
 
-### Parameters
+### 参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -69,32 +74,32 @@ params = TeaCacheParams(
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Type</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>类型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`teacache_thresh`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>float</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Threshold for accumulated L1 distance. Higher = more caching, faster but potentially lower quality</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>累积 L1 距离的阈值。越大缓存越多、越快，但质量可能下降</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`coefficients`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>list[float]</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Polynomial coefficients for L1 rescaling. Model-specific tuning</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>L1 缩放用的多项式系数。需要按模型单独调优</td>
     </tr>
   </tbody>
 </table>
 
-### Model-Specific Configurations
+### 模型专用配置
 
-Different models may have different optimal configurations. The coefficients are typically tuned per-model to balance speed and quality.
+不同模型可能有不同的最优配置。系数通常按模型单独调优，以平衡速度与质量。
 
-## Supported Models
+## 支持的模型
 
-TeaCache support status by model family:
+TeaCache 按模型家族的支持状态：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -104,46 +109,46 @@ TeaCache support status by model family:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>CFG Cache Separation</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型家族</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>CFG 缓存分离</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>备注</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Wan2.1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Full support</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>完整支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Wan2.2</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Coefficients are not calibrated yet; enabling TeaCache is accepted but currently no-ops</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>系数尚未标定；启用 TeaCache 会被接受，但目前不起作用</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Z-Image</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Yes</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Full support</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>是</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>完整支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>HunyuanVideo</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Not supported yet</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>暂不支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Flux</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>To be supported</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>待支持</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Qwen</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>No</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>To be supported</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>否</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>待支持</td>
     </tr>
   </tbody>
 </table>
 
 
-## References
+## 参考资料
 
-- [TeaCache: Accelerating Diffusion Models with Temporal Similarity](https://arxiv.org/abs/2411.14324)
+- [TeaCache: 基于时间相似性加速扩散模型](https://arxiv.org/abs/2411.14324)

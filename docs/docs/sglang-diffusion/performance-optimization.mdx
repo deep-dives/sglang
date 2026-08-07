@@ -1,26 +1,30 @@
 ---
-title: "Performance Optimization"
-description: "Choose performance levers for SGLang Diffusion by latency, throughput, memory, and quality tradeoffs."
+title: "性能优化"
+description: "根据延迟、吞吐量、内存与质量权衡，为 SGLang Diffusion 选择合适的性能优化手段。"
 ---
 
-Use this page as the starting point for SGLang Diffusion performance work. It separates performance levers into two decision classes:
+把本页作为 SGLang Diffusion 性能优化的起点。它把性能优化手段分成两大类决策：
 
-- **Output-preserving / lossless-style:** system settings that should preserve model behavior while changing residency, parallelism, kernels, or scheduling.
-- **Quality-tradeoff / lossy or approximate:** techniques that can change the denoising path, numerical representation, or generated output.
+- **保持输出 / 无损型：** 系统级设置，在改变驻留方式、并行、kernel 或调度的同时，应当保持模型行为不变。
+- **质量权衡 / 有损或近似型：** 可能改变去噪路径、数值表示或生成输出的技术。
 
-The docs use "output-preserving" instead of promising bit-exact "lossless" because different kernels, GPU types, or precision paths can still introduce small numerical differences. The decision boundary is whether the optimization intentionally trades quality or output equivalence for speed.
+文档用"保持输出"而不是承诺逐位精确的"无损"，是因为不同的 kernel、GPU 类型或精度路径仍可能带来细微数值差异。判断边界在于：这个优化是否刻意用质量或输出等价性换取速度。
 
-## Start Here
+## 从这里开始
 
-1. Pick a serving or generation mode from [Deployment and Performance Modes](./deployment_cookbook). `--performance-mode auto` is the default; use `speed` when the model fits in GPU memory and latency matters most, `memory` when GPU memory is the bottleneck, and `manual` when every performance flag should be explicit.
-2. Choose the right attention backend from [Attention Backends](./attention_backends).
-3. Use [Sequence Parallelism](./ring_sp_performance) only when the model and video shape benefit from sequence splitting.
-4. Use [Inference Batching](./dynamic_batching) for concurrent compatible requests during serving.
-5. Use [Profiling](./profiling) before changing several levers at once.
+1. 从 [部署与性能模式](./deployment_cookbook) 中选择一种服务化或生成模式。`--performance-mode auto` 是默认值；当模型能装进 GPU 内存且延迟最要紧时用 `speed`，当 GPU 内存成为瓶颈时用 `memory`，当每个性能参数都要显式指定时用 `manual`。
+2. 从 [Attention 后端](./attention_backends) 中选择合适的注意力后端。
+3. 只有当模型与视频形状确实受益于序列切分时才使用 [序列并行](./ring_sp_performance)。
+4. 服务化过程中，对并发的兼容请求使用 [推理批处理](./dynamic_batching)。
+5. 在同时改动多个优化手段之前，先使用 [性能剖析](./profiling)。
 
-## Output-Preserving / Lossless-Style Levers
+<Note>
+💡 AI Infra 学习笔记：性能优化手段可以粗分为"不改输出的系统优化"与"以输出换速度的近似优化"两类。生产调优的稳妥路径是：先建立基线 → 用无损手段（并行、kernel、批处理）压榨性能 → 只有在基线固定、且你有一套质量验收标准之后，才引入 Cache-DiT/TeaCache、渐进式分辨率、量化这类有损手段。这能避免"性能上去了，但没人知道输出变了多少"的尴尬。
+</Note>
 
-These settings should preserve model behavior while changing residency, parallelism, kernels, or scheduling. They are the first choices for production tuning.
+## 保持输出 / 无损型优化手段
+
+这些设置在改变驻留方式、并行、kernel 或调度的同时应当保持模型行为不变，是生产调优的首选。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -30,48 +34,48 @@ These settings should preserve model behavior while changing residency, parallel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Lever</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Use when</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Docs</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>手段</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>适用场景</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>文档</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500}}><code>--performance-mode</code></td>
-      <td style={{padding: "9px 12px"}}>You want a safe preset for speed or memory without overriding explicit flags.</td>
-      <td style={{padding: "9px 12px"}}><a href="./deployment_cookbook">Deployment and Performance Modes</a></td>
+      <td style={{padding: "9px 12px"}}>想要一个不覆盖显式参数、安全的速度或内存预设。</td>
+      <td style={{padding: "9px 12px"}}><a href="./deployment_cookbook">部署与性能模式</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Offload, FSDP, CFG parallelism</td>
-      <td style={{padding: "9px 12px"}}>GPU memory, multi-GPU residency, or CFG branch splitting is the main bottleneck.</td>
-      <td style={{padding: "9px 12px"}}><a href="./deployment_cookbook">Deployment and Performance Modes</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>卸载、FSDP、CFG 并行</td>
+      <td style={{padding: "9px 12px"}}>GPU 内存、多 GPU 驻留方式或 CFG 分支切分是主要瓶颈。</td>
+      <td style={{padding: "9px 12px"}}><a href="./deployment_cookbook">部署与性能模式</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Sequence parallelism</td>
-      <td style={{padding: "9px 12px"}}>Long image/video sequences need sequence-level parallelism.</td>
-      <td style={{padding: "9px 12px"}}><a href="./ring_sp_performance">Sequence Parallelism</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>序列并行</td>
+      <td style={{padding: "9px 12px"}}>长图像/视频序列需要序列级并行。</td>
+      <td style={{padding: "9px 12px"}}><a href="./ring_sp_performance">序列并行</a></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500}}><code>--encoder-parallel</code></td>
-      <td style={{padding: "9px 12px"}}>Text/image encoding is a visible share of the request and the DiT replica sits idle during it.</td>
-      <td style={{padding: "9px 12px"}}><a href="./encoder_parallel">Encoder Parallelism</a></td>
+      <td style={{padding: "9px 12px"}}>文本/图像编码占请求的可观比例，且编码期间 DiT 副本处于空闲。</td>
+      <td style={{padding: "9px 12px"}}><a href="./encoder_parallel">编码器并行</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Attention backend</td>
-      <td style={{padding: "9px 12px"}}>Kernel choice dominates DiT latency or memory.</td>
-      <td style={{padding: "9px 12px"}}><a href="./attention_backends">Attention Backends</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>Attention 后端</td>
+      <td style={{padding: "9px 12px"}}>kernel 选择主导 DiT 的延迟或内存。</td>
+      <td style={{padding: "9px 12px"}}><a href="./attention_backends">Attention 后端</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Dynamic batching</td>
-      <td style={{padding: "9px 12px"}}>Serving many compatible requests concurrently.</td>
-      <td style={{padding: "9px 12px"}}><a href="./dynamic_batching">Inference Batching</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>动态批处理</td>
+      <td style={{padding: "9px 12px"}}>同时服务大量兼容请求。</td>
+      <td style={{padding: "9px 12px"}}><a href="./dynamic_batching">推理批处理</a></td>
     </tr>
   </tbody>
 </table>
 
-## Quality-Tradeoff / Lossy Or Approximate Levers
+## 质量权衡 / 有损或近似型优化手段
 
-These techniques can change the denoising path, numerical representation, or generated output. They are useful after you have a baseline and an acceptance criterion for quality.
+这些技术可能改变去噪路径、数值表示或生成输出。当你已有基线、并且有明确的质量验收标准之后再使用它们。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -81,51 +85,51 @@ These techniques can change the denoising path, numerical representation, or gen
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Lever</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Tradeoff</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Docs</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>手段</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>权衡</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>文档</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500}}>Cache-DiT</td>
-      <td style={{padding: "9px 12px"}}>Skips selected DiT block or step computation based on cache decisions.</td>
+      <td style={{padding: "9px 12px"}}>根据缓存决策跳过选定的 DiT 块或步骤计算。</td>
       <td style={{padding: "9px 12px"}}><a href="./cache_dit">Cache-DiT</a></td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500}}>TeaCache</td>
-      <td style={{padding: "9px 12px"}}>Reuses residuals when consecutive denoising steps are similar enough.</td>
+      <td style={{padding: "9px 12px"}}>当连续去噪步骤足够相似时复用残差。</td>
       <td style={{padding: "9px 12px"}}><a href="./teacache">TeaCache</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Progressive resolution</td>
-      <td style={{padding: "9px 12px"}}>Runs early denoising at lower latent resolution for supported pipelines.</td>
-      <td style={{padding: "9px 12px"}}><a href="./progressive_resolution">Progressive Resolution Generation</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>渐进式分辨率</td>
+      <td style={{padding: "9px 12px"}}>对受支持的管线，在更低的潜变量分辨率下运行早期去噪。</td>
+      <td style={{padding: "9px 12px"}}><a href="./progressive_resolution">渐进式分辨率生成</a></td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500}}>Quantization</td>
-      <td style={{padding: "9px 12px"}}>Uses lower-precision transformer weights or activations.</td>
-      <td style={{padding: "9px 12px"}}><a href="./quantization">Quantization</a></td>
+      <td style={{padding: "9px 12px", fontWeight: 500}}>量化</td>
+      <td style={{padding: "9px 12px"}}>使用更低精度的 transformer 权重或激活值。</td>
+      <td style={{padding: "9px 12px"}}><a href="./quantization">量化</a></td>
     </tr>
   </tbody>
 </table>
 
-## Practical Order
+## 实操顺序
 
-1. Establish a baseline with the target model, resolution, frame count, step count, and GPU type.
-2. Select `--performance-mode` and explicit residency or parallelism flags.
-3. Tune attention backend and batching for the deployment pattern.
-4. Profile if the bottleneck is unclear.
-5. Add caching, progressive resolution, or quantization only after comparing output quality against your acceptance target.
+1. 用目标模型、分辨率、帧数、步数与 GPU 类型建立基线。
+2. 选择 `--performance-mode` 以及显式的驻留或并行参数。
+3. 针对部署形态调优 Attention 后端与批处理。
+4. 瓶颈不清晰时先做性能剖析。
+5. 只有在将输出质量与你的验收目标对比之后，再添加缓存、渐进式分辨率或量化。
 
-## Diagnostics
+## 诊断
 
-[Profiling](./profiling) is not an optimization technique by itself. It belongs in the performance workflow because it tells you which stage, kernel, or denoising step is worth optimizing before you change multiple levers.
+[性能剖析](./profiling) 本身不是优化技术。它属于性能工作流，是因为它能在你改动多个优化手段之前，告诉你哪个阶段、哪个 kernel 或哪一步去噪值得优化。
 
-## References
+## 参考资料
 
-- [Deployment and Performance Modes](./deployment_cookbook)
-- [Attention Backends](./attention_backends)
-- [Sequence Parallelism](./ring_sp_performance)
-- [Caching Strategies](./caching-acceleration)
-- [Profiling](./profiling)
+- [部署与性能模式](./deployment_cookbook)
+- [Attention 后端](./attention_backends)
+- [序列并行](./ring_sp_performance)
+- [缓存策略](./caching-acceleration)
+- [性能剖析](./profiling)

@@ -1,24 +1,27 @@
 ---
-title: "Quantization"
+title: "量化"
 tag: "approx"
 metatags:
-    description: "SGLang-Diffusion supports quantized transformer checkpoints. In most cases, keep the base model and the quantized transformer override separate."
+    description: "SGLang-Diffusion 支持量化的 transformer 检查点。多数情况下，把基础模型和量化 transformer 覆盖分开。"
 ---
 
-SGLang-Diffusion supports quantized transformer checkpoints. In most cases, keep
-the base model and the quantized transformer override separate.
+SGLang-Diffusion 支持量化的 transformer 检查点。多数情况下，把基础模型和量化 transformer 覆盖分开。
 
-## Quick Reference
+<Note>
+💡 AI Infra 学习笔记：扩散模型量化和 LLM 量化有个关键区别：扩散的主干是 DiT，去噪过程中每一步的激活分布都在变，所以在线量化必须动态量化激活（W8A8/W4A4），而不能像 LLM 那样用静态定标；同时生成任务对量化误差很敏感，通常要把调制层（modulation）、时间步嵌入、首尾 transformer 块等关键路径留在 BF16。格式选择（FP8/NVFP4/INT4）还要和 kernel 后端（TensorRT-LLM/CUTLASS FP4 GEMM）配合，才能既省显存又吃到低精度计算的红利——这也正是"量化不只是换精度，而是精度-质量-后端三者权衡"的体现。
+</Note>
 
-Use these paths:
+## 快速参考
 
-- `--model-path`: the base or original model
-- `--transformer-path`: a quantized transformers-style transformer component directory that already contains its own `config.json`
-- `--transformer-weights-path`: quantized transformer weights provided as a single safetensors file, a sharded safetensors directory, a local path, or a Hugging Face repo ID
-- `--quantization`: apply online quantization to unquantized models at load time (activations are quantized dynamically)
-- `--quantization-ignored-layers` layer name patterns to keep unquantized (e.g. `attention.to_`)
+使用这些路径：
 
-Recommended example for pre-quantized checkpoints:
+- `--model-path`：基础模型或原始模型
+- `--transformer-path`：已量化、自带 `config.json` 的 transformers 风格 transformer 组件目录
+- `--transformer-weights-path`：以单个 safetensors 文件、分片 safetensors 目录、本地路径或 Hugging Face 仓库 ID 提供的量化 transformer 权重
+- `--quantization`：在加载时对未量化模型应用在线量化（激活动态量化）
+- `--quantization-ignored-layers`：保持未量化的层名模式（例如 `attention.to_`）
+
+预量化检查点的推荐示例：
 
 ```bash
 sglang generate \
@@ -27,7 +30,7 @@ sglang generate \
   --prompt "a curious pikachu"
 ```
 
-For quantized transformers-style transformer component folders:
+对量化的 transformers 风格 transformer 组件文件夹：
 
 ```bash
 sglang generate \
@@ -36,16 +39,11 @@ sglang generate \
   --prompt "A Logo With Bold Large Text: SGL Diffusion"
 ```
 
-NOTE: Some model-specific integrations also accept a quantized repo or local
-directory directly as `--model-path`, but that is a compatibility path. If a
-repo contains multiple candidate checkpoints, pass
-`--transformer-weights-path` explicitly.
+注意：某些模型专属集成也接受把量化仓库或本地目录直接作为 `--model-path`，但那是兼容路径。如果仓库里包含多个候选检查点，请显式传入 `--transformer-weights-path`。
 
-## Quant Families
+## 量化家族
 
-Here, `quant_family` means a checkpoint and loading family with shared CLI
-usage and loader behavior. It is not just the numeric precision or a kernel
-backend.
+这里的 `quant_family` 指一个共享 CLI 用法和加载行为的检查点与加载家族。它不只是数值精度或 kernel 后端。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -59,72 +57,72 @@ backend.
   <thead>
     <tr>
       <th>quant_family</th>
-      <th>checkpoint form</th>
-      <th>canonical CLI</th>
-      <th>supported models</th>
-      <th>extra dependency</th>
-      <th>platform / notes</th>
+      <th>检查点形式</th>
+      <th>规范 CLI</th>
+      <th>支持的模型</th>
+      <th>额外依赖</th>
+      <th>平台 / 说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td><code>fp8</code> / <code>mxfp4</code> (online quantization)</td>
-      <td>Unquantized checkpoint (offline via AMD Quark coming soon)</td>
+      <td><code>fp8</code> / <code>mxfp4</code>（在线量化）</td>
+      <td>未量化检查点（AMD Quark 的离线量化即将推出）</td>
       <td><code>--quantization &#123;fp8,mxfp4&#125;</code></td>
-      <td>Z-Image-Turbo (validated), others likely work. More support coming soon.</td>
-      <td>MXFP4: <code>aiter</code> on ROCm</td>
-      <td>MXFP4 requires ROCm and MI350+ (gfx95x). Weights quantized at load time, activations quantized to <code>fp8</code> / <code>mxfp4</code> dynamically.</td>
+      <td>Z-Image-Turbo（已验证），其它可能也能用。更多支持即将推出。</td>
+      <td>MXFP4：ROCm 上的 <code>aiter</code></td>
+      <td>MXFP4 需要 ROCm 和 MI350+（gfx95x）。权重在加载时量化，激活动态量化为 <code>fp8</code> / <code>mxfp4</code>。</td>
     </tr>
     <tr>
-      <td><code>fp8</code> (offline quantization)</td>
-      <td>Quantized transformer component folder, or safetensors with <code>quantization_config</code> metadata</td>
-      <td><code>--transformer-path</code> or <code>--transformer-weights-path</code></td>
-      <td>ALL</td>
-      <td>None</td>
-      <td>Component-folder and single-file flows are both supported</td>
+      <td><code>fp8</code>（离线量化）</td>
+      <td>量化后的 transformer 组件文件夹，或带 <code>quantization_config</code> 元数据的 safetensors</td>
+      <td><code>--transformer-path</code> 或 <code>--transformer-weights-path</code></td>
+      <td>全部</td>
+      <td>无</td>
+      <td>组件文件夹和单文件两种流程都受支持</td>
     </tr>
     <tr>
       <td><code>modelopt-fp8</code></td>
-      <td>Converted ModelOpt FP8 transformer directory or repo with <code>config.json</code></td>
+      <td>转换后的 ModelOpt FP8 transformer 目录，或含 <code>config.json</code> 的仓库</td>
       <td><code>--transformer-path</code></td>
-      <td>FLUX.1, FLUX.2, Wan2.2, HunyuanVideo, Qwen Image, Qwen Image Edit</td>
-      <td>None</td>
-      <td>Serialized config stays <code>quant_method=modelopt</code> with <code>quant_algo=FP8</code>; <code>dit_layerwise_offload</code> is supported and <code>dit_cpu_offload</code> stays disabled</td>
+      <td>FLUX.1、FLUX.2、Wan2.2、HunyuanVideo、Qwen Image、Qwen Image Edit</td>
+      <td>无</td>
+      <td>序列化配置保持 <code>quant_method=modelopt</code> 且 <code>quant_algo=FP8</code>；支持 <code>dit_layerwise_offload</code>，<code>dit_cpu_offload</code> 保持禁用</td>
     </tr>
     <tr>
       <td><code>modelopt-nvfp4</code></td>
-      <td>Mixed transformer directory/repo with <code>config.json</code>, raw NVFP4 safetensors export/repo, or full ModelOpt Diffusers repo</td>
-      <td><code>--transformer-path</code> for mixed overrides; <code>--transformer-weights-path</code> for raw exports; <code>--model-path</code> for full repos</td>
-      <td>FLUX.1, FLUX.2, Wan2.2, Qwen Image, Qwen Image 2512, Qwen Image Edit, Qwen Image Edit 2511</td>
-      <td>None</td>
-      <td>Mixed override repos keep the base model separate; full Qwen Image exports can be loaded directly as <code>--model-path</code>; raw exports such as <code>black-forest-labs/FLUX.2-dev-NVFP4</code> still use the weights-path flow</td>
+      <td>带 <code>config.json</code> 的混合 transformer 目录/仓库、原始 NVFP4 safetensors 导出/仓库，或完整的 ModelOpt Diffusers 仓库</td>
+      <td>混合覆盖用 <code>--transformer-path</code>；原始导出用 <code>--transformer-weights-path</code>；完整仓库用 <code>--model-path</code></td>
+      <td>FLUX.1、FLUX.2、Wan2.2、Qwen Image、Qwen Image 2512、Qwen Image Edit、Qwen Image Edit 2511</td>
+      <td>无</td>
+      <td>混合覆盖仓库保持基础模型独立；完整的 Qwen Image 导出可直接作为 <code>--model-path</code> 加载；原始导出（如 <code>black-forest-labs/FLUX.2-dev-NVFP4</code>）仍走 weights-path 流程</td>
     </tr>
     <tr>
       <td><code>nunchaku-svdq</code></td>
-      <td>Pre-quantized Nunchaku transformer weights, usually named <code>svdq-&#123;int4\|fp4&#125;_r&#123;rank&#125;-...</code></td>
+      <td>预量化的 Nunchaku transformer 权重，通常命名为 <code>svdq-&#123;int4\|fp4&#125;_r&#123;rank&#125;-...</code></td>
       <td><code>--transformer-weights-path</code></td>
-      <td>Model-specific support such as Qwen-Image, FLUX, and Z-Image</td>
+      <td>按模型支持，如 Qwen-Image、FLUX 和 Z-Image</td>
       <td><code>nunchaku</code></td>
-      <td>SGLang can infer precision and rank from the filename and supports both <code>int4</code> and <code>nvfp4</code></td>
+      <td>SGLang 可以从文件名推断精度和 rank，并同时支持 <code>int4</code> 和 <code>nvfp4</code></td>
     </tr>
     <tr>
       <td><code>msmodelslim</code></td>
-      <td>Pre-quantized msmodelslim transformer weights</td>
+      <td>预量化的 msmodelslim transformer 权重</td>
       <td><code>--model-path</code></td>
-      <td>Wan2.2 family</td>
-      <td>None</td>
-      <td>Currently only compatible with the Ascend NPU family and supports <code>mxfp8</code>, <code>mxfp4</code>, <code>w8a8</code>, and <code>w4a4</code></td>
+      <td>Wan2.2 家族</td>
+      <td>无</td>
+      <td>目前仅兼容 Ascend NPU 家族，支持 <code>mxfp8</code>、<code>mxfp4</code>、<code>w8a8</code> 和 <code>w4a4</code></td>
     </tr>
   </tbody>
 </table>
 
-## Online Quantization
+## 在线量化
 
-Online quantization applies quantization to unquantized models at load time. This is useful for when pre-quantized checkpoints are not available.
+在线量化在加载时对未量化模型应用量化。当没有预量化检查点可用时很有用。
 
-### FP8 Online Quantization
+### FP8 在线量化
 
-Apply FP8 quantization to any unquantized model:
+对任意未量化模型应用 FP8 量化：
 
 ```bash
 sglang generate \
@@ -134,14 +132,12 @@ sglang generate \
   --save-output
 ```
 
-MiniMax-H3 supports this path while preserving its required FP32 patch,
-timestep, and output projections. See the
-[MiniMax-H3 cookbook](/cookbook/diffusion/MiniMax/MiniMax-H3#7-runtime-feature-recipes)
-for its distributed serving recipe.
+MiniMax-H3 支持这条路径，同时保留其必需的 FP32 patch、timestep 和输出投影。其分布式服务配方见
+[MiniMax-H3 cookbook](/cookbook/diffusion/MiniMax/MiniMax-H3#7-runtime-feature-recipes)。
 
-### MXFP4 Online Quantization
+### MXFP4 在线量化
 
-MXFP4 provides aggressive 4-bit compression with online quantization. **Note: Requires ROCm and MI350+ (gfx95x) GPU.**
+MXFP4 通过在线量化提供激进的 4 位压缩。**注意：需要 ROCm 和 MI350+（gfx95x）GPU。**
 
 ```bash
 sglang generate \
@@ -150,12 +146,11 @@ sglang generate \
   --prompt "a beautiful sunset" \
   --save-output
 ```
-**Note:** Requires `aiter` package with MXFP4 kernel support
+**注意：** 需要带 MXFP4 kernel 支持的 `aiter` 包
 
-### Skipping Layers
+### 跳过某些层
 
-By default, online quantization quantizes every linear layer in
-the transformer. However, `--quantization-ignored-layers` can be used to keep specific layers in their original precision:
+默认情况下，在线量化会量化 transformer 中的每个线性层。不过可以用 `--quantization-ignored-layers` 让特定层保持原始精度：
 
 ```bash
 sglang generate \
@@ -173,20 +168,15 @@ sglang generate \
   --save-output
 ```
 
-Each pattern is matched against the full layer prefix (e.g. `layers.0.attention.to_q`). A layer is skipped and left unquantizd if its prefix contains any of the given patterns.
+每个模式都会与完整层前缀匹配（例如 `layers.0.attention.to_q`）。如果某个层的前缀包含任意给定模式，该层就会被跳过并保持未量化。
 
-## Validated ModelOpt Checkpoints
+## 已验证的 ModelOpt 检查点
 
-This section is the canonical support matrix for the thirteen published
-diffusion ModelOpt checkpoints currently wired up in SGLang docs and validation
-coverage.
+本节是当前接入 SGLang 文档与验证覆盖的十三个已发布扩散 ModelOpt 检查点的权威支持矩阵。
 
-Published checkpoints keep the serialized quantization config as
-`quant_method=modelopt`; the FP8 vs NVFP4 split below is a documentation label
-derived from `quant_algo`.
+已发布检查点保留 `quant_method=modelopt` 的序列化量化配置；下面的 FP8 与 NVFP4 划分是依据 `quant_algo` 得出的文档标签。
 
-Twelve of the thirteen repos live under `lmsys/*`. The FLUX.2 NVFP4 entry keeps
-the official `black-forest-labs/FLUX.2-dev-NVFP4` repo.
+十三个仓库中有十二个位于 `lmsys/*` 下。FLUX.2 NVFP4 条目使用官方的 `black-forest-labs/FLUX.2-dev-NVFP4` 仓库。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -199,12 +189,12 @@ the official `black-forest-labs/FLUX.2-dev-NVFP4` repo.
   </colgroup>
   <thead>
     <tr>
-      <th>Quant Algo</th>
-      <th>Base Model</th>
-      <th>Preferred CLI</th>
-      <th>HF Repo</th>
-      <th>Current Scope</th>
-      <th>Notes</th>
+      <th>量化算法</th>
+      <th>基础模型</th>
+      <th>首选 CLI</th>
+      <th>HF 仓库</th>
+      <th>当前范围</th>
+      <th>说明</th>
     </tr>
   </thead>
   <tbody>
@@ -213,121 +203,115 @@ the official `black-forest-labs/FLUX.2-dev-NVFP4` repo.
       <td><code>black-forest-labs/FLUX.1-dev</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/flux1-dev-modelopt-fp8-sglang-transformer</code></td>
-      <td>single-transformer override, deterministic latent/image comparison, H100 benchmark, torch-profiler trace</td>
-      <td>SGLang converter keeps a validated BF16 fallback set for modulation and FF projection layers; use <code>--model-id FLUX.1-dev</code> for local mirrors</td>
+      <td>单 transformer 覆盖、确定性潜空间/图像对比、H100 基准测试、torch-profiler 轨迹</td>
+      <td>SGLang 转换器为调制和 FF 投影层保留了一组经过验证的 BF16 回退；本地镜像请用 <code>--model-id FLUX.1-dev</code></td>
     </tr>
     <tr>
       <td><code>FP8</code></td>
       <td><code>black-forest-labs/FLUX.2-dev</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/flux2-dev-modelopt-fp8-sglang-transformer</code></td>
-      <td>single-transformer override load and generation path</td>
-      <td>published SGLang-ready transformer override</td>
+      <td>单 transformer 覆盖的加载与生成路径</td>
+      <td>已发布的 SGLang 就绪 transformer 覆盖</td>
     </tr>
     <tr>
       <td><code>FP8</code></td>
       <td><code>Wan-AI/Wan2.2-T2V-A14B-Diffusers</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/wan22-t2v-a14b-modelopt-fp8-sglang-transformer</code></td>
-      <td>primary <code>transformer</code> quantized, <code>transformer_2</code> kept BF16</td>
-      <td>primary-transformer-only path; keep <code>transformer_2</code> on the base checkpoint, and do not describe this as dual-transformer full-model FP8 unless that path is validated separately</td>
+      <td>主 <code>transformer</code> 量化，<code>transformer_2</code> 保持 BF16</td>
+      <td>仅主 transformer 的路径；把 <code>transformer_2</code> 留在基础检查点上，除非该路径被单独验证，否则不要把这里描述成双 transformer 全模型 FP8</td>
     </tr>
     <tr>
       <td><code>FP8</code></td>
       <td><code>hunyuanvideo-community/HunyuanVideo</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/hunyuanvideo-modelopt-fp8-sglang-transformer</code></td>
-      <td>single-transformer override, BF16-vs-FP8 video comparison, H100 benchmark, torch-profiler trace</td>
-      <td>HunyuanVideo uses different ModelOpt/diffusers and SGLang runtime module names; the converter maps those names before writing FP8 scale tensors and BF16 fallback ignores</td>
+      <td>单 transformer 覆盖、BF16 对 FP8 视频对比、H100 基准测试、torch-profiler 轨迹</td>
+      <td>HunyuanVideo 使用不同的 ModelOpt/diffusers 和 SGLang 运行时模块名；转换器会在写出 FP8 缩放张量之前映射这些名称，并忽略 BF16 回退</td>
     </tr>
     <tr>
       <td><code>FP8</code></td>
       <td><code>Qwen/Qwen-Image</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/qwen-image-modelopt-fp8-sglang-transformer</code></td>
-      <td>single-transformer override, BF16-vs-FP8 image comparison, H100 benchmark, torch-profiler trace</td>
-      <td>shares the Qwen Image FP8 fallback preset; keep <code>img_in</code>, <code>txt_in</code>, timestep embedder, <code>norm_out.linear</code>, <code>proj_out</code>, <code>img_mod</code>/<code>txt_mod</code>, and <code>img_mlp.net.2</code> in BF16</td>
+      <td>单 transformer 覆盖、BF16 对 FP8 图像对比、H100 基准测试、torch-profiler 轨迹</td>
+      <td>与 Qwen Image FP8 回退预设共用；把 <code>img_in</code>、<code>txt_in</code>、timestep 嵌入器、<code>norm_out.linear</code>、<code>proj_out</code>、<code>img_mod</code>/<code>txt_mod</code> 和 <code>img_mlp.net.2</code> 保持在 BF16</td>
     </tr>
     <tr>
       <td><code>FP8</code></td>
       <td><code>Qwen/Qwen-Image-Edit-2511</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/qwen-image-edit-modelopt-fp8-sglang-transformer</code></td>
-      <td>TI2I edit path, BF16-vs-FP8 image comparison, H100 benchmark</td>
-      <td>shares <code>QwenImageTransformer2DModel</code> with Qwen Image and uses the same Qwen Image FP8 fallback preset</td>
+      <td>TI2I 编辑路径、BF16 对 FP8 图像对比、H100 基准测试</td>
+      <td>与 Qwen Image 共用 <code>QwenImageTransformer2DModel</code>，并使用相同的 Qwen Image FP8 回退预设</td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>black-forest-labs/FLUX.1-dev</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/flux1-dev-modelopt-nvfp4-sglang-transformer</code></td>
-      <td>mixed BF16+NVFP4 transformer override, correctness validation, 4x RTX 5090 benchmark, torch-profiler trace</td>
-      <td>use <code>build_modelopt_nvfp4_transformer.py</code>; validated builder keeps selected FLUX.1 modules in BF16 and sets <code>swap_weight_nibbles=false</code></td>
+      <td>混合 BF16+NVFP4 transformer 覆盖、正确性验证、4x RTX 5090 基准测试、torch-profiler 轨迹</td>
+      <td>使用 <code>build_modelopt_nvfp4_transformer.py</code>；经过验证的构建器把选定的 FLUX.1 模块保持在 BF16，并设置 <code>swap_weight_nibbles=false</code></td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>black-forest-labs/FLUX.2-dev</code></td>
       <td><code>--transformer-weights-path</code></td>
       <td><code>black-forest-labs/FLUX.2-dev-NVFP4</code></td>
-      <td>packed-QKV load path</td>
-      <td>official raw export repo; validated packed export detection and runtime layout handling</td>
+      <td>打包 QKV 加载路径</td>
+      <td>官方原始导出仓库；已验证打包导出的检测和运行时布局处理</td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>Wan-AI/Wan2.2-T2V-A14B-Diffusers</code></td>
       <td><code>--transformer-path</code></td>
       <td><code>lmsys/wan22-t2v-a14b-modelopt-nvfp4-sglang-transformer</code></td>
-      <td>primary <code>transformer</code> quantized with ModelOpt NVFP4, <code>transformer_2</code> kept BF16</td>
-      <td>primary-transformer-only path; keep <code>transformer_2</code> on the base checkpoint; the default FP4 GEMM backend is <code>flashinfer_trtllm</code></td>
+      <td>主 <code>transformer</code> 用 ModelOpt NVFP4 量化，<code>transformer_2</code> 保持 BF16</td>
+      <td>仅主 transformer 的路径；把 <code>transformer_2</code> 留在基础检查点上；默认 FP4 GEMM 后端是 <code>flashinfer_trtllm</code></td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>Qwen/Qwen-Image</code></td>
       <td><code>--model-path</code></td>
       <td><code>lmsys/qwen-image-modelopt-nvfp4-sglang</code></td>
-      <td>full ModelOpt NVFP4 Diffusers repo, BF16-vs-NVFP4 B200 image comparison</td>
-      <td>full repo loaded directly; exported with ModelOpt PR #1706 SVDQuant NVFP4 (<code>--format fp4</code>, max calibration, block size 16) and BF16 fallbacks for attention-sensitive modules plus first/last transformer blocks</td>
+      <td>完整 ModelOpt NVFP4 Diffusers 仓库、BF16 对 NVFP4 B200 图像对比</td>
+      <td>直接加载完整仓库；使用 ModelOpt PR #1706 SVDQuant NVFP4（<code>--format fp4</code>、最大校准、块大小 16）导出，并对注意力敏感模块以及首/尾 transformer 块使用 BF16 回退</td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>Qwen/Qwen-Image-2512</code></td>
       <td><code>--model-path</code></td>
       <td><code>lmsys/qwen-image-2512-modelopt-nvfp4-sglang</code></td>
-      <td>full ModelOpt NVFP4 Diffusers repo, BF16-vs-NVFP4 B200 image comparison, B200 CI case</td>
-      <td>same full-repo loader path as Qwen Image; this is the Qwen Image NVFP4 representative in <code>multimodal-gen-test-1-b200</code></td>
+      <td>完整 ModelOpt NVFP4 Diffusers 仓库、BF16 对 NVFP4 B200 图像对比、B200 CI 用例</td>
+      <td>与 Qwen Image 相同的完整仓库加载路径；这是 <code>multimodal-gen-test-1-b200</code> 中的 Qwen Image NVFP4 代表</td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>Qwen/Qwen-Image-Edit</code></td>
       <td><code>--model-path</code></td>
       <td><code>lmsys/qwen-image-edit-modelopt-nvfp4-sglang</code></td>
-      <td>TI2I edit full ModelOpt NVFP4 Diffusers repo, BF16-vs-NVFP4 B200 image comparison</td>
-      <td>full repo loaded directly with normal image-edit inputs; exported with the same ModelOpt PR #1706 NVFP4 recipe</td>
+      <td>TI2I 编辑的完整 ModelOpt NVFP4 Diffusers 仓库、BF16 对 NVFP4 B200 图像对比</td>
+      <td>直接加载完整仓库并使用常规图像编辑输入；用相同的 ModelOpt PR #1706 NVFP4 配方导出</td>
     </tr>
     <tr>
       <td><code>NVFP4</code></td>
       <td><code>Qwen/Qwen-Image-Edit-2511</code></td>
       <td><code>--model-path</code></td>
       <td><code>lmsys/qwen-image-edit-2511-modelopt-nvfp4-sglang</code></td>
-      <td>TI2I edit full ModelOpt NVFP4 Diffusers repo, BF16-vs-NVFP4 B200 image comparison</td>
-      <td>full repo loaded directly with normal image-edit inputs; exported with the same ModelOpt PR #1706 NVFP4 recipe</td>
+      <td>TI2I 编辑的完整 ModelOpt NVFP4 Diffusers 仓库、BF16 对 NVFP4 B200 图像对比</td>
+      <td>直接加载完整仓库并使用常规图像编辑输入；用相同的 ModelOpt PR #1706 NVFP4 配方导出</td>
     </tr>
   </tbody>
 </table>
 
-These thirteen checkpoints are the intended ModelOpt documentation support
-set. The B200 diffusion CI job (`multimodal-gen-test-1-b200`) uses a
-representative NVFP4 subset and includes
-`lmsys/qwen-image-2512-modelopt-nvfp4-sglang` for Qwen Image coverage.
+这十三个检查点就是预期的 ModelOpt 文档支持集。B200 扩散 CI 任务（`multimodal-gen-test-1-b200`）使用一个有代表性的 NVFP4 子集，其中包含 `lmsys/qwen-image-2512-modelopt-nvfp4-sglang` 以覆盖 Qwen Image。
 
 ## ModelOpt FP8
 
-### Usage Examples
+### 用法示例
 
-Converted ModelOpt FP8 transformer repos should be loaded as transformer
-component overrides. If the repo or local directory already contains
-`config.json`, use `--transformer-path`. Full Diffusers repos such as the
-NVIDIA Wan2.2 FP8 checkpoint can be passed directly with `--model-path`.
+转换后的 ModelOpt FP8 transformer 仓库应以 transformer 组件覆盖的方式加载。如果仓库或本地目录已包含 `config.json`，使用 `--transformer-path`。像 NVIDIA Wan2.2 FP8 检查点这样的完整 Diffusers 仓库可以直接用 `--model-path` 传入。
 
 ```bash
 sglang generate \
@@ -371,32 +355,22 @@ sglang generate \
   --save-output
 ```
 
-### Notes
+### 说明
 
-- `--transformer-path` is the canonical flag for converted ModelOpt FP8
-  transformer component repos or directories that already carry `config.json`.
-- If the override repo or local directory contains its own `config.json`,
-  SGLang reads the quantization config from that override instead of relying on
-  the base model config.
-- `--transformer-weights-path` still works when you intentionally point at raw
-  weight files or a directory that should be metadata-probed as weights first.
-- `dit_layerwise_offload` is supported for ModelOpt FP8 checkpoints.
-- `dit_cpu_offload` still stays disabled for ModelOpt FP8 checkpoints.
-- The layerwise offload path now preserves the non-contiguous FP8 weight stride
-  expected by the runtime FP8 GEMM path.
-- On disk, the quantization config stays `quant_method=modelopt` with
-  `quant_algo=FP8`; the `modelopt-fp8` label in this document is a support
-  family name, not a serialized config key.
-- To build the converted checkpoint yourself from a ModelOpt diffusers export,
-  use `python -m sglang.multimodal_gen.tools.build_modelopt_fp8_transformer`.
+- `--transformer-path` 是转换后、已带 `config.json` 的 ModelOpt FP8 transformer 组件仓库或目录的规范参数。
+- 如果覆盖仓库或本地目录自带 `config.json`，SGLang 会从该覆盖中读取量化配置，而不是依赖基础模型配置。
+- 当你刻意指向原始权重文件、或一个应先按权重做元数据探测的目录时，`--transformer-weights-path` 仍然可用。
+- ModelOpt FP8 检查点支持 `dit_layerwise_offload`。
+- ModelOpt FP8 检查点的 `dit_cpu_offload` 仍保持禁用。
+- 逐层卸载路径现在会保留运行时 FP8 GEMM 路径期望的非连续 FP8 权重步长。
+- 在磁盘上，量化配置保持 `quant_method=modelopt` 且 `quant_algo=FP8`；本文档中的 `modelopt-fp8` 标签是支持家族名称，不是序列化配置键。
+- 要从 ModelOpt diffusers 导出手动构建转换后的检查点，使用 `python -m sglang.multimodal_gen.tools.build_modelopt_fp8_transformer`。
 
 ## ModelOpt NVFP4
 
-### Usage Examples
+### 用法示例
 
-For mixed ModelOpt NVFP4 transformer overrides that already contain
-`config.json`, keep the base model and quantized transformer separate and use
-`--transformer-path`:
+对已包含 `config.json` 的混合 ModelOpt NVFP4 transformer 覆盖，保持基础模型和量化 transformer 分离，并使用 `--transformer-path`：
 
 ```bash
 sglang generate \
@@ -406,8 +380,7 @@ sglang generate \
   --save-output
 ```
 
-For raw NVFP4 exports such as the official FLUX.2 release, use
-`--transformer-weights-path`:
+对官方 FLUX.2 发布版这样的原始 NVFP4 导出，使用 `--transformer-weights-path`：
 
 ```bash
 sglang generate \
@@ -417,8 +390,7 @@ sglang generate \
   --save-output
 ```
 
-SGLang also supports passing the NVFP4 repo or local directory directly as
-`--model-path`:
+SGLang 也支持把 NVFP4 仓库或本地目录直接作为 `--model-path` 传入：
 
 ```bash
 sglang generate \
@@ -427,8 +399,7 @@ sglang generate \
   --save-output
 ```
 
-For a dual-transformer Wan2.2 export where only the primary `transformer`
-was quantized:
+对只有主 `transformer` 被量化的双 transformer Wan2.2 导出：
 
 ```bash
 sglang generate \
@@ -438,7 +409,7 @@ sglang generate \
   --save-output
 ```
 
-For full Qwen Image NVFP4 exports, load the published repo directly:
+对完整的 Qwen Image NVFP4 导出，直接加载已发布仓库：
 
 ```bash
 sglang generate \
@@ -447,8 +418,7 @@ sglang generate \
   --save-output
 ```
 
-For high-resolution Qwen-Image-family generations on B200, the FlashInfer
-CUTLASS FP4 GEMM backend can be faster than the default TensorRT-LLM backend:
+在 B200 上做高分辨率 Qwen-Image 家族生成时，FlashInfer CUTLASS FP4 GEMM 后端可能比默认的 TensorRT-LLM 后端更快：
 
 ```bash
 SGLANG_DIFFUSION_FLASHINFER_FP4_GEMM_BACKEND=cutlass \
@@ -459,64 +429,43 @@ sglang generate \
   --save-output
 ```
 
-### Notes
+### 说明
 
-- Use `--transformer-path` for mixed ModelOpt NVFP4 transformer repos or local
-  directories that already include `config.json`.
-- Use `--transformer-weights-path` for raw NVFP4 exports, individual
-  safetensors files, or repo layouts that should be treated as weights first.
-- For dual-transformer pipelines such as `Wan2.2-T2V-A14B-Diffusers`, the
-  primary `--transformer-path` override targets only `transformer`. Use a
-  per-component override such as `--transformer-2-path` only when you
-  intentionally want a non-default `transformer_2`.
-- On Blackwell, the diffusion ModelOpt NVFP4 path defaults to FlashInfer
-  TensorRT-LLM FP4 GEMM (`flashinfer_trtllm`).
-- The published Qwen Image NVFP4 exports keep the `img_mod`/`txt_mod`
-  modulation projections and first/last transformer blocks in BF16.
-- Qwen-Image NVFP4 does not always improve latency at 1024x1024. On B200, the
-  validated ModelOpt exports were faster than BF16 at 2048x2048 with
-  `SGLANG_DIFFUSION_FLASHINFER_FP4_GEMM_BACKEND=cutlass`, while 1024x1024
-  remained BF16-faster.
-- Direct `--model-path` loading is the canonical path for full Qwen Image
-  ModelOpt NVFP4 repos and a compatibility path for FLUX.2 NVFP4-style repos
-  or local directories.
-- If `--transformer-weights-path` is provided explicitly, it takes precedence
-  over the compatibility `--model-path` flow.
-- For local directories, SGLang first looks for `*-mixed.safetensors`, then
-  falls back to loading from the directory.
-- To force the diffusion ModelOpt FP4 path onto a different FlashInfer
-  backend, set `SGLANG_DIFFUSION_FLASHINFER_FP4_GEMM_BACKEND`. Supported values
-  include `flashinfer_cudnn`, `flashinfer_cutlass`, and `flashinfer_trtllm`.
-- On disk, the quantization config stays `quant_method=modelopt` with
-  `quant_algo=NVFP4`; the `modelopt-nvfp4` label here is again a documentation
-  family name rather than a serialized config key.
+- 对已包含 `config.json` 的混合 ModelOpt NVFP4 transformer 仓库或本地目录，使用 `--transformer-path`。
+- 对原始 NVFP4 导出、单个 safetensors 文件、或应优先按权重处理的仓库布局，使用 `--transformer-weights-path`。
+- 对 `Wan2.2-T2V-A14B-Diffusers` 这样的双 transformer 流水线，主 `--transformer-path` 覆盖只作用于 `transformer`。只有当你有意要非默认的 `transformer_2` 时，才使用 `--transformer-2-path` 这样的按组件覆盖。
+- 在 Blackwell 上，扩散 ModelOpt NVFP4 路径默认使用 FlashInfer TensorRT-LLM FP4 GEMM（`flashinfer_trtllm`）。
+- 已发布的 Qwen Image NVFP4 导出把 `img_mod`/`txt_mod` 调制投影和首/尾 transformer 块保持在 BF16。
+- Qwen-Image NVFP4 在 1024x1024 下并不总能改善延迟。在 B200 上，经过验证的 ModelOpt 导出在 2048x2048 配合 `SGLANG_DIFFUSION_FLASHINFER_FP4_GEMM_BACKEND=cutlass` 时比 BF16 快，而 1024x1024 仍是 BF16 更快。
+- 直接 `--model-path` 加载是完整 Qwen Image ModelOpt NVFP4 仓库的规范路径，也是 FLUX.2 NVFP4 风格仓库或本地目录的兼容路径。
+- 如果显式提供了 `--transformer-weights-path`，它优先于兼容的 `--model-path` 流程。
+- 对本地目录，SGLang 先查找 `*-mixed.safetensors`，再回退到从目录加载。
+- 要把扩散 ModelOpt FP4 路径强制到不同的 FlashInfer 后端，设置 `SGLANG_DIFFUSION_FLASHINFER_FP4_GEMM_BACKEND`。支持的值包括 `flashinfer_cudnn`、`flashinfer_cutlass` 和 `flashinfer_trtllm`。
+- 在磁盘上，量化配置保持 `quant_method=modelopt` 且 `quant_algo=NVFP4`；这里的 `modelopt-nvfp4` 标签同样是文档家族名称，而不是序列化配置键。
 
-## Nunchaku (SVDQuant)
+## Nunchaku（SVDQuant）
 
-### Install
+### 安装
 
-Install the runtime dependency first:
+先安装运行时依赖：
 
 ```bash
 pip install nunchaku
 ```
 
-For platform-specific installation methods and troubleshooting, see the
-[Nunchaku installation guide](https://nunchaku.tech/docs/nunchaku/installation/installation.html).
+平台专属的安装方法和故障排查见
+[Nunchaku 安装指南](https://nunchaku.tech/docs/nunchaku/installation/installation.html)。
 
-### File Naming and Auto-Detection
+### 文件命名与自动检测
 
-For Nunchaku checkpoints, `--model-path` should still point to the original
-base model, while `--transformer-weights-path` points to the quantized
-transformer weights.
+对 Nunchaku 检查点，`--model-path` 仍应指向原始基础模型，而 `--transformer-weights-path` 指向量化的 transformer 权重。
 
-If the basename of `--transformer-weights-path` contains the pattern
-`svdq-(int4|fp4)_r{rank}`, SGLang will automatically:
-- enable SVDQuant
-- infer `--quantization-precision`
-- infer `--quantization-rank`
+如果 `--transformer-weights-path` 的 basename 包含模式 `svdq-(int4|fp4)_r{rank}`，SGLang 会自动：
+- 启用 SVDQuant
+- 推断 `--quantization-precision`
+- 推断 `--quantization-rank`
 
-Examples:
+示例：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -527,10 +476,10 @@ Examples:
   </colgroup>
   <thead>
     <tr>
-      <th>checkpoint name fragment</th>
-      <th>inferred precision</th>
-      <th>inferred rank</th>
-      <th>notes</th>
+      <th>检查点名称片段</th>
+      <th>推断的精度</th>
+      <th>推断的 rank</th>
+      <th>说明</th>
     </tr>
   </thead>
   <tbody>
@@ -538,30 +487,30 @@ Examples:
       <td><code>svdq-int4_r32</code></td>
       <td><code>int4</code></td>
       <td><code>32</code></td>
-      <td>Standard INT4 checkpoint</td>
+      <td>标准 INT4 检查点</td>
     </tr>
     <tr>
       <td><code>svdq-int4_r128</code></td>
       <td><code>int4</code></td>
       <td><code>128</code></td>
-      <td>Higher-quality INT4 checkpoint</td>
+      <td>更高质量的 INT4 检查点</td>
     </tr>
     <tr>
       <td><code>svdq-fp4_r32</code></td>
       <td><code>nvfp4</code></td>
       <td><code>32</code></td>
-      <td><code>fp4</code> in the filename maps to CLI value <code>nvfp4</code></td>
+      <td>文件名中的 <code>fp4</code> 映射到 CLI 值 <code>nvfp4</code></td>
     </tr>
     <tr>
       <td><code>svdq-fp4_r128</code></td>
       <td><code>nvfp4</code></td>
       <td><code>128</code></td>
-      <td>Higher-quality NVFP4 checkpoint</td>
+      <td>更高质量的 NVFP4 检查点</td>
     </tr>
   </tbody>
 </table>
 
-Common filenames:
+常见文件名：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -572,10 +521,10 @@ Common filenames:
   </colgroup>
   <thead>
     <tr>
-      <th>filename</th>
-      <th>precision</th>
+      <th>文件名</th>
+      <th>精度</th>
       <th>rank</th>
-      <th>typical use</th>
+      <th>典型用途</th>
     </tr>
   </thead>
   <tbody>
@@ -583,48 +532,46 @@ Common filenames:
       <td><code>svdq-int4_r32-qwen-image.safetensors</code></td>
       <td><code>int4</code></td>
       <td><code>32</code></td>
-      <td>Balanced default</td>
+      <td>均衡的默认选择</td>
     </tr>
     <tr>
       <td><code>svdq-int4_r128-qwen-image.safetensors</code></td>
       <td><code>int4</code></td>
       <td><code>128</code></td>
-      <td>Quality-focused</td>
+      <td>质量优先</td>
     </tr>
     <tr>
       <td><code>svdq-fp4_r32-qwen-image.safetensors</code></td>
       <td><code>nvfp4</code></td>
       <td><code>32</code></td>
-      <td>RTX 50-series / NVFP4 path</td>
+      <td>RTX 50 系列 / NVFP4 路径</td>
     </tr>
     <tr>
       <td><code>svdq-fp4_r128-qwen-image.safetensors</code></td>
       <td><code>nvfp4</code></td>
       <td><code>128</code></td>
-      <td>Quality-focused NVFP4</td>
+      <td>质量优先的 NVFP4</td>
     </tr>
     <tr>
       <td><code>svdq-int4_r32-qwen-image-lightningv1.0-4steps.safetensors</code></td>
       <td><code>int4</code></td>
       <td><code>32</code></td>
-      <td>Lightning 4-step</td>
+      <td>Lightning 4 步</td>
     </tr>
     <tr>
       <td><code>svdq-int4_r128-qwen-image-lightningv1.1-8steps.safetensors</code></td>
       <td><code>int4</code></td>
       <td><code>128</code></td>
-      <td>Lightning 8-step</td>
+      <td>Lightning 8 步</td>
     </tr>
   </tbody>
 </table>
 
-If your checkpoint name does not follow this convention, pass
-`--enable-svdquant`, `--quantization-precision`, and `--quantization-rank`
-explicitly.
+如果你的检查点名称不符合这个约定，请显式传入 `--enable-svdquant`、`--quantization-precision` 和 `--quantization-rank`。
 
-### Usage Examples
+### 用法示例
 
-Recommended auto-detected flow:
+推荐的自动检测流程：
 
 ```bash
 sglang generate \
@@ -634,7 +581,7 @@ sglang generate \
   --save-output
 ```
 
-Manual override when the filename does not encode the quant settings:
+当文件名没有编码量化设置时手动覆盖：
 
 ```bash
 sglang generate \
@@ -647,24 +594,18 @@ sglang generate \
   --save-output
 ```
 
-### Notes
+### 说明
 
-- `--transformer-weights-path` is the canonical flag for Nunchaku checkpoints.
-  Older config names such as `quantized_model_path` are treated as
-  compatibility aliases.
-- Auto-detection only happens when the checkpoint basename matches
-  `svdq-(int4|fp4)_r{rank}`.
-- The CLI values are `int4` and `nvfp4`. In filenames, the NVFP4 variant is
-  written as `fp4`.
-- Lightning checkpoints usually expect matching `--num-inference-steps`, such
-  as `4` or `8`.
-- Current runtime validation only allows Nunchaku on NVIDIA CUDA Ampere (SM8x)
-  or SM12x GPUs. Hopper (SM90) is currently rejected.
+- `--transformer-weights-path` 是 Nunchaku 检查点的规范参数。`quantized_model_path` 等旧配置名会被当作兼容别名。
+- 只有当检查点 basename 匹配 `svdq-(int4|fp4)_r{rank}` 时才会自动检测。
+- CLI 值是 `int4` 和 `nvfp4`。在文件名中，NVFP4 变体写作 `fp4`。
+- Lightning 检查点通常期望匹配的 `--num-inference-steps`，例如 `4` 或 `8`。
+- 当前运行时验证只允许 Nunchaku 在 NVIDIA CUDA Ampere（SM8x）或 SM12x GPU 上运行。Hopper（SM90）目前会被拒绝。
 
-## [ModelSlim](https://gitcode.com/Ascend/msmodelslim)
-MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression tool launched by MindStudio and optimized for Ascend hardware.
+## [ModelSlim](https://gitcode.com/Ascend/msmodelslim) {#modelslim}
+MindStudio-ModelSlim（msModelSlim）是 MindStudio 推出的模型离线量化压缩工具，针对昇腾硬件优化。
 
-- **Installation**
+- **安装**
 
     ```bash
     # Clone repo and install msmodelslim:
@@ -673,12 +614,12 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
     bash install.sh
     ```
 
-- **Multimodal_sd quantization**
+- **Multimodal_sd 量化**
 
-    Download the original floating-point weights of the large model. Taking Wan2.2-T2V-A14B as an example, you can go to [Wan2.2-T2V-A14B](https://modelscope.cn/models/Wan-AI/Wan2.2-T2V-A14B) to obtain the original model weights. Then install other dependencies (related to the model, refer to the modelscope model card).
-    > Note: You can find pre-quantized validated models on [modelscope/Eco-Tech](https://modelscope.cn/models/Eco-Tech).
+    下载大模型的原始浮点权重。以 Wan2.2-T2V-A14B 为例，你可以到 [Wan2.2-T2V-A14B](https://modelscope.cn/models/Wan-AI/Wan2.2-T2V-A14B) 获取原始模型权重。然后安装其它依赖（与模型相关，参考 modelscope 模型卡）。
+    > 注意：你可以在 [modelscope/Eco-Tech](https://modelscope.cn/models/Eco-Tech) 找到预量化且经过验证的模型。
 
-  Run quantization using one-click quantization (recommended):
+  使用一键量化运行量化（推荐）：
 
   ```bash
   msmodelslim quant \
@@ -690,16 +631,16 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
     --trust_remote_code True
   ```
 
-  For more detailed examples of quantization of models, as well as information about their support, see the [examples](https://gitcode.com/Ascend/msmodelslim/blob/master/example/multimodal_sd/README.md) section in ModelSLim repo.
+  更详细的模型量化示例及其支持情况，见 ModelSLim 仓库的 [examples](https://gitcode.com/Ascend/msmodelslim/blob/master/example/multimodal_sd/README.md) 部分。
 
-  > Note: SGLang does not support quantized embeddings, please disable this option when quantizing using msmodelslim.
+  > 注意：SGLang 不支持量化嵌入，用 msmodelslim 量化时请禁用该选项。
 
-- **Auto-Detection and different formats**
+- **自动检测与不同格式**
 
-    For msmodelslim checkpoints, it's enough to specify only ```--model-path```, the detection of quantization occurs automatically for each layer using parsing of      `quant_model_description.json` config.
+    对 msmodelslim 检查点，只需指定 ```--model-path``` 即可，量化检测会根据解析 `quant_model_description.json` 配置自动逐层完成。
 
-    In the case of `Wan2.2` only `Diffusers` weights storage format are supported, whereas modelslim saves the quantized model in the original `Wan2.2` format.
-    For conversion, use the one-step `wan_repack.py` script:
+    对 `Wan2.2`，只支持 `Diffusers` 权重存储格式，而 modelslim 会把量化模型保存为原始的 `Wan2.2` 格式。
+    转换请用一步式的 `wan_repack.py` 脚本：
 
     ```bash
     python wan_repack.py \
@@ -709,12 +650,12 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
       --output-path {path_to_converted_model}
     ```
 
-    Supported `--model-type` values: `Wan2.2-TI2V-5B` (single-transformer), `Wan2.2-T2V-A14B` and `Wan2.2-I2V-A14B` (Cascade dual-transformer).
-    The script automatically handles: copying the base model, converting quantized weights to Diffusers format, and restoring `config.json`.
+    支持的 `--model-type` 值：`Wan2.2-TI2V-5B`（单 transformer）、`Wan2.2-T2V-A14B` 和 `Wan2.2-I2V-A14B`（级联双 transformer）。
+    该脚本自动处理：复制基础模型、把量化权重转换为 Diffusers 格式、以及恢复 `config.json`。
 
-- **Usage Example**
+- **用法示例**
 
-    With auto-detected flow:
+    使用自动检测流程：
 
     ```bash
     sglang generate \
@@ -723,20 +664,19 @@ MindStudio-ModelSlim (msModelSlim) is a model offline quantization compression t
       --save-output
     ```
 
-- **Available Quantization Methods**:
-    - [x]  ```W4A4_DYNAMIC``` linear with online quantization of activations
-    - [x]  ```W8A8``` linear with offline quantization of activations
-    - [x]  ```W8A8_DYNAMIC``` linear with online quantization of activations
-    - [x]  ```W8A8_MXFP8``` linear with offline quantization (msmodelslim pre-quantized weights)
-    - [x]  ```mxfp8``` linear with online quantization (`--quantization mxfp8`)
-    - [x]  ```W4A4_MXFP4``` / ```W4A4_MXFP4_DUALSCALE``` linear with offline quantization (msmodelslim pre-quantized weights)
-    - [x]  ```mxfp4_npu``` linear with online quantization (`--quantization mxfp4_npu`)
+- **可用量化方法**：
+    - [x]  ```W4A4_DYNAMIC``` 带激活在线量化的线性层
+    - [x]  ```W8A8``` 带激活离线量化的线性层
+    - [x]  ```W8A8_DYNAMIC``` 带激活在线量化的线性层
+    - [x]  ```W8A8_MXFP8``` 带离线量化的线性层（msmodelslim 预量化权重）
+    - [x]  ```mxfp8``` 带激活在线量化的线性层（`--quantization mxfp8`）
+    - [x]  ```W4A4_MXFP4``` / ```W4A4_MXFP4_DUALSCALE``` 带离线量化的线性层（msmodelslim 预量化权重）
+    - [x]  ```mxfp4_npu``` 带激活在线量化的线性层（`--quantization mxfp4_npu`）
 
-## MXFP8 Online Quantization
+## MXFP8 在线量化
 
-For online MXFP8 quantization, load the original FP16/BF16 model and add `--quantization mxfp8`.
-Weights are quantized at load time via `npu_dynamic_mx_quant`, and activations are quantized per-token
-during inference with `npu_quant_matmul` (block_size=32).
+在线 MXFP8 量化：加载原始 FP16/BF16 模型并加上 `--quantization mxfp8`。
+权重在加载时通过 `npu_dynamic_mx_quant` 量化，激活在推理期间用 `npu_quant_matmul`（block_size=32）逐 token 量化。
 
 ```bash
 sglang generate \
@@ -746,13 +686,11 @@ sglang generate \
   --save-output
 ```
 
-> **Hardware requirement:** Ascend A5 series or newer. `npu_dynamic_mx_quant` is not available on A2/A3.
+> **硬件要求：** 昇腾 A5 系列或更新版本。`npu_dynamic_mx_quant` 在 A2/A3 上不可用。
 
-## MXFP8 Offline Quantization (msmodelslim)
+## MXFP8 离线量化（msmodelslim）
 
-Pre-quantized MXFP8 weights exported by msmodelslim are auto-detected via `quant_model_description.json`
-(`W8A8_MXFP8` scheme). Use `wan_repack.py` to convert the quantized weights to Diffusers format,
-then load the converted model with `--model-path`:
+msmodelslim 导出的预量化 MXFP8 权重会通过 `quant_model_description.json`（`W8A8_MXFP8` 方案）自动检测。用 `wan_repack.py` 把量化权重转换为 Diffusers 格式，然后用 `--model-path` 加载转换后的模型：
 
 ```bash
 sglang generate \
@@ -761,15 +699,13 @@ sglang generate \
   --save-output
 ```
 
-## MXFP4 Online Quantization
+## MXFP4 在线量化
 
-For online MXFP4 quantization on Ascend NPU, load the original FP16/BF16 model and add
-`--quantization mxfp4_npu`. The `mxfp4_npu` key is used for Ascend because `mxfp4`
-is reserved for the ROCm/aiter backend.
+在昇腾 NPU 上做在线 MXFP4 量化：加载原始 FP16/BF16 模型并加上
+`--quantization mxfp4_npu`。在昇腾上使用 `mxfp4_npu` 键，因为 `mxfp4`
+保留给 ROCm/aiter 后端。
 
-Weights are quantized at load time via `npu_dynamic_dual_level_mx_quant`, and activations
-are quantized per-token during inference before `npu_dual_level_quant_matmul`. MXFP4 uses
-dual-level block scales with an L1 block size of 32 and an L0 block size of 512.
+权重在加载时通过 `npu_dynamic_dual_level_mx_quant` 量化，激活在推理期间、`npu_dual_level_quant_matmul` 之前逐 token 量化。MXFP4 使用双层块缩放，L1 块大小为 32，L0 块大小为 512。
 
 ```bash
 sglang generate \
@@ -779,18 +715,17 @@ sglang generate \
   --save-output
 ```
 
-> **Hardware requirement:** Ascend A5 series or newer. `npu_dynamic_dual_level_mx_quant`
-> and `npu_dual_level_quant_matmul` are not available on A2/A3.
+> **硬件要求：** 昇腾 A5 系列或更新版本。`npu_dynamic_dual_level_mx_quant`
+> 和 `npu_dual_level_quant_matmul` 在 A2/A3 上不可用。
 >
-> **Note:** Online MXFP4 weight quantization is experimental. The offline msmodelslim
-> flow uses pre-quantized weights and may produce different numerical results.
+> **注意：** 在线 MXFP4 权重量化是实验性的。离线 msmodelslim
+> 流程使用预量化权重，可能产生不同的数值结果。
 
-## MXFP4 Offline Quantization (msmodelslim)
+## MXFP4 离线量化（msmodelslim）
 
-Pre-quantized MXFP4 weights exported by msmodelslim are auto-detected via
-`quant_model_description.json` (`W4A4_MXFP4` / `W4A4_MXFP4_DUALSCALE` scheme).
-Use `wan_repack.py` to convert the quantized weights to Diffusers format, then load
-the converted model with `--model-path`:
+msmodelslim 导出的预量化 MXFP4 权重会通过
+`quant_model_description.json`（`W4A4_MXFP4` / `W4A4_MXFP4_DUALSCALE` 方案）自动检测。
+用 `wan_repack.py` 把量化权重转换为 Diffusers 格式，然后用 `--model-path` 加载转换后的模型：
 
 ```bash
 sglang generate \
@@ -799,7 +734,6 @@ sglang generate \
   --save-output
 ```
 
-The offline MXFP4 checkpoint stores weights in an FP8 container and includes dual-level
-scales (`weight_scale`, `weight_dual_scale`). If exported with smooth quantization,
-`mul_scale` is loaded and applied before activation quantization to keep activations
-aligned with the calibrated weights.
+离线 MXFP4 检查点把权重存放在 FP8 容器中，并包含双层
+缩放（`weight_scale`、`weight_dual_scale`）。如果使用平滑量化导出，
+`mul_scale` 会被加载并在激活量化前应用，使激活与校准后的权重对齐。

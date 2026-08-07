@@ -1,21 +1,25 @@
 ---
-title: "Cache-DiT Acceleration"
-description: "Configure Cache-DiT acceleration for diffusion inference."
+title: "Cache-DiT 加速"
+description: "为扩散模型推理配置 Cache-DiT 加速。"
 tag: "approx"
 ---
-SGLang integrates [Cache-DiT](https://github.com/vipshop/cache-dit), a caching acceleration engine for Diffusion Transformers (DiT), to achieve up to **1.69x inference speedup** with minimal quality loss.
+SGLang 集成了 [Cache-DiT](https://github.com/vipshop/cache-dit)——一个面向扩散 Transformer（DiT）的缓存加速引擎，在质量损失很小的情况下最高可带来 **1.69x 推理加速**。
 
-## Overview
+## 概览
 
-**Cache-DiT** uses intelligent caching strategies to skip redundant computation in the denoising loop:
+**Cache-DiT** 使用智能缓存策略，在去噪循环中跳过冗余计算：
 
-- **DBCache (Dual Block Cache)**: Dynamically decides when to cache transformer blocks based on residual differences
-- **TaylorSeer**: Uses Taylor expansion for calibration to optimize caching decisions
-- **SCM (Step Computation Masking)**: Step-level caching control for additional speedup
+- **DBCache（双块缓存）**：基于残差差异动态决定何时缓存 transformer 块
+- **TaylorSeer**：使用泰勒展开做校准，优化缓存决策
+- **SCM（步骤级计算掩码）**：步骤级缓存控制，进一步提升速度
 
-## Basic Usage
+<Note>
+💡 AI Infra 学习笔记：Cache-DiT 属于"块级"缓存——它在去噪过程中观察每个 transformer 块的残差差异：如果某块相邻两次的输出变化很小，就判定"这块这次不用重算"，直接用上一次的结果。DBCache 负责动态判定要不要缓存某块，TaylorSeer 用泰勒展开更精确地预测变化趋势，SCM 则从"步"的粒度再筛一遍。粒度越细，节省越多，但误判（该算的没算）对画质的影响也越难排查。
+</Note>
 
-Enable Cache-DiT by exporting the environment variable and using `sglang generate` or `sglang serve` :
+## 基本用法
+
+通过导出环境变量并使用 `sglang generate` 或 `sglang serve` 来启用 Cache-DiT：
 
 ```bash
 SGLANG_CACHE_DIT_ENABLED=true \
@@ -23,15 +27,13 @@ sglang generate --model-path Qwen/Qwen-Image \
     --prompt "A beautiful sunset over the mountains"
 ```
 
-## Diffusers Backend
+## Diffusers 后端
 
-Cache-DiT supports loading acceleration configs from a custom YAML file. For
-diffusers pipelines (`diffusers` backend), pass the YAML/JSON path via `--cache-dit-config`. This
-flow requires cache-dit >= 1.2.0 (`cache_dit.load_configs`).
+Cache-DiT 支持从自定义 YAML 文件加载加速配置。对于 diffusers 管线（`diffusers` 后端），通过 `--cache-dit-config` 传入 YAML/JSON 路径。该流程需要 cache-dit >= 1.2.0（`cache_dit.load_configs`）。
 
-### Single GPU inference
+### 单 GPU 推理
 
-Define a `cache.yaml` file that contains:
+定义一个包含以下内容的 `cache.yaml` 文件：
 
 - DBCache + TaylorSeer
 
@@ -48,7 +50,7 @@ cache_config:
   taylorseer_order: 1
 ```
 
-Then apply the config with:
+然后用以下命令应用该配置：
 
 ```bash
 sglang generate \
@@ -58,7 +60,7 @@ sglang generate \
   --prompt "A beautiful sunset over the mountains"
 ```
 
-- DBCache + TaylorSeer + SCM (Step Computation Mask)
+- DBCache + TaylorSeer + SCM（步骤级计算掩码）
 
 ```yaml Config
 cache_config:
@@ -78,7 +80,7 @@ cache_config:
   steps_computation_mask: fast
 ```
 
-- DBCache + TaylorSeer + SCM (Step Computation Mask) + Cache CFG
+- DBCache + TaylorSeer + SCM（步骤级计算掩码）+ Cache CFG
 
 ```yaml Config
 cache_config:
@@ -96,11 +98,11 @@ cache_config:
   enable_sperate_cfg: true # e.g, Qwen-Image, Wan, Chroma, Ovis-Image, etc.
 ```
 
-### Distributed inference
+### 分布式推理
 
-- 1D Parallelism
+- 1D 并行
 
-Define a parallelism only config yaml `parallel.yaml` file that contains:
+定义一个只包含并行配置的 `parallel.yaml` 文件，内容如下：
 
 ```yaml Config
 parallelism_config:
@@ -108,9 +110,9 @@ parallelism_config:
   attention_backend: native
 ```
 
-Then, apply the distributed inference acceleration config from yaml. `ulysses_size: auto` means that cache-dit will auto detect the `world_size` as the ulysses_size. Otherwise, you should manually set it as specific int number, e.g, 4.
+然后从 yaml 应用分布式推理加速配置。`ulysses_size: auto` 表示 cache-dit 会自动把 `world_size` 检测为 ulysses_size；否则你需要手动设为具体的整数，例如 4。
 
-Then apply the distributed config with: (Note: please add `--num-gpus N` to specify the number of gpus for distributed inference)
+然后用以下命令应用分布式配置：（注意：请加上 `--num-gpus N` 指定分布式推理的 GPU 数量）
 
 ```bash
 sglang generate \
@@ -121,9 +123,9 @@ sglang generate \
   --prompt "A futuristic cityscape at sunset"
 ```
 
-- 2D Parallelism
+- 2D 并行
 
-You can also define a 2D parallelism config yaml `parallel_2d.yaml` file that contains:
+你也可以定义一个包含 2D 并行配置的 `parallel_2d.yaml` 文件，内容如下：
 
 ```yaml Config
 parallelism_config:
@@ -131,11 +133,11 @@ parallelism_config:
   tp_size: 2
   attention_backend: native
 ```
-Then, apply the 2D parallelism config from yaml. Here `tp_size: 2` means using tensor parallelism with size 2. The `ulysses_size: auto` means that cache-dit will auto detect the `world_size // tp_size` as the ulysses_size.
+然后从 yaml 应用 2D 并行配置。这里的 `tp_size: 2` 表示使用规模为 2 的张量并行。`ulysses_size: auto` 表示 cache-dit 会自动把 `world_size // tp_size` 检测为 ulysses_size。
 
-- 3D Parallelism
+- 3D 并行
 
-You can also define a 3D parallelism config yaml `parallel_3d.yaml` file that contains:
+你也可以定义一个包含 3D 并行配置的 `parallel_3d.yaml` 文件，内容如下：
 
 ```yaml Config
 parallelism_config:
@@ -144,11 +146,11 @@ parallelism_config:
   tp_size: 2
   attention_backend: native
 ```
-Then, apply the 3D parallelism config from yaml. Here `ulysses_size: 2`, `ring_size: 2`, `tp_size: 2` means using ulysses parallelism with size 2, ring parallelism with size 2 and tensor parallelism with size 2.
+然后从 yaml 应用 3D 并行配置。这里的 `ulysses_size: 2`、`ring_size: 2`、`tp_size: 2` 分别表示规模为 2 的 ulysses 并行、环形并行与张量并行。
 
 - Ulysses Anything Attention
 
-To enable Ulysses Anything Attention, you can define a parallelism config yaml `parallel_uaa.yaml` file that contains:
+要启用 Ulysses Anything Attention，你可以定义一个包含以下内容的并行配置 `parallel_uaa.yaml` 文件：
 
 ```yaml Config
 parallelism_config:
@@ -157,9 +159,9 @@ parallelism_config:
   ulysses_anything: true
 ```
 
-- Ulysses FP8 Communication
+- Ulysses FP8 通信
 
-For device that don't have NVLink support, you can enable Ulysses FP8 Communication to further reduce the communication overhead. You can define a parallelism config yaml `parallel_fp8.yaml` file that contains:
+对于不支持 NVLink 的设备，你可以启用 Ulysses FP8 通信来进一步降低通信开销。你可以定义一个包含以下内容的并行配置 `parallel_fp8.yaml` 文件：
 
 ```yaml Config
 parallelism_config:
@@ -168,9 +170,9 @@ parallelism_config:
   ulysses_float8: true
 ```
 
-- Async Ulysses CP
+- 异步 Ulysses CP
 
-You can also enable async ulysses CP to overlap the communication and computation. Define a parallelism config yaml `parallel_async.yaml` file that contains:
+你也可以启用异步 ulysses CP 来让通信与计算重叠。定义一个包含以下内容的并行配置 `parallel_async.yaml` 文件：
 
 ```yaml Config
 parallelism_config:
@@ -178,11 +180,11 @@ parallelism_config:
   attention_backend: native
   ulysses_async: true # Now, only support for FLUX.1, Qwen-Image, Ovis-Image and Z-Image.
 ```
-Then, apply the config from yaml. Here `ulysses_async: true` means enabling async ulysses CP.
+然后从 yaml 应用该配置。这里的 `ulysses_async: true` 表示启用异步 ulysses CP。
 
-- TE-P and VAE-P
+- TE-P 与 VAE-P
 
-You can also specify the extra parallel modules in the yaml config. For example, define a parallelism config yaml `parallel_extra.yaml` file that contains:
+你也可以在 yaml 配置中指定额外的并行模块。例如，定义一个包含以下内容的并行配置 `parallel_extra.yaml` 文件：
 
 ```yaml Config
 parallelism_config:
@@ -191,10 +193,13 @@ parallelism_config:
   extra_parallel_modules: ["text_encoder", "vae"]
 ```
 
+<Note>
+💡 AI Infra 学习笔记：Cache-DiT 的并行配置复用了一套熟悉的并行词汇——Ulysses（按序列维度切分注意力）、ring（环形通信做序列并行）、TP（张量并行切分 GEMM）。视频生成里 latent 序列很长，序列并行是必选项；而 `ulysses_float8` 这类开关是为了在没有 NVLink 的环境（PCIe 互联）里压低通信带宽。理解"切什么维度、走什么通信、什么硬件受限"是评估这类配置的通用思路。
+</Note>
 
-### Hybrid Cache and Parallelism
+### 混合缓存与并行
 
-Define a hybrid cache and parallel acceleration config yaml `hybrid.yaml` file that contains:
+定义一个同时包含缓存与并行加速配置的 `hybrid.yaml` 文件，内容如下：
 
 ```yaml Config
 cache_config:
@@ -213,7 +218,7 @@ parallelism_config:
   extra_parallel_modules: ["text_encoder", "vae"]
 ```
 
-Then, apply the hybrid cache and parallel acceleration config from yaml.
+然后从 yaml 应用混合缓存与并行加速配置。
 
 ```bash
 sglang generate \
@@ -224,17 +229,17 @@ sglang generate \
   --prompt "A beautiful sunset over the mountains"
 ```
 
-### Attention Backend
+### Attention 后端
 
-In some cases, users may want to only specify the attention backend without any other optimization configs. In this case, you can define a yaml file `attention.yaml` that only contains:
+有些情况下，用户只想指定 Attention 后端而不加任何其他优化配置。此时你可以定义一个只包含以下内容的 `attention.yaml` 文件：
 
 ```yaml Config
 attention_backend: "flash" # '_flash_3' for Hopper
 ```
 
-### Quantization
+### 量化
 
-You can also specify the quantization config in the yaml file, required `torchao>=0.16.0`. For example, define a yaml file `quantize.yaml` that contains:
+你也可以在 yaml 文件中指定量化配置，需要 `torchao>=0.16.0`。例如，定义一个包含以下内容的 `quantize.yaml` 文件：
 
 ```yaml Config
 quantize_config: # quantization configuration for transformer modules
@@ -248,7 +253,7 @@ quantize_config: # quantization configuration for transformer modules
     - "embed"
   verbose: false # whether to print verbose logs during quantization
 ```
-Then, apply the quantization config from yaml. Please also enable torch.compile for better performance if you are using quantization. For example:
+然后从 yaml 应用量化配置。使用量化时，也请启用 torch.compile 以获得更好的性能。例如：
 
 ```bash Command
 sglang generate \
@@ -262,9 +267,9 @@ sglang generate \
   --prompt "A beautiful sunset over the mountains"
 ```
 
-### Combined Configs: Cache + Parallelism + Quantization
+### 组合配置：缓存 + 并行 + 量化
 
-You can also combine all the above configs together in a single yaml file `combined.yaml` that contains:
+你也可以把上述所有配置组合到单个 `combined.yaml` 文件中，内容如下：
 
 ```yaml Config
 cache_config:
@@ -288,13 +293,13 @@ quantize_config:
     - "embed"
   verbose: false
 ```
-Then, apply the combined cache, parallelism and quantization config from yaml. Please also enable torch.compile for better performance if you are using quantization.
+然后从 yaml 应用组合的缓存、并行与量化配置。使用量化时，也请启用 torch.compile 以获得更好的性能。
 
-## Advanced Configuration
+## 高级配置
 
-### DBCache Parameters
+### DBCache 参数
 
-DBCache controls block-level caching behavior:
+DBCache 控制块级缓存行为：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -305,10 +310,10 @@ DBCache controls block-level caching behavior:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Env Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>环境变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
@@ -316,38 +321,38 @@ DBCache controls block-level caching behavior:
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Fn</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_FN`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Number of first blocks to always compute</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>始终计算的前几个块的数量</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Bn</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_BN`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>0</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Number of last blocks to always compute</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>始终计算的后几个块的数量</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>W</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_WARMUP`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>4</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Warmup steps before caching starts</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>缓存开始前的预热步数</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>R</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_RDT`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>0.24</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Residual difference threshold</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>残差差异阈值</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>MC</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_MC`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>3</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Maximum continuous cached steps</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最大连续缓存步数</td>
     </tr>
   </tbody>
 </table>
 
-### TaylorSeer Configuration
+### TaylorSeer 配置
 
-TaylorSeer improves caching accuracy using Taylor expansion:
+TaylorSeer 使用泰勒展开提高缓存精度：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -358,32 +363,31 @@ TaylorSeer improves caching accuracy using Taylor expansion:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Env Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Default</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>环境变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>默认值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Enable</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>启用</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_TAYLORSEER`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>false</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Enable TaylorSeer calibrator</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>启用 TaylorSeer 校准器</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Order</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>阶数</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_TS_ORDER`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>1</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Taylor expansion order (1 or 2)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>泰勒展开阶数（1 或 2）</td>
     </tr>
   </tbody>
 </table>
 
-### Combined Configuration Example
+### 组合配置示例
 
-DBCache and TaylorSeer are complementary strategies that work together, you can configure both sets of parameters
-simultaneously:
+DBCache 与 TaylorSeer 是互补的策略，可以同时工作，你可以同时配置两组参数：
 
 ```bash
 SGLANG_CACHE_DIT_ENABLED=true \
@@ -398,14 +402,13 @@ sglang generate --model-path black-forest-labs/FLUX.1-dev \
     --prompt "A curious raccoon in a forest"
 ```
 
-### SCM (Step Computation Masking)
+### SCM（步骤级计算掩码）
 
-SCM provides step-level caching control for additional speedup. It decides which denoising steps to compute fully and
-which to use cached results.
+SCM 提供步骤级缓存控制，以进一步提升速度。它决定哪些去噪步骤完整计算、哪些直接使用缓存结果。
 
-**SCM Presets**
+**SCM 预设**
 
-SCM is configured with presets:
+SCM 通过预设配置：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -416,47 +419,47 @@ SCM is configured with presets:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Preset</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Compute Ratio</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Speed</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Quality</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>预设</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>计算比例</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>速度</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>质量</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`none`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>100%</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Baseline</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Best</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>基线</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最佳</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`slow`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>~75%</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>~1.3x</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>High</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>高</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`medium`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>~50%</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>~2x</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Good</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>良好</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`fast`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>~35%</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>~3x</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Acceptable</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>可接受</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`ultra`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>~25%</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>~4x</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Lower</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>较低</td>
     </tr>
   </tbody>
 </table>
 
-**Usage**
+**用法**
 
 ```bash
 SGLANG_CACHE_DIT_ENABLED=true \
@@ -465,9 +468,9 @@ sglang generate --model-path Qwen/Qwen-Image \
     --prompt "A futuristic cityscape at sunset"
 ```
 
-**Custom SCM Bins**
+**自定义 SCM 分箱**
 
-For fine-grained control over which steps to compute vs cache:
+需要对哪些步骤计算、哪些步骤缓存做细粒度控制时：
 
 ```bash
 SGLANG_CACHE_DIT_ENABLED=true \
@@ -477,7 +480,7 @@ sglang generate --model-path Qwen/Qwen-Image \
     --prompt "A futuristic cityscape at sunset"
 ```
 
-**SCM Policy**
+**SCM 策略**
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -487,33 +490,33 @@ sglang generate --model-path Qwen/Qwen-Image \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Policy</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Env Variable</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>策略</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>环境变量</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`dynamic`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_SCM_POLICY=dynamic`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Adaptive caching based on content (default)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>基于内容的自适应缓存（默认）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`static`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`SGLANG_CACHE_DIT_SCM_POLICY=static`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Fixed caching pattern</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>固定的缓存模式</td>
     </tr>
   </tbody>
 </table>
 
-## Environment Variables
+## 环境变量
 
-All Cache-DiT parameters can be configured via environment variables.
-See [Environment Variables](./environment_variables) for the complete list.
+所有 Cache-DiT 参数都可以通过环境变量配置。
+完整列表见 [环境变量](./environment_variables)。
 
-## Supported Models
+## 支持的模型
 
-SGLang Diffusion x Cache-DiT supports almost all models originally supported in SGLang Diffusion:
+SGLang Diffusion x Cache-DiT 支持 SGLang Diffusion 原本支持的大部分模型：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -522,8 +525,8 @@ SGLang Diffusion x Cache-DiT supports almost all models originally supported in 
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model Family</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Example Models</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型家族</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>示例模型</th>
     </tr>
   </thead>
   <tbody>
@@ -549,34 +552,32 @@ SGLang Diffusion x Cache-DiT supports almost all models originally supported in 
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>MiniMax</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MiniMax-H3 (T2VA, FL2VA, and Ref2VA)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>MiniMax-H3（T2VA、FL2VA 与 Ref2VA）</td>
     </tr>
   </tbody>
 </table>
 
-## Performance Tips
+## 性能提示
 
-1. **Start with defaults**: The default parameters work well for most models
-2. **Use TaylorSeer**: It typically improves both speed and quality
-3. **Tune R threshold**: Lower values = better quality, higher values = faster
-4. **SCM for extra speed**: Use `medium` preset for good speed/quality balance
-5. **Warmup matters**: Higher warmup = more stable caching decisions
+1. **从默认值开始**：默认参数对大多数模型都表现良好
+2. **使用 TaylorSeer**：它通常同时改善速度与质量
+3. **调优 R 阈值**：更小 = 质量更好，更大 = 更快
+4. **用 SCM 额外提速**：`medium` 预设能在速度与质量之间取得良好平衡
+5. **预热很重要**：更高的预热步数 = 更稳定的缓存决策
 
-## Limitations
+## 限制
 
-- **SGLang-native pipelines**: Distributed Cache-DiT paths exist for supported pipelines. Hybrid SP+TP configurations add communication and cache coordination overhead, so validate them on the target model and hardware before using them as production defaults.
-- **SCM minimum steps**: SCM requires >= 8 inference steps to be effective
-- **Model support**: The model must be registered in Cache-DiT's
-  `BlockAdapterRegister` or have an SGLang custom block adapter.
+- **SGLang 原生管线**：受支持的管线存在分布式 Cache-DiT 路径。混合 SP+TP 配置会增加通信与缓存协调开销，因此在将其作为生产默认配置之前，请在目标模型与硬件上验证。
+- **SCM 最少步数**：SCM 需要 >= 8 个推理步骤才能生效
+- **模型支持**：模型必须注册在 Cache-DiT 的 `BlockAdapterRegister` 中，或者拥有 SGLang 自定义块适配器。
 
-## Troubleshooting
+## 故障排查
 
-### SCM disabled for low step count
+### 低步数时 SCM 被禁用
 
-For models with < 8 inference steps (e.g., DMD distilled models), SCM will be automatically disabled. DBCache
-acceleration still works.
+对于推理步骤少于 8 个的模型（例如 DMD 蒸馏模型），SCM 会自动禁用。DBCache 加速仍然有效。
 
-## References
+## 参考资料
 
 - [Cache-DiT](https://github.com/vipshop/cache-dit)
 - [SGLang Diffusion](./performance-optimization)

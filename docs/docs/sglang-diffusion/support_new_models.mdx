@@ -1,72 +1,54 @@
 ---
-title: "Support New Diffusion Models"
-description: "A concise implementation guide for adding diffusion model families to SGLang-Diffusion."
+title: "支持新的扩散模型"
+description: "一份把扩散模型家族接入 SGLang-Diffusion 的简明实现指南。"
 ---
 
-Use this guide as a triage flow for finding the smallest change that can
-support a model. Most new model work should touch a small set of files, even
-though the runtime is split into separate folders.
+把本指南当作一个分诊流程：找到能支持某个模型的最小改动。尽管运行时被拆成了不同文件夹，大多数新模型的工作只应触及一小批文件。
 
-## Read the Code in This Order
+## 按这个顺序阅读代码
 
-The files are split by runtime responsibility. For a new model, read the
-request path first:
+文件按运行时职责划分。对一个新模型，先读请求路径：
 
-1. `registry.py` chooses the model family, sampling params, and pipeline config.
-2. `configs/pipeline_configs/{model}.py` defines model-specific denoising and
-   decoding behavior.
-3. `runtime/pipelines/{model}.py` wires modules into stages.
-4. `runtime/pipelines_core/stages/` runs the shared stage logic.
-5. `runtime/models/` contains native model components only when the architecture
-   cannot be reused.
+1. `registry.py` 选择模型家族、采样参数和流水线配置。
+2. `configs/pipeline_configs/{model}.py` 定义模型专属的去噪和解码行为。
+3. `runtime/pipelines/{model}.py` 把模块接入各阶段。
+4. `runtime/pipelines_core/stages/` 运行共享的阶段逻辑。
+5. 只有架构无法复用时，`runtime/models/` 才包含原生模型组件。
 
-That is the dependency direction. Avoid making a model PR that requires readers
-to jump between folders in a different order.
+这就是依赖方向。避免做一个让读者不得不在文件夹之间按不同顺序跳来跳去的模型 PR。
 
-`runtime/models/` owns modeling code: checkpoint-defined neural modules,
-architecture wrappers, and weight-loading or forward-path details that are
-intrinsic to one model family. Reusable serving infrastructure belongs in
-SGLang-Diffusion runtime folders such as `runtime/cache/`,
-`runtime/distributed/`, `runtime/utils/`, or shared pipeline stages. This
-includes cache managers, graph runners, process-group transport, request
-utilities, and common action-policy helpers. Model packages may call these
-helpers. Keep ownership in shared runtime folders unless the code is truly
-architecture-specific.
+`runtime/models/` 拥有建模代码：检查点定义的神经模块、架构封装、以及某个模型家族特有的权重加载或前向路径细节。可复用的服务化基础设施应放在 SGLang-Diffusion 运行时文件夹中，如 `runtime/cache/`、`runtime/distributed/`、`runtime/utils/` 或共享的流水线阶段。这包括缓存管理器、图运行器、进程组传输、请求工具和通用 action-policy 辅助。模型包可以调用这些辅助。除非代码真的是架构专属的，否则把所有权留在共享运行时文件夹里。
 
-## Start With the Smallest Change
+## 从最小改动开始
 
-Before adding files, decide which path fits the model.
+在添加文件之前，先判断哪种路径适合这个模型。
 
-| Situation | What to do |
+| 情况 | 该做什么 |
 | --- | --- |
-| A new checkpoint uses an existing native family | Add the Hugging Face path and, if needed, a small `SamplingParams` or `PipelineConfig` variant. Reuse the existing pipeline and modules. |
-| The model has a new native DiT/UNet architecture | Add a native SGLang pipeline and the missing model components. Keep denoising and decoding on the shared stages unless measured behavior requires model-specific logic. |
-| The model is long-tail or you only need compatibility first | Prefer the Diffusers backend for compatibility-first support. Add native support later if performance or deployment needs justify it. |
+| 新检查点属于已有原生家族 | 添加 Hugging Face 路径，必要时加一个小的 `SamplingParams` 或 `PipelineConfig` 变体。复用现有流水线和模块。 |
+| 模型有新的原生 DiT/UNet 架构 | 添加原生 SGLang 流水线和缺失的模型组件。除非实测行为需要模型专属逻辑，否则把去噪和解码留在共享阶段上。 |
+| 模型属于长尾、或你只需要先兼容 | 先兼容支持优先用 Diffusers 后端。如果后续性能或部署需求证明有必要，再加原生支持。 |
 
-Do not add a folder just to mirror the Diffusers repository layout. Add a new
-file only when an existing pipeline, stage, module, config, or sampler cannot
-express the behavior clearly.
+不要只是为了镜像 Diffusers 仓库的目录结构就新增文件夹。只有当现有流水线、阶段、模块、配置或采样器无法清晰表达该行为时，才添加新文件。
 
-## Minimal File Map
+## 最小文件映射
 
-The source tree is split by runtime responsibility. That split is useful for
-optimization. Keep new model PRs focused on the files required by model
-behavior.
+源码树按运行时职责划分。这种划分对优化很有用。让新模型 PR 只聚焦于模型行为所需的文件。
 
-| Area | Add or edit when | Typical file |
+| 区域 | 何时添加或修改 | 典型文件 |
 | --- | --- | --- |
-| Registry | Always, unless extending an already registered family | `python/sglang/multimodal_gen/registry.py` |
-| Runtime parameters | The request schema differs from existing models | `configs/sample/{model}.py` |
-| Pipeline config | Denoising, decoding, precision, position encoding, or CFG hooks differ | `configs/pipeline_configs/{model}.py` |
-| Pipeline wiring | The model needs a new stage layout or module list | `runtime/pipelines/{model}.py` |
-| DiT/UNet module | The denoising network is new | `runtime/models/dits/{model}.py` |
-| dVLA or policy module | The checkpoint defines a new action-policy architecture | `runtime/models/{family}/modeling_*.py` or a task-specific model subfolder |
-| Shared runtime infrastructure | Cache, CUDA graph, distributed transfer, request utilities, or action-policy helpers can be reused by future models | `runtime/cache/`, `runtime/distributed/`, `runtime/utils/`, `runtime/pipelines_core/stages/` |
-| Model component config | A model component has static architecture config | `configs/models/dits/{model}.py`, `configs/models/vaes/{model}.py` |
-| Model-specific stage | A single stage's runtime semantics cannot be expressed by a native stage or a narrow subclass of one | `runtime/pipelines_core/stages/model_specific_stages/{model}.py` |
-| Encoder, VAE, scheduler | No existing implementation can be reused | `runtime/models/encoders/`, `runtime/models/vaes/`, `runtime/models/schedulers/` |
+| 注册表 | 总是，除非是在扩展已注册的家族 | `python/sglang/multimodal_gen/registry.py` |
+| 运行时参数 | 请求 schema 与现有模型不同 | `configs/sample/{model}.py` |
+| 流水线配置 | 去噪、解码、精度、位置编码或 CFG 钩子不同 | `configs/pipeline_configs/{model}.py` |
+| 流水线接线 | 模型需要新的阶段布局或模块列表 | `runtime/pipelines/{model}.py` |
+| DiT/UNet 模块 | 去噪网络是全新的 | `runtime/models/dits/{model}.py` |
+| dVLA 或 policy 模块 | 检查点定义了新的 action-policy 架构 | `runtime/models/{family}/modeling_*.py` 或任务专属的模型子文件夹 |
+| 共享运行时基础设施 | 缓存、CUDA 图、分布式传输、请求工具或 action-policy 辅助可被未来模型复用 | `runtime/cache/`、`runtime/distributed/`、`runtime/utils/`、`runtime/pipelines_core/stages/` |
+| 模型组件配置 | 模型组件有静态架构配置 | `configs/models/dits/{model}.py`、`configs/models/vaes/{model}.py` |
+| 模型专属阶段 | 某个阶段的运行时语义无法用原生阶段或它的窄子类表达 | `runtime/pipelines_core/stages/model_specific_stages/{model}.py` |
+| 编码器、VAE、调度器 | 现有实现都不可复用 | `runtime/models/encoders/`、`runtime/models/vaes/`、`runtime/models/schedulers/` |
 
-For a new native architecture, the common minimum is:
+对一个新原生架构，常见的最小集是：
 
 1. `registry.py`
 2. `configs/sample/{model}.py`
@@ -74,69 +56,50 @@ For a new native architecture, the common minimum is:
 4. `runtime/pipelines/{model}.py`
 5. `runtime/models/dits/{model}.py`
 
-Every extra file should map to model behavior that existing code cannot express
-clearly.
+每个额外的文件都应该对应到现有代码无法清晰表达的行为。
 
-For dVLA or other non-image diffusion policies, keep the same ownership rule.
-The policy network, VLM/action expert modules, checkpoint mapping, and
-model-specific forward code belong under `runtime/models/`. Prefix caches,
-request-local contexts, denoising graph runners, OpenPI-compatible transport,
-and prefix/action process-group utilities should be shared SGLang-Diffusion
-runtime infrastructure when they are useful beyond the first model.
+对 dVLA 或其它非图像扩散策略，保持相同的所有权规则。策略网络、VLM/action 专家模块、检查点映射和模型专属前向代码属于 `runtime/models/`。前缀缓存、请求局部上下文、去噪图运行器、OpenPI 兼容传输、前缀/action 进程组工具，只要它们对第一个模型之外也有用，就应是共享的 SGLang-Diffusion 运行时基础设施。
 
-## Read the Reference First
+<Note>
+💡 AI Infra 学习笔记：为什么把扩散流水线拆成"编码→潜空间准备→去噪→解码"这些标准阶段？因为性能优化都是按阶段生效的——CPU 卸载可以只针对大编码器/VAE 组件、CUDA 图捕获可以只针对循环去噪的 DiT、分离部署按编码器/去噪器/解码器拆分、profiling 按阶段计时。如果一个新模型把所有逻辑塞进一个自定义阶段，就等于绕开了这些共享钩子，后续每项优化都要为它单独实现一遍。这也是"先复用原生阶段、再窄子类、最后才自定义"这条优先级排序的底层原因。
+</Note>
 
-Use the model's Diffusers pipeline, official implementation, or
-`model_index.json` as the source of truth. Write down:
+## 先读参考实现
 
-- Which modules must be loaded: tokenizer, text encoder, image encoder,
-  transformer, scheduler, VAE, processor, and any extra adapters.
-- The prompt and image encoding flow.
-- Latent shape, packing, scale, shift, dtype, and device rules.
-- Timestep and sigma schedule.
-- The exact `forward()` kwargs expected by the denoising network.
-- VAE decode rules and output post-processing.
+把模型的 Diffusers 流水线、官方实现或 `model_index.json` 当作权威来源。记下：
 
-If the new model is close to Flux, Qwen-Image, GLM-Image, Wan, HunyuanVideo, or
-LTX, extend that implementation before starting from an empty file.
+- 必须加载哪些模块：分词器、文本编码器、图像编码器、transformer、调度器、VAE、processor，以及任何额外适配器。
+- 提示词和图像编码流程。
+- 潜空间形状、打包、缩放、偏移、dtype 和设备规则。
+- timestep 与 sigma 调度。
+- 去噪网络期望的精确 `forward()` kwargs。
+- VAE 解码规则和输出后处理。
 
-## Choose a Pipeline Shape
+如果新模型接近 Flux、Qwen-Image、GLM-Image、Wan、HunyuanVideo 或 LTX，先从扩展那个实现开始，而不是从空文件起步。
 
-SGLang-Diffusion uses `ComposedPipelineBase` to wire stages together. Most
-native pipelines should choose the least invasive stage shape that preserves the
-runtime semantics.
+## 选择流水线形态
 
-| Shape | Use when | Layout |
+SGLang-Diffusion 用 `ComposedPipelineBase` 把阶段接线在一起。大多数原生流水线应选择保留运行时语义的侵入性最小的阶段形态。
+
+| 形态 | 何时使用 | 布局 |
 | --- | --- | --- |
-| Native stages | Text/image encoding, latent prep, timestep prep, denoising, and decoding match existing helpers | `add_standard_t2i_stages()`, `add_standard_ti2i_stages()`, or a similar helper |
-| Native-stage subclass | One stage has model-specific details, but the stage boundary and batch contract still match an existing native stage | `{Model}TextEncodingStage(TextEncodingStage) -> LatentPreparationStage -> TimestepPreparationStage -> DenoisingStage -> DecodingStage` |
-| Custom single-purpose stage | One step has a different state owner or batch-field lifecycle and cannot cleanly inherit from a native stage | Native stages with one `{Model}{Purpose}Stage` inserted or substituted |
-| Aggregated custom stage | Several preparation steps are inseparable in the reference pipeline and cannot be split without fragile duplicate state | `{Model}BeforeDenoisingStage -> DenoisingStage -> DecodingStage` |
+| 原生阶段 | 文本/图像编码、潜空间准备、timestep 准备、去噪、解码与现有辅助一致 | `add_standard_t2i_stages()`、`add_standard_ti2i_stages()` 或类似辅助 |
+| 原生阶段子类 | 某个阶段有模型专属细节，但阶段边界和 batch 契约仍与现有原生阶段一致 | `{Model}TextEncodingStage(TextEncodingStage) -> LatentPreparationStage -> TimestepPreparationStage -> DenoisingStage -> DecodingStage` |
+| 自定义单一用途阶段 | 某一步的状态持有者或 batch 字段生命周期不同，无法干净地继承原生阶段 | 原生阶段中插入或替换一个 `{Model}{Purpose}Stage` |
+| 聚合自定义阶段 | 参考流水线中几个准备步骤密不可分，拆分会产生脆弱的重复状态 | `{Model}BeforeDenoisingStage -> DenoisingStage -> DecodingStage` |
 
-Prefer this order:
+优先按这个顺序：
 
-1. **Use native stages directly.** This keeps the model on shared code paths for
-   offload, component readiness, profiling, disaggregation, batching, and future
-   stage-level optimizations.
-2. **Subclass the narrowest native stage.** If only prompt processing differs,
-   inherit from `TextEncodingStage`. If only latent setup, timestep setup,
-   denoising, or decode differs, inherit from that specific native stage. Preserve
-   the existing input/output fields whenever possible.
-3. **Add a custom single-purpose stage only when no native stage contract fits.**
-   Keep the stage owner narrow: one stage should own one coherent transformation,
-   such as a custom condition assembly step or a model-specific policy/action
-   bridge.
-4. **Use an aggregated `BeforeDenoisingStage` only as a last resort.** This is the
-   least preferred shape because it hides multiple runtime responsibilities in
-   one stage, increases code size and review cost, and bypasses shared hooks for
-   offload, profiling, disaggregation, batching, and future stage-level
-   optimizations.
+1. **直接使用原生阶段。** 这能让模型留在共享代码路径上，获得卸载、组件就绪、性能剖析、分离部署、批处理以及未来的阶段级优化。
+2. **子类化最窄的原生阶段。** 如果只有提示词处理不同，继承 `TextEncodingStage`。如果只有潜空间设置、timestep 设置、去噪或解码不同，继承对应的那个原生阶段。尽可能保留现有的输入/输出字段。
+3. **只有当没有原生阶段契约匹配时，才添加自定义单一用途阶段。** 保持阶段持有者职责单一：一个阶段只做一件连贯的变换，比如自定义条件组装步骤或模型专属的 policy/action 桥接。
+4. **只在万不得已时使用聚合的 `BeforeDenoisingStage`。** 这是最不推荐的形态，因为它把多个运行时职责藏在一个阶段里，增加代码量和审查成本，并且绕过了卸载、性能剖析、分离部署、批处理以及未来阶段级优化的共享钩子。
 
-## Implement the Pieces
+## 实现各个部分
 
-### 1. Sampling Params
+### 1. 采样参数
 
-Create request parameters only for values users can set at runtime.
+只为用户运行时能设置的值创建请求参数。
 
 ```python
 # python/sglang/multimodal_gen/configs/sample/my_model.py
@@ -151,10 +114,9 @@ class MyModelSamplingParams(ImageSamplingParams):
     num_inference_steps: int = 28
 ```
 
-### 2. Pipeline Config
+### 2. 流水线配置
 
-`PipelineConfig` is where shared denoising and decoding stages get model-specific
-callbacks.
+`PipelineConfig` 是共享的去噪和解码阶段获取模型专属回调的地方。
 
 ```python
 # python/sglang/multimodal_gen/configs/pipeline_configs/my_model.py
@@ -183,11 +145,11 @@ class MyModelPipelineConfig(ImagePipelineConfig):
         }
 ```
 
-Make these kwargs match the denoising module's `forward()` signature exactly.
+让这些 kwargs 与去噪模块的 `forward()` 签名完全一致。
 
-### 3. Pipeline Wiring
+### 3. 流水线接线
 
-Use the standard helper when the model fits it.
+当模型符合标准辅助时，使用它。
 
 ```python
 # python/sglang/multimodal_gen/runtime/pipelines/my_model.py
@@ -209,10 +171,7 @@ class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
 EntryClass = [MyModelPipeline]
 ```
 
-When a standard helper is not enough, first check whether only one native stage
-needs model-specific behavior. In that case, subclass that stage and keep the
-rest of the pipeline standard. For example, custom tokenization or prompt-window
-logic should usually inherit from `TextEncodingStage` directly.
+当标准辅助不够用时，先检查是否只有一个原生阶段需要模型专属行为。如果是，就子类化那个阶段，其余保持标准。例如，自定义分词或提示词窗口逻辑通常应直接继承 `TextEncodingStage`。
 
 ```python
 class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
@@ -245,9 +204,7 @@ class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
 EntryClass = [MyModelPipeline]
 ```
 
-Use a custom single-purpose stage only when the reference pipeline has one step
-that cannot be represented cleanly by a hook or native-stage subclass. Keep the
-custom stage narrow and reuse native stages before and after it.
+只有当参考流水线中有一个步骤无法用钩子或原生阶段子类干净表达时，才使用自定义单一用途阶段。保持自定义阶段职责单一，并在它前后复用原生阶段。
 
 ```python
 class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
@@ -281,9 +238,7 @@ class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
 EntryClass = [MyModelPipeline]
 ```
 
-Use an aggregated `BeforeDenoisingStage` only when the reference pipeline couples
-several preparation steps so tightly that splitting them would require fragile
-duplicate state or extra synchronization. Do not start with this shape.
+只有当参考流水线把几个准备步骤耦合得如此紧密、拆分会导致脆弱的重复状态或额外同步时，才使用聚合的 `BeforeDenoisingStage`。不要一开始就用这种形态。
 
 ```python
 class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
@@ -314,17 +269,11 @@ class MyModelPipeline(LoRAPipeline, ComposedPipelineBase):
 EntryClass = [MyModelPipeline]
 ```
 
-### 4. Last-Resort Before-Denoising Stage
+### 4. 万不得已才用的去噪前阶段
 
-A `BeforeDenoisingStage` is not a catch-all replacement for the native stages.
-Use it when the model has custom latent packing, conditioning assembly, timestep
-preparation, or request-local state that does not fit `LatentPreparationStage` or
-`TimestepPreparationStage`, and only after checking whether the work can be a
-native-stage subclass or a custom single-purpose stage. If the difference is
-prompt handling, subclass `TextEncodingStage` instead.
+`BeforeDenoisingStage` 不是原生阶段的万能替代。当模型有自定义潜空间打包、条件组装、timestep 准备或请求局部状态、而这些装不进 `LatentPreparationStage` 或 `TimestepPreparationStage` 时才使用它，并且要先用前面检查过：能否做成原生阶段子类或自定义单一用途阶段。如果差异只在提示词处理，请子类化 `TextEncodingStage`。
 
-A proper `BeforeDenoisingStage` should populate the batch fields consumed by
-`DenoisingStage`.
+一个合格的 `BeforeDenoisingStage` 应该填充 `DenoisingStage` 消费的 batch 字段。
 
 ```python
 class MyModelBeforeDenoisingStage(PipelineStage):
@@ -344,33 +293,30 @@ class MyModelBeforeDenoisingStage(PipelineStage):
         return batch
 ```
 
-Required fields for `DenoisingStage`:
+`DenoisingStage` 需要的字段：
 
-| Field | Notes |
+| 字段 | 说明 |
 | --- | --- |
-| `batch.latents` | Initial latent tensor, including any packing required by the model. |
-| `batch.timesteps` | Timestep tensor in the exact order used by the reference pipeline. |
-| `batch.sigmas` | Python list when the scheduler expects sigma values. |
-| `batch.prompt_embeds` | Positive embeddings, wrapped in a list. |
-| `batch.negative_prompt_embeds` | Negative embeddings, wrapped in a list when CFG is used. |
-| `batch.num_inference_steps` | Number of denoising iterations. |
-| `batch.raw_latent_shape` | Original latent shape before packing, if decode needs it. |
+| `batch.latents` | 初始潜张量，包括模型所需的任何打包。 |
+| `batch.timesteps` | 与参考流水线完全一致顺序的 timestep 张量。 |
+| `batch.sigmas` | 当调度器需要 sigma 值时，用 Python 列表。 |
+| `batch.prompt_embeds` | 正条件嵌入，用列表包裹。 |
+| `batch.negative_prompt_embeds` | 使用 CFG 时，用列表包裹的负条件嵌入。 |
+| `batch.num_inference_steps` | 去噪迭代次数。 |
+| `batch.raw_latent_shape` | 打包前的原始潜空间形状，解码需要时使用。 |
 
-### 5. Denoising Module
+### 5. 去噪模块
 
-Add a file under `runtime/models/dits/` only when the architecture is new. Reuse
-existing encoders, VAEs, schedulers, normalization layers, and fused kernels
-whenever possible.
+只有当架构是全新的时，才在 `runtime/models/dits/` 下添加文件。尽可能复用现有的编码器、VAE、调度器、归一化层和融合 kernel。
 
-For multi-GPU serving, add TP/SP support after the single-GPU path is correct.
-Useful references:
+多 GPU 服务化：先在单 GPU 路径正确后，再加 TP/SP 支持。有用的参考：
 
-- `runtime/models/dits/wanvideo.py` for TP plus SP.
-- `runtime/models/dits/qwen_image.py` for USP attention.
+- `runtime/models/dits/wanvideo.py`：TP 加 SP。
+- `runtime/models/dits/qwen_image.py`：USP 注意力。
 
-### 6. Registry
+### 6. 注册表
 
-Register the family once the sampling params and pipeline config exist.
+采样参数和流水线配置就绪后，注册这个家族。
 
 ```python
 register_configs(
@@ -381,43 +327,33 @@ register_configs(
 )
 ```
 
-The pipeline file is discovered through its `EntryClass`; do not add a second
-pipeline registry unless the existing registry requires it.
+流水线文件通过它的 `EntryClass` 被发现；不要加第二个流水线注册表，除非现有注册表确实要求。
 
-## Verify the Port
+## 验证移植
 
-Use one deterministic prompt and seed while comparing with the reference
-implementation.
+使用一个确定性的提示词和种子，与参考实现对比。
 
-1. Run a single-GPU smoke test and check that the output contains coherent
-   content.
-2. Compare latent scale and shift, timestep order, sigma values, and conditioning
-   kwargs against Diffusers or the official implementation.
-3. Verify VAE decode and post-processing separately from denoising.
-4. If the model supports LoRA, CFG parallelism, TP, SP, or disaggregation, test
-   each feature explicitly.
-5. Add or update docs, examples, or the compatibility matrix when users need a
-   new launch command.
+1. 运行单 GPU 冒烟测试，检查输出是否包含连贯的内容。
+2. 对比潜空间缩放与偏移、timestep 顺序、sigma 值以及 conditioning kwargs 是否与 Diffusers 或官方实现一致。
+3. 把 VAE 解码和后处理与去噪分开验证。
+4. 如果模型支持 LoRA、CFG 并行、TP、SP 或分离部署，逐个显式测试这些特性。
+5. 当用户需要新的启动命令时，添加或更新文档、示例或兼容性矩阵。
 
-Common failure points:
+常见失败点：
 
-- Wrong latent scale or shift.
-- Reversed or dtype-mismatched timesteps.
-- Missing negative embeddings when CFG is enabled.
-- Conditioning kwarg names mismatched with the DiT `forward()`.
-- Rotary embedding shape or style mismatch.
-- Decoding packed latents without restoring `raw_latent_shape`.
+- 潜空间缩放或偏移错误。
+- timestep 顺序颠倒或 dtype 不匹配。
+- 启用 CFG 时缺少负条件嵌入。
+- conditioning kwarg 名称与 DiT `forward()` 不匹配。
+- 旋转嵌入的形状或风格不匹配。
+- 解码打包后的潜空间时没有恢复 `raw_latent_shape`。
 
-## PR Checklist
+## PR 检查清单
 
-- [ ] Reused an existing family, stage, module, scheduler, or VAE wherever
-      possible.
-- [ ] Kept the new-model touch surface small and justified any extra files.
-- [ ] Added `SamplingParams`, `PipelineConfig`, pipeline wiring, DiT module, and
-      registry entry when native support is needed.
-- [ ] Confirmed `pipeline_name` matches the Diffusers `model_index.json`
-      `_class_name` when applicable.
-- [ ] Confirmed `_required_config_modules` matches the model repo.
-- [ ] Verified image or video quality against a reference output.
-- [ ] Tested multi-GPU paths if the PR claims TP, SP, CFG parallelism, or
-      distributed serving support.
+- [ ] 尽可能复用了现有家族、阶段、模块、调度器或 VAE。
+- [ ] 保持新模型的改动面小，并为任何额外文件给出理由。
+- [ ] 需要原生支持时，添加了 `SamplingParams`、`PipelineConfig`、流水线接线、DiT 模块和注册表条目。
+- [ ] 确认适用时 `pipeline_name` 与 Diffusers `model_index.json` 的 `_class_name` 一致。
+- [ ] 确认 `_required_config_modules` 与模型仓库一致。
+- [ ] 对照参考输出验证了图像或视频质量。
+- [ ] 如果 PR 声称支持 TP、SP、CFG 并行或分布式服务化，测试了多 GPU 路径。

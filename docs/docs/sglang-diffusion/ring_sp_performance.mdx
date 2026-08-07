@@ -1,33 +1,32 @@
 ---
-title: "Sequence Parallelism"
+title: "序列并行"
 tag: "preserve"
 metatags:
-    description: "Configure sequence parallelism, TP plus SP, Ulysses, K/V gather, and ring-based sequence splitting for SGLang Diffusion workloads."
+    description: "为 SGLang Diffusion 负载配置序列并行、TP 加 SP、Ulysses、K/V 收集以及环形序列拆分。"
 ---
 
-Sequence parallelism splits long image or video latent sequences across GPUs. In SGLang Diffusion, the public controls are:
+序列并行（sequence parallelism）把长图像或视频的潜空间序列拆分到多块 GPU 上。在 SGLang Diffusion 中，公开的控制项有：
 
-- `--sp-degree`: total sequence parallel degree
-- `--ulysses-degree`: Ulysses parallel degree
-- `--ring-degree`: ring parallel degree
-- `--sp-attention-mode`: attention exchange used inside each SP group
+- `--sp-degree`：序列并行总度数
+- `--ulysses-degree`：Ulysses 并行度数
+- `--ring-degree`：环形并行度数
+- `--sp-attention-mode`：每个 SP 组内部使用的注意力交换方式
 
-The degrees must satisfy:
+这些度数必须满足：
 
 ```text
 sp_degree = ulysses_degree * ring_degree
 ```
 
-The default `--sp-attention-mode ulysses` uses all-to-all to redistribute
-sequence shards over attention heads. `--sp-attention-mode kv_gather` keeps
-queries sequence-sharded and all-gathers keys and values, then computes each
-rank's local output directly. The K/V-gather mode currently supports
-non-causal attention with `--ring-degree 1`. Varlen calls through the legacy
-`UlyssesAttention` adapter and video sparse attention are not supported.
+默认的 `--sp-attention-mode ulysses` 使用 all-to-all 把序列分片重新分布到注意力头上。`--sp-attention-mode kv_gather` 保持查询按序列分片，对键和值做 all-gather，然后直接计算每个 rank 的局部输出。K/V 收集模式目前支持非因果注意力，要求 `--ring-degree 1`。通过旧版 `UlyssesAttention` 适配器发起的 varlen 调用以及视频稀疏注意力不受支持。
 
-Use SP when sequence length or video shape makes the DiT forward pass the bottleneck and the model supports sequence sharding. For latency-oriented multi-GPU Qwen/Wan deployments, also compare against CFG parallelism and FSDP; SP is not automatically the best multi-GPU setting for every model.
+当序列长度或视频形状让 DiT 前向过程成为瓶颈、且模型支持序列分片时，可以使用 SP。对延迟导向的多 GPU Qwen/Wan 部署，还要和 CFG 并行、FSDP 做对比；SP 并不自动是每个模型最好的多 GPU 方案。
 
-## Choosing The Attention Exchange
+<Note>
+💡 AI Infra 学习笔记：扩散模型的序列并行与 LLM 的序列并行思路相通——注意力计算的开销随序列长度呈平方级增长，视频生成里一个 batch 的潜空间序列可能长达数万 token，单卡装不下或算不动。SP 把序列切成多份、分给多块 GPU，注意力阶段再通过 all-to-all（Ulysses）或 K/V all-gather（KV gather）交换数据。它的代价是通信开销随 SP 度数增长，所以"何时从单卡切到 SP、SP 度数取多少"是典型的容量-延迟权衡题。相比 LLM 的 KV 缓存，扩散 SP 分的是激活序列本身，这也是两者在面试考点上的区别。
+</Note>
+
+## 选择注意力交换方式
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -38,46 +37,37 @@ Use SP when sequence length or video shape makes the DiT forward pass the bottle
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Mode</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Communication</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Memory</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Constraints</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>模式</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>通信</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>内存</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>约束</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px"}}><code>ulysses</code></td>
-      <td style={{padding: "9px 12px"}}>All-to-all before and after attention</td>
-      <td style={{padding: "9px 12px"}}>Full sequence with a shard of the attention heads during attention</td>
-      <td style={{padding: "9px 12px"}}>Attention head divisibility must match the Ulysses degree</td>
+      <td style={{padding: "9px 12px"}}>注意力前后各做一次 all-to-all</td>
+      <td style={{padding: "9px 12px"}}>注意力期间持有完整序列和一份注意力头分片</td>
+      <td style={{padding: "9px 12px"}}>注意力头数必须能被 Ulysses 度数整除</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px"}}><code>kv_gather</code></td>
-      <td style={{padding: "9px 12px"}}>All-gather K and V; Q and output remain sequence-sharded</td>
-      <td style={{padding: "9px 12px"}}>Replicates full K and V within the SP group</td>
-      <td style={{padding: "9px 12px"}}>Non-causal attention and <code>ring_degree=1</code>; no legacy varlen or video sparse attention</td>
+      <td style={{padding: "9px 12px"}}>对 K 和 V 做 all-gather；Q 和输出保持序列分片</td>
+      <td style={{padding: "9px 12px"}}>在 SP 组内复制完整的 K 和 V</td>
+      <td style={{padding: "9px 12px"}}>非因果注意力且 <code>ring_degree=1</code>；不支持旧版 varlen 或视频稀疏注意力</td>
     </tr>
   </tbody>
 </table>
 
-Neither exchange is universally faster. K/V gather avoids the reverse
-all-to-all and can help when its local attention shape or collective is more
-efficient, while Ulysses can use less attention activation memory. Benchmark
-both on the target model, resolution, accelerator, and interconnect.
+两种交换方式没有绝对优劣。K/V 收集省掉了反向 all-to-all，当它的局部注意力形状或集合通信更高效时可能有帮助；而 Ulysses 能减少注意力激活内存。请在目标模型、分辨率、加速器和互连上分别做基准测试。
 
-For SP degree `P`, the approximate per-rank network payload of K/V gather
-relative to Ulysses is `P / 2`, excluding each rank's local shard. The payloads
-are therefore similar at SP2, while K/V gather moves about 2x as much data at
-SP4 and 4x at SP8. K/V gather may still be faster when all-gather and its local
-attention layout are more efficient, especially at low SP degrees, but this
-scaling makes the interconnect and input shape part of the selection policy.
+对 SP 度数 `P`，K/V 收集相对 Ulysses 的单 rank 近似网络负载是 `P / 2`（不含各 rank 的局部分片）。因此 SP2 时两者负载相近，SP4 时 K/V 收集大约多传 2 倍数据，SP8 时多传 4 倍。当 all-gather 和它的局部注意力布局更高效时，K/V 收集仍可能更快，尤其是在低 SP 度数下；但这种扩展性让互连和输入形状也成为选型策略的一部分。
 
-## Recommended Commands
+## 推荐命令
 
-### Ulysses Sequence Parallelism
+### Ulysses 序列并行
 
-The default mode needs only the total SP degree when ring parallelism is not
-used:
+不使用环形并行时，默认模式只需要总 SP 度数：
 
 ```bash
 sglang serve \
@@ -87,10 +77,9 @@ sglang serve \
   --port 8898
 ```
 
-### K/V-Gather Sequence Parallelism
+### K/V 收集序列并行
 
-Use the same SP process-group layout and select the alternative attention
-exchange explicitly:
+使用相同的 SP 进程组布局，显式选择另一种注意力交换方式：
 
 ```bash
 sglang serve \
@@ -101,11 +90,9 @@ sglang serve \
   --port 8898
 ```
 
-### Tensor Plus Sequence Parallelism
+### 张量加序列并行
 
-TP and SP use independent dimensions. With DP and CFG parallelism disabled,
-the required GPU count is `tp_size * sp_degree`. This example creates two TP
-groups across a two-rank SP dimension:
+TP 和 SP 使用相互独立的维度。禁用 DP 和 CFG 并行时，所需 GPU 数为 `tp_size * sp_degree`。下面的例子在两 rank 的 SP 维度上创建两个 TP 组：
 
 ```bash
 sglang serve \
@@ -117,57 +104,32 @@ sglang serve \
   --port 8898
 ```
 
-Omit `--sp-attention-mode kv_gather` to use TP plus Ulysses with the same
-`tp=2, sp=2` topology.
+省略 `--sp-attention-mode kv_gather`，则在相同的 `tp=2, sp=2` 拓扑上使用 TP 加 Ulysses。
 
-#### How TP Plus SP Works
+#### TP 加 SP 如何工作
 
-TP and SP form orthogonal dimensions of the DiT process mesh. For `tp=2,
-sp=2`, ranks `[0, 1]` and `[2, 3]` are TP groups, while ranks `[0, 2]` and
-`[1, 3]` are SP groups. Each rank therefore belongs to one group of each type:
+TP 和 SP 构成 DiT 进程网格上两个正交的维度。对 `tp=2, sp=2`，rank `[0, 1]` 和 `[2, 3]` 是 TP 组，而 rank `[0, 2]` 和 `[1, 3]` 是 SP 组。因此每个 rank 同时属于两种组各一个：
 
-- TP shards supported attention and MLP projection weights and computation,
-  then communicates partial projection results inside the TP group.
-- SP shards the latent sequence and attention activations, then uses Ulysses
-  or K/V gather inside the SP group.
+- TP 分片受支持的注意力和 MLP 投影权重与计算，然后在 TP 组内部通信部分投影结果。
+- SP 分片潜空间序列和注意力激活，然后在 SP 组内部使用 Ulysses 或 K/V 收集。
 
-Pure SP replicates the DiT weights on every SP rank. Adding TP reduces the
-per-rank memory used by TP-sharded weights and keeps the sequence activation
-sharding from SP, at the cost of adding TP communication to every applicable
-DiT block. The exact memory reduction is model-dependent because not every
-parameter or runtime buffer is TP-sharded.
+纯 SP 会在每个 SP rank 上复制 DiT 权重。加 TP 能降低每个 rank 上被 TP 分片的权重所占内存，同时保留 SP 的序列激活分片，代价是给每个适用的 DiT 块增加 TP 通信。具体能省多少内存取决于模型，因为并非每个参数或运行时缓冲区都会被 TP 分片。
 
-TP plus SP should therefore be treated as a capacity and memory-latency Pareto
-option, not as the default latency winner. On a single NVSwitch node, pure SP
-often wins when the complete DiT weights fit on every GPU because it avoids
-the repeated TP collectives. Try TP plus SP when pure SP does not fit, when
-more memory headroom is required, or when its measured memory reduction is
-worth a small latency increase.
+因此 TP 加 SP 应该被当作一个容量与内存-延迟的帕累托选项，而不是默认的延迟最优解。在单 NVSwitch 节点上，当完整 DiT 权重能装进每块 GPU 时，纯 SP 常常胜出，因为它避免了重复的 TP 集合通信。当纯 SP 装不下、需要更多内存余量、或实测的内存节省值得那一点延迟增加时，再尝试 TP 加 SP。
 
-The following representative eager results used eight H200 GPUs in one
-NVSwitch node. Times are median scheduler-side end-to-end latency. They
-illustrate the tradeoff rather than define a universal policy:
+下面这些有代表性的 eager 结果来自单 NVSwitch 节点上的八块 H200。时间取调度器侧端到端延迟的中位数。它们用于说明权衡关系，而不是定义通用策略：
 
-| Model and workload | Fastest tested topology | TP plus SP Pareto point | Tradeoff |
+| 模型与负载 | 实测最快拓扑 | TP 加 SP 帕累托点 | 权衡 |
 | --- | --- | --- | --- |
-| Qwen-Image, 1536x1536 | CFG2xSP4 Ulysses: 972.6 ms, 62.8 GiB/GPU | CFG2xTP2xSP2 K/V: 1017.4 ms, 48.4 GiB/GPU | 4.6% slower, 22.9% less peak memory |
-| Wan2.2-A14B, 832x480x81 | CFG2xSP4 K/V: 6573.5 ms, 61.9 GiB/GPU | CFG2xTP2xSP2 K/V: 7243.1 ms, 34.2 GiB/GPU | 10.2% slower, 44.7% less peak memory |
-| LTX2.3, 768x512x241 | SP8 K/V: 7258.2 ms, 55.4 GiB/GPU | TP2xSP4 K/V: 10372.3 ms, 37.8 GiB/GPU | 42.9% slower, 31.8% less peak memory |
+| Qwen-Image, 1536x1536 | CFG2xSP4 Ulysses: 972.6 ms, 62.8 GiB/GPU | CFG2xTP2xSP2 K/V: 1017.4 ms, 48.4 GiB/GPU | 慢 4.6%，峰值内存降低 22.9% |
+| Wan2.2-A14B, 832x480x81 | CFG2xSP4 K/V: 6573.5 ms, 61.9 GiB/GPU | CFG2xTP2xSP2 K/V: 7243.1 ms, 34.2 GiB/GPU | 慢 10.2%，峰值内存降低 44.7% |
+| LTX2.3, 768x512x241 | SP8 K/V: 7258.2 ms, 55.4 GiB/GPU | TP2xSP4 K/V: 10372.3 ms, 37.8 GiB/GPU | 慢 42.9%，峰值内存降低 31.8% |
 
-K/V gather can still improve TP plus SP at the same topology even when that
-topology is not the global latency winner. In the same experiment it improved
-TP2xSP4 by 4.2% for FLUX and 8.4% for LTX2.3, and improved
-CFG2xTP2xSP2 by 6.0% for Qwen-Image and 2.7% for Wan2.2-A14B, relative to
-Ulysses. Always compare the full candidate set, including pure SP, TP, CFG,
-and their feasible combinations, rather than selecting the SP attention
-backend first.
+即使在某个拓扑不是全局延迟最优解时，K/V 收集仍可能改善同一拓扑下的 TP 加 SP。在同一实验中，相对 Ulysses，它对 TP2xSP4 的 FLUX 提升了 4.2%、LTX2.3 提升了 8.4%，对 CFG2xTP2xSP2 的 Qwen-Image 提升了 6.0%、Wan2.2-A14B 提升了 2.7%。请始终对比完整候选集（包括纯 SP、TP、CFG 及它们可行的组合），而不是先选定 SP 注意力后端。
 
-### FSDP Plus Sequence Parallelism
+### FSDP 加序列并行
 
-FSDP can shard DiT weights across the same workers that participate in SP.
-Unlike TP times SP, the FSDP and SP degrees do not multiply the required GPU
-count. This is useful when pure SP is fast enough but replicated DiT weights
-or long-sequence activations leave too little memory headroom:
+FSDP 可以在参与 SP 的同一批 worker 上分片 DiT 权重。与 TP 乘 SP 不同，FSDP 和 SP 的度数不会相乘所需的 GPU 数。当纯 SP 足够快、但复制的 DiT 权重或长序列激活留下的内存余量太少时，这种方式很有用：
 
 ```bash
 sglang serve \
@@ -179,13 +141,11 @@ sglang serve \
   --port 8898
 ```
 
-FSDP adds weight all-gather communication, so compare it with pure SP when
-both fit. K/V gather has the same non-causal and `ring_degree=1` constraints
-under FSDP.
+FSDP 会引入权重 all-gather 通信，所以当两者都装得下时，请与纯 SP 对比。在 FSDP 下，K/V 收集同样受非因果和 `ring_degree=1` 的约束。
 
-### Ring Sequence Parallelism
+### 环形序列并行
 
-This example uses two GPUs with `sp=2`, `ulysses=1`, and `ring=2`.
+下面的例子用两块 GPU，`sp=2`、`ulysses=1`、`ring=2`。
 
 ```bash
 sglang serve \
@@ -197,9 +157,9 @@ sglang serve \
   --port 8898
 ```
 
-### Single-GPU Baseline
+### 单 GPU 基线
 
-Use an explicit single-GPU baseline before attributing a gain to sequence parallelism.
+在把收益归因于序列并行之前，先用显式的单 GPU 基线：
 
 ```bash
 sglang serve \
@@ -211,7 +171,7 @@ sglang serve \
   --port 8898
 ```
 
-## Choosing The Degrees
+## 选择度数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -221,52 +181,52 @@ sglang serve \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Setting</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Typical use</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>Notes</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>设置</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>典型用途</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px"}}><code>--sp-degree 1</code></td>
-      <td style={{padding: "9px 12px"}}>Single-GPU or no sequence splitting</td>
-      <td style={{padding: "9px 12px"}}>Use this as the baseline.</td>
+      <td style={{padding: "9px 12px"}}>单 GPU 或不拆分序列</td>
+      <td style={{padding: "9px 12px"}}>把它当作基线使用。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px"}}><code>--ulysses-degree N</code></td>
-      <td style={{padding: "9px 12px"}}>Ulysses-only sequence parallelism</td>
-      <td style={{padding: "9px 12px"}}>When ring parallelism is not needed, keep <code>--ring-degree 1</code>.</td>
+      <td style={{padding: "9px 12px"}}>仅 Ulysses 的序列并行</td>
+      <td style={{padding: "9px 12px"}}>不需要环形并行时，保持 <code>--ring-degree 1</code>。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px"}}><code>--ring-degree N</code></td>
-      <td style={{padding: "9px 12px"}}>Ring-based sequence splitting over long sequences</td>
-      <td style={{padding: "9px 12px"}}>Keep <code>--sp-degree</code> equal to <code>ulysses_degree * ring_degree</code>.</td>
+      <td style={{padding: "9px 12px"}}>针对长序列的环形序列拆分</td>
+      <td style={{padding: "9px 12px"}}>让 <code>--sp-degree</code> 等于 <code>ulysses_degree * ring_degree</code>。</td>
     </tr>
   </tbody>
 </table>
 
-## Benchmarking Guidance
+## 基准测试建议
 
-When benchmarking SP, compare the same model, precision, resolution, frame count, step count, scheduler settings, prompt type, and output path. Report both stage latency and peak GPU memory; SP can reduce per-GPU memory while adding communication overhead.
+对 SP 做基准测试时，对比相同的模型、精度、分辨率、帧数、步数、调度器设置、提示词类型和输出路径。同时报告阶段延迟和 GPU 峰值内存；SP 在降低单 GPU 内存的同时会增加通信开销。
 
-Useful metrics:
+有用的指标：
 
-- End-to-end latency
-- Denoising stage latency
-- Decoding stage latency
-- Peak GPU memory and peak allocated memory
-- Communication or runtime overhead when available
+- 端到端延迟
+- 去噪阶段延迟
+- 解码阶段延迟
+- GPU 峰值内存与峰值已分配内存
+- 可用的通信或运行时开销
 
-## Reference Benchmark
+## 参考基准
 
-The following numbers are a reference measurement for one setup. They are not a general promise for all Wan2.2 deployments.
+下面的数字是某个配置的一次参考测量。它不是对所有 Wan2.2 部署的普遍承诺。
 
-- Model: `Wan-AI/Wan2.2-TI2V-5B-Diffusers`
-- Hardware: two 48 GB RTX 40-series GPUs for sequence parallelism, one 48 GB RTX 40-series GPU for baseline
-- Sequence parallel config: `sp=2, ulysses=1, ring=2` (`u1r2`)
-- Baseline config: `sp=1, ulysses=1, ring=1` (`u1r1`)
+- 模型：`Wan-AI/Wan2.2-TI2V-5B-Diffusers`
+- 硬件：序列并行用两块 48 GB RTX 40 系列 GPU，基线用一块 48 GB RTX 40 系列 GPU
+- 序列并行配置：`sp=2, ulysses=1, ring=2`（`u1r2`）
+- 基线配置：`sp=1, ulysses=1, ring=1`（`u1r1`）
 
-### Stage Time Breakdown
+### 阶段耗时拆分
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -277,10 +237,10 @@ The following numbers are a reference measurement for one setup. They are not a 
   </colgroup>
   <thead>
     <tr>
-      <th>Stage / Metric</th>
-      <th><code>u1r2</code> (s)</th>
-      <th><code>u1r1</code> baseline (s)</th>
-      <th>Speedup</th>
+      <th>阶段 / 指标</th>
+      <th><code>u1r2</code>（秒）</th>
+      <th><code>u1r1</code> 基线（秒）</th>
+      <th>加速比</th>
     </tr>
   </thead>
   <tbody>
@@ -321,7 +281,7 @@ The following numbers are a reference measurement for one setup. They are not a 
       <td>1.75x</td>
     </tr>
     <tr>
-      <td><strong>Total</strong></td>
+      <td><strong>总计</strong></td>
       <td><strong>63.74</strong></td>
       <td><strong>90.63</strong></td>
       <td><strong>1.42x</strong></td>
@@ -329,7 +289,7 @@ The following numbers are a reference measurement for one setup. They are not a 
   </tbody>
 </table>
 
-### Memory Usage
+### 内存占用
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -340,33 +300,33 @@ The following numbers are a reference measurement for one setup. They are not a 
   </colgroup>
   <thead>
     <tr>
-      <th>Memory Metric</th>
-      <th><code>u1r2</code> (GB)</th>
-      <th><code>u1r1</code> baseline (GB)</th>
-      <th>Delta</th>
+      <th>内存指标</th>
+      <th><code>u1r2</code>（GB）</th>
+      <th><code>u1r1</code> 基线（GB）</th>
+      <th>差值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Peak GPU Memory</td>
+      <td>GPU 峰值内存</td>
       <td>20.07</td>
       <td>27.40</td>
       <td>-7.33</td>
     </tr>
     <tr>
-      <td>Peak Allocated</td>
+      <td>峰值已分配内存</td>
       <td>13.35</td>
       <td>20.40</td>
       <td>-7.05</td>
     </tr>
     <tr>
-      <td>Memory Overhead</td>
+      <td>内存开销</td>
       <td>6.72</td>
       <td>7.00</td>
       <td>-0.28</td>
     </tr>
     <tr>
-      <td>Overhead Ratio</td>
+      <td>开销占比</td>
       <td>33.5%</td>
       <td>25.6%</td>
       <td>+7.9pp</td>
@@ -374,4 +334,4 @@ The following numbers are a reference measurement for one setup. They are not a 
   </tbody>
 </table>
 
-In this setup, end-to-end latency improved from `90.63s` to `63.74s` (`1.42x`) and peak GPU memory dropped by `7.33GB`. The overhead ratio increased, so future tuning should still check communication and runtime overhead on the target hardware.
+在这个配置里，端到端延迟从 `90.63s` 改善到 `63.74s`（`1.42x`），GPU 峰值内存下降了 `7.33GB`。开销占比变高了，所以后续调优仍应在目标硬件上检查通信和运行时开销。

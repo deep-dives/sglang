@@ -1,13 +1,17 @@
 ---
-title: "Caching Acceleration"
-description: "Compare caching acceleration strategies for diffusion models."
+title: "缓存加速"
+description: "对比扩散模型的各种缓存加速策略。"
 tag: "approx"
 ---
-SGLang provides three complementary caching strategies for Diffusion Transformer (DiT) models. All reduce denoising cost by skipping redundant computation, but they operate at different levels.
+SGLang 为扩散 Transformer（DiT）模型提供了三种互补的缓存策略。它们都通过跳过冗余计算来降低去噪成本，但作用在不同层级。
 
-## Overview
+<Note>
+💡 AI Infra 学习笔记：这些"缓存加速"和 LLM 的前缀缓存（RadixAttention）思路不同——LLM 缓存的是 KV 状态以复用公共前缀，而扩散模型的缓存是"跳过计算"：既然去噪过程中相邻块/相邻步的输出变化很小，就干脆复用旧结果，省下整块或整步的前向。Cache-DiT 按块跳过、TeaCache/Spectrum 按时间步跳过，粒度不同，速度与质量的取舍也不同。
+</Note>
 
-SGLang supports three complementary caching approaches:
+## 概览
+
+SGLang 支持三种互补的缓存方案：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -18,46 +22,45 @@ SGLang supports three complementary caching approaches:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Strategy</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Scope</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Mechanism</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Best For</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>策略</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>作用范围</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>机制</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>最适合</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Cache-DiT</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Block-level</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Skip individual transformer blocks dynamically</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Advanced, higher speedup</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>块级</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>动态跳过单个 transformer 块</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>高级用户，加速比更高</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>TeaCache</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timestep-level</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Skip entire denoising steps based on L1 similarity</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Simple, built-in</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>时间步级</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>基于 L1 相似度跳过整个去噪步骤</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>简单、内置</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>Spectrum</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Timestep-level</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Forecast DiT features to skip selected denoising steps</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Experimental, model-validated tuning</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>时间步级</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>预测 DiT 特征以跳过选定的去噪步骤</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>实验性，需按模型验证调参</td>
     </tr>
   </tbody>
 </table>
 
 ## Cache-DiT
 
-[Cache-DiT](https://github.com/vipshop/cache-dit) provides block-level caching with
-advanced strategies like DBCache and TaylorSeer. It can achieve up to **1.69x speedup**.
+[Cache-DiT](https://github.com/vipshop/cache-dit) 提供块级缓存，带有 DBCache 与 TaylorSeer 等高级策略，最高可实现 **1.69x 加速**。
 
-See [Cache-DiT](./cache_dit) for detailed configuration.
+详细配置见 [Cache-DiT](./cache_dit)。
 
 <Note>
-Cache-DiT currently cannot be combined with `--use-fsdp-inference`. Keep FSDP disabled when enabling Cache-DiT, or use other residency/offload controls instead.
+Cache-DiT 目前无法与 `--use-fsdp-inference` 组合使用。启用 Cache-DiT 时请保持 FSDP 关闭，改用其他驻留/卸载控制手段。
 </Note>
 
-### Quick Start
+### 快速上手
 
 ```bash
 SGLANG_CACHE_DIT_ENABLED=true \
@@ -65,43 +68,41 @@ sglang generate --model-path Qwen/Qwen-Image \
     --prompt "A beautiful sunset over the mountains"
 ```
 
-### Key Features
+### 核心特性
 
-- **DBCache**: Dynamic block-level caching based on residual differences
-- **TaylorSeer**: Taylor expansion-based calibration for optimized caching
-- **SCM**: Step-level computation masking for additional speedup
+- **DBCache**：基于残差差异的动态块级缓存
+- **TaylorSeer**：基于泰勒展开的校准，优化缓存决策
+- **SCM**：步骤级计算掩码，进一步提升速度
 
 ## TeaCache
 
-TeaCache (Temporal similarity-based caching) accelerates diffusion inference by detecting when consecutive denoising steps are similar enough to skip computation entirely.
+TeaCache（基于时间相似性的缓存）通过检测连续去噪步骤是否足够相似、从而完全跳过计算，来加速扩散模型推理。
 
-See [TeaCache](./teacache) for detailed documentation.
+详细文档见 [TeaCache](./teacache)。
 
-### Quick Overview
+### 快速概览
 
-- Tracks L1 distance between modulated inputs across timesteps
-- When accumulated distance is below threshold, reuses cached residual
-- Uses separate positive/negative caches for supported CFG model families
+- 跟踪跨时间步的调制输入之间的 L1 距离
+- 当累积距离低于阈值时，复用缓存的残差
+- 对受支持的 CFG 模型家族使用独立的正/负缓存
 
-### Supported Models
+### 支持的模型
 
 - Wan2.1
 - Z-Image
-- Wan2.2: coefficients are not calibrated yet; enabling TeaCache is accepted but currently no-ops
-- HunyuanVideo: not supported yet
+- Wan2.2：系数尚未标定；启用 TeaCache 会被接受，但目前不起作用
+- HunyuanVideo：暂不支持
 
-For Flux and Qwen models, TeaCache is automatically disabled when CFG is enabled.
+对于 Flux 与 Qwen 模型，当启用 CFG 时 TeaCache 会自动禁用。
 
 ## Spectrum
 
-Spectrum forecasts DiT features and skips selected denoising steps. It is
-approximate and currently applies only to selected native implementation paths.
+Spectrum 会预测 DiT 特征，并跳过选定的去噪步骤。它是近似方法，目前仅适用于部分原生实现路径。
 
-See [Spectrum Acceleration](./spectrum) for supported model families,
-constraints, and request controls.
+支持的模型家族、限制与请求控制见 [Spectrum 加速](./spectrum)。
 
 
-## References
+## 参考资料
 
-- [Cache-DiT Repository](https://github.com/vipshop/cache-dit)
-- [TeaCache Paper](https://arxiv.org/abs/2411.14324)
+- [Cache-DiT 仓库](https://github.com/vipshop/cache-dit)
+- [TeaCache 论文](https://arxiv.org/abs/2411.14324)

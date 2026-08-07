@@ -1,14 +1,12 @@
 ---
-title: "Spectrum Acceleration"
-description: "Approximate request-scoped denoising-step acceleration."
+title: "Spectrum 加速"
+description: "近似、请求维度的去噪步加速。"
 tag: "approx"
 ---
 
-Spectrum forecasts DiT features and skips selected denoising steps. It is an
-approximation: validate visual or video quality and latency on the exact model,
-shape, hardware, and sampling settings you plan to deploy.
+Spectrum 会预测 DiT 特征，并跳过选定的去噪步骤。它是一种近似方法：请在你要部署的确切模型、形状、硬件与采样配置上验证视觉/视频质量与延迟表现。
 
-## Quick start
+## 快速上手
 
 ```bash
 sglang generate \
@@ -18,37 +16,33 @@ sglang generate \
   --save-output
 ```
 
-## Scope and constraints
+## 适用范围与限制
 
-- Available only on native FLUX.1, Wan, HunyuanVideo, and SD3 implementation
-  paths. It is not a `--backend diffusers` feature and does not currently
-  cover FLUX.2.
-- The request control is available through `sglang generate` and Python
-  sampling parameters. It is not a `sglang serve` or OpenAI-server request
-  option yet.
-- Spectrum and `--enable-teacache` are mutually exclusive.
-- Start with the defaults. `--debug` adds shadow-prediction validation work, so
-  its latency is not representative of normal Spectrum execution.
+- 仅适用于原生 FLUX.1、Wan、HunyuanVideo 和 SD3 实现路径。它不是 `--backend diffusers` 的功能，目前也不覆盖 FLUX.2。
+- 请求级控制可通过 `sglang generate` 与 Python 采样参数使用。目前还不能作为 `sglang serve` 或 OpenAI 服务端的请求选项。
+- Spectrum 与 `--enable-teacache` 互斥。
+- 先从默认参数开始。`--debug` 会额外做影子预测校验工作，因此它的延迟不能代表 Spectrum 正常运行时的表现。
 
-## Advanced controls
+<Note>
+💡 AI Infra 学习笔记：Spectrum 属于"缓存/预测类"近似加速——它不直接复用上一次的结果，而是用一个轻量预测器（Chebyshev 展开 + 局部泰勒预测器）预判 DiT 特征，从而整步跳过某些去噪步骤。这类方法用"算得少"换"算得快"，代价是输出与全量去噪不完全一致，所以文档强调要在目标配置上做质量验证。
+</Note>
 
-Use `--enable-spectrum` explicitly. Providing any Spectrum override also
-enables it, but that implicit behavior is intended for scripts rather than new
-commands.
+## 高级控制
 
-| Flag | Default | Purpose |
+显式使用 `--enable-spectrum`。提供任意 Spectrum 覆盖参数也会隐式启用它，但这种隐式行为是为脚本准备的，新命令里应该显式声明。
+
+| 参数 | 默认值 | 用途 |
 | --- | --- | --- |
-| `--spectrum-window-size` | `2.0` | Initial step-skipping window |
-| `--spectrum-flex-window` | `0.75` | Window growth after a real forward |
-| `--spectrum-warmup-steps` | `5` | Initial exact DiT forwards |
-| `--spectrum-m` | `4` | Chebyshev basis count |
-| `--spectrum-lam` | `0.1` | Ridge regularization |
-| `--spectrum-tau-num-steps` | `50` | Chebyshev time horizon |
-| `--history-size` | `100` | Recent feature-history capacity |
-| `--taylor-order` | `1` | Local predictor order (`1`, `2`, or `3`) |
-| `--w` | `1.0` | Chebyshev/Taylor blend weight |
+| `--spectrum-window-size` | `2.0` | 初始的跳步窗口 |
+| `--spectrum-flex-window` | `0.75` | 真实前向之后的窗口增长 |
+| `--spectrum-warmup-steps` | `5` | 初始精确 DiT 前向次数 |
+| `--spectrum-m` | `4` | Chebyshev 基数量 |
+| `--spectrum-lam` | `0.1` | 岭正则化 |
+| `--spectrum-tau-num-steps` | `50` | Chebyshev 时间范围 |
+| `--history-size` | `100` | 近期特征历史容量 |
+| `--taylor-order` | `1` | 局部预测器阶数（`1`、`2` 或 `3`） |
+| `--w` | `1.0` | Chebyshev/泰勒混合权重 |
 
 <Warning>
-These controls trade speed against output fidelity. Change one control at a
-time and retain a lossless baseline for comparison.
+这些控制项是在速度与输出保真度之间做权衡。请一次只改一个控制项，并保留一个无损基线用于对比。
 </Warning>

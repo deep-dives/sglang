@@ -1,36 +1,31 @@
 ---
-title: "Post-Processing"
+title: "后处理"
 metatags:
-    description: "Use SGLang Diffusion post-processing for frame interpolation and spatial upscaling after generation."
+    description: "使用 SGLang Diffusion 后处理在生成之后进行帧插值和空间超分辨率。"
 ---
 
-SGLang diffusion supports optional post-processing steps that run after
-generation to improve temporal smoothness (frame interpolation) or spatial
-resolution (upscaling). These steps are independent of the diffusion model and
-can be combined in a single run.
+SGLang 扩散模型支持可选的生成后处理步骤，用于改善时间平滑度（帧插值）或空间分辨率（超分辨率）。这些步骤与扩散模型相互独立，可以在一次运行中组合使用。
 
-When both are enabled, **frame interpolation runs first** (increasing the frame
-count), then **upscaling runs on every frame** (increasing the spatial
-resolution).
+两者都启用时，**先做帧插值**（增加帧数），然后**对每一帧做超分辨率**（提升空间分辨率）。
+
+<Note>
+💡 AI Infra 学习笔记：把帧插值（RIFE）和超分辨率（Real-ESRGAN）设计成与扩散模型解耦的后处理步骤，是个很划算的取舍——它们不依赖具体模型，也不需要重新跑昂贵的 DiT 去噪循环。插值利用的是视频帧间的时间冗余（相邻帧差异小，用光流估计中间帧），超分辨率用轻量网络放大空间分辨率。代价是要额外加载/推理这些网络，而且任何后处理都可能引入伪影，所以默认关闭、按需开启。这与推理引擎里"生成 vs 后处理分离、可独立开关"的服务化设计思路一致。
+</Note>
 
 ---
 
-## Frame Interpolation (video only)
+## 帧插值（仅视频）
 
-Frame interpolation synthesizes new frames between each pair of consecutive
-generated frames, producing smoother motion without re-running the diffusion
-model.
+帧插值在每对相邻生成帧之间合成新帧，在不重新运行扩散模型的前提下产生更平滑的运动。
 
-The `--frame-interpolation-exp` flag controls how many rounds of interpolation
-to apply: each round inserts one new frame into every gap between adjacent
-frames, so the output frame count follows the formula:
+`--frame-interpolation-exp` 参数控制应用几轮插值：每轮都会在相邻帧的每个空隙里插入一个新帧，因此输出帧数遵循公式：
 
 > **(N − 1) × 2^exp + 1**
 >
-> e.g. 5 original frames with `exp=1` → 4 gaps × 1 new frame + 5 originals = **9** frames;
-> with `exp=2` → **17** frames.
+> 例如 5 个原始帧搭配 `exp=1` → 4 个空隙 × 1 个新帧 + 5 个原始帧 = **9** 帧；
+> 搭配 `exp=2` → **17** 帧。
 
-### CLI Arguments
+### CLI 参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -39,41 +34,35 @@ frames, so the output frame count follows the formula:
   </colgroup>
   <thead>
     <tr>
-      <th>Argument</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--enable-frame-interpolation</code></td>
-      <td>Enable frame interpolation. Model weights are downloaded automatically on first use.</td>
+      <td>启用帧插值。模型权重会在首次使用时自动下载。</td>
     </tr>
     <tr>
       <td><code>--frame-interpolation-exp &#123;EXP&#125;</code></td>
-      <td>Interpolation exponent — <code>1</code> = 2× temporal resolution, <code>2</code> = 4×, etc. (default: <code>1</code>)</td>
+      <td>插值指数——<code>1</code> = 2 倍时间分辨率，<code>2</code> = 4 倍，依此类推（默认：<code>1</code>）</td>
     </tr>
     <tr>
       <td><code>--frame-interpolation-scale &#123;SCALE&#125;</code></td>
-      <td>RIFE inference scale; use <code>0.5</code> for high-resolution inputs to save memory (default: <code>1.0</code>)</td>
+      <td>RIFE 推理缩放；高分辨率输入用 <code>0.5</code> 以节省内存（默认：<code>1.0</code>）</td>
     </tr>
     <tr>
       <td><code>--frame-interpolation-model-path &#123;PATH&#125;</code></td>
-      <td>Local directory or HuggingFace repo ID containing RIFE <code>flownet.pkl</code> weights (default: <code>elfgum/RIFE-4.22.lite</code>, downloaded automatically)</td>
+      <td>包含 RIFE <code>flownet.pkl</code> 权重的本地目录或 HuggingFace 仓库 ID（默认：<code>elfgum/RIFE-4.22.lite</code>，自动下载）</td>
     </tr>
   </tbody>
 </table>
 
-### Supported Models
+### 受支持的模型
 
-Frame interpolation uses the [RIFE](https://github.com/hzwer/Practical-RIFE)
-(Real-Time Intermediate Flow Estimation) architecture. Only **RIFE 4.22.lite**
-(`IFNet` with 4-scale `IFBlock` backbone) is supported. The network topology is
-hard-coded, so custom weights provided via `--frame-interpolation-model-path`
-must be a `flownet.pkl` checkpoint that is compatible with this architecture.
+帧插值使用 [RIFE](https://github.com/hzwer/Practical-RIFE)（Real-Time Intermediate Flow Estimation，实时中间光流估计）架构。只支持 **RIFE 4.22.lite**（使用 4 尺度 `IFBlock` 骨干的 `IFNet`）。网络拓扑是硬编码的，所以通过 `--frame-interpolation-model-path` 提供的自定义权重，必须是与该架构兼容的 `flownet.pkl` 检查点。
 
-Other RIFE versions (e.g., older `v4.x` variants with different block counts)
-or entirely different frame interpolation methods (FILM, AMT, etc.) are **not
-supported**.
+其它 RIFE 版本（例如块数不同的旧 `v4.x` 变体）或完全不同的帧插值方法（FILM、AMT 等）**不受支持**。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -83,23 +72,23 @@ supported**.
   </colgroup>
   <thead>
     <tr>
-      <th>Weight</th>
-      <th>HuggingFace Repo</th>
-      <th>Description</th>
+      <th>权重</th>
+      <th>HuggingFace 仓库</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>RIFE 4.22.lite *(default)*</td>
+      <td>RIFE 4.22.lite *（默认）*</td>
       <td><a href="https://huggingface.co/elfgum/RIFE-4.22.lite"><code>elfgum/RIFE-4.22.lite</code></a></td>
-      <td>Lightweight model, downloaded automatically on first use</td>
+      <td>轻量模型，首次使用时自动下载</td>
     </tr>
   </tbody>
 </table>
 
-### Example
+### 示例
 
-Generate a 5-frame video and interpolate to 9 frames ((5 − 1) × 2¹ + 1 = 9):
+生成 5 帧视频并插值到 9 帧（(5 − 1) × 2¹ + 1 = 9）：
 
 ```bash
 sglang generate \
@@ -113,13 +102,11 @@ sglang generate \
 
 ---
 
-## Upscaling (image and video)
+## 超分辨率（图像和视频）
 
-Upscaling increases the spatial resolution of generated images or video frames
-using [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN). The model weights
-are downloaded automatically on first use and cached for subsequent runs.
+超分辨率使用 [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) 提升生成图像或视频帧的空间分辨率。模型权重会在首次使用时自动下载，并在后续运行中缓存。
 
-### CLI Arguments
+### CLI 参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -128,31 +115,29 @@ are downloaded automatically on first use and cached for subsequent runs.
   </colgroup>
   <thead>
     <tr>
-      <th>Argument</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--enable-upscaling</code></td>
-      <td>Enable post-generation upscaling using Real-ESRGAN.</td>
+      <td>启用生成后的 Real-ESRGAN 超分辨率。</td>
     </tr>
     <tr>
       <td><code>--upscaling-scale &#123;SCALE&#125;</code></td>
-      <td>Desired upscaling factor (default: <code>4</code>). The 4× model is used internally; if a different scale is requested, a bicubic resize is applied after the network output.</td>
+      <td>期望的超分辨率倍数（默认：<code>4</code>）。内部使用 4 倍模型；如果请求其它倍数，会在网络输出之后应用一次双三次（bicubic）重采样。</td>
     </tr>
     <tr>
       <td><code>--upscaling-model-path &#123;PATH&#125;</code></td>
-      <td>Local <code>.pth</code> file, HuggingFace repo ID, or <code>repo_id:filename</code> for Real-ESRGAN weights (default: <code>ai-forever/Real-ESRGAN</code> with <code>RealESRGAN_x4.pth</code>, downloaded automatically). Use the <code>repo_id:filename</code> format to specify a custom weight file from a HuggingFace repo (e.g. <code>my-org/my-esrgan:weights.pth</code>).</td>
+      <td>Real-ESRGAN 权重的本地 <code>.pth</code> 文件、HuggingFace 仓库 ID 或 <code>repo_id:filename</code>（默认：<code>ai-forever/Real-ESRGAN</code> 的 <code>RealESRGAN_x4.pth</code>，自动下载）。用 <code>repo_id:filename</code> 格式从 HuggingFace 仓库指定自定义权重文件（例如 <code>my-org/my-esrgan:weights.pth</code>）。</td>
     </tr>
   </tbody>
 </table>
 
-### Supported Models
+### 受支持的模型
 
-Upscaling supports two Real-ESRGAN network architectures. The correct
-architecture is **auto-detected** from the checkpoint keys, so you only need to
-point `--upscaling-model-path` at a valid `.pth` file:
+超分辨率支持两种 Real-ESRGAN 网络架构。正确的架构会**自动检测**——从检查点键推断，所以你只需把 `--upscaling-model-path` 指向一个合法的 `.pth` 文件：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -162,36 +147,34 @@ point `--upscaling-model-path` at a valid `.pth` file:
   </colgroup>
   <thead>
     <tr>
-      <th>Architecture</th>
-      <th>Example Weights</th>
-      <th>Description</th>
+      <th>架构</th>
+      <th>示例权重</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><strong>RRDBNet</strong></td>
       <td><code>RealESRGAN_x4plus.pth</code></td>
-      <td>Heavier model with higher quality; best for photos</td>
+      <td>更重的模型，质量更高；最适合照片</td>
     </tr>
     <tr>
       <td><strong>SRVGGNetCompact</strong></td>
-      <td><code>RealESRGAN_x4.pth</code> *(default)*, <code>realesr-animevideov3.pth</code>, <code>realesr-general-x4v3.pth</code></td>
-      <td>Lightweight model; faster inference, good for video</td>
+      <td><code>RealESRGAN_x4.pth</code> *（默认）*、<code>realesr-animevideov3.pth</code>、<code>realesr-general-x4v3.pth</code></td>
+      <td>轻量模型，推理更快，适合视频</td>
     </tr>
   </tbody>
 </table>
 
-The default weight file is
-[`ai-forever/Real-ESRGAN`](https://huggingface.co/ai-forever/Real-ESRGAN) with
-`RealESRGAN_x4.pth` (SRVGGNetCompact, 4× native scale).
+默认权重文件是
+[`ai-forever/Real-ESRGAN`](https://huggingface.co/ai-forever/Real-ESRGAN) 的
+`RealESRGAN_x4.pth`（SRVGGNetCompact，原生 4 倍缩放）。
 
-Other super-resolution models (e.g., SwinIR, HAT, BSRGAN) are **not supported**
-— only Real-ESRGAN checkpoints using the two architectures above are
-compatible.
+其它超分模型（例如 SwinIR、HAT、BSRGAN）**不受支持**——只有使用上面两种架构的 Real-ESRGAN 检查点才兼容。
 
-### Examples
+### 示例
 
-Generate a 1024×1024 image and upscale to 4096×4096:
+生成 1024×1024 图像并超分到 4096×4096：
 
 ```bash
 sglang generate \
@@ -202,7 +185,7 @@ sglang generate \
   --save-output
 ```
 
-Generate a video and upscale each frame by 4×:
+生成视频并对每一帧做 4 倍超分：
 
 ```bash
 sglang generate \
@@ -215,14 +198,11 @@ sglang generate \
 
 ---
 
-## Combining Frame Interpolation and Upscaling
+## 组合帧插值与超分辨率
 
-Frame interpolation and upscaling can be combined in a single run.
-Interpolation is applied first (increasing the frame count), then upscaling is
-applied to every frame (increasing the spatial resolution).
+帧插值和超分辨率可以在一次运行中组合。先应用插值（增加帧数），再对每一帧应用超分辨率（提升空间分辨率）。
 
-Example — generate 5 frames, interpolate to 9 frames, and upscale each frame
-by 4×:
+示例——生成 5 帧、插值到 9 帧、每帧 4 倍超分：
 
 ```bash
 sglang generate \

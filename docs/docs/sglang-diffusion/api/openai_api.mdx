@@ -1,19 +1,19 @@
 ---
 title: OpenAI API
 sidebarTitle: OpenAI API
-description: Image and video generation endpoints with LoRA adapter management.
+description: 图像与视频生成端点，以及 LoRA 适配器管理。
 ---
-The SGLang diffusion HTTP server implements an OpenAI-compatible API for image and video generation, as well as LoRA adapter management.
+SGLang 扩散 HTTP 服务端实现了兼容 OpenAI 的 API，用于图像和视频生成，以及 LoRA 适配器管理。
 
-## Prerequisites
+## 前置条件
 
-- Python 3.11+ if you plan to use the OpenAI Python SDK.
+- 如果你想用 OpenAI Python SDK，需要 Python 3.11 及以上。
 
-## Serve
+## 服务
 
-Launch the server using the `sglang serve` command.
+用 `sglang serve` 命令启动服务端。
 
-### Start the server
+### 启动服务端
 
 ```bash
 SERVER_ARGS=(
@@ -29,22 +29,22 @@ SERVER_ARGS=(
 sglang serve "${SERVER_ARGS[@]}"
 ```
 
-- **--model-path**: Path to the model or model ID.
-- **--port**: HTTP port to listen on (default: `30000`).
+- **--model-path**：模型路径或模型 ID。
+- **--port**：HTTP 监听端口（默认：`30000`）。
 
-**Get Model Information**
+**获取模型信息**
 
-**Endpoint:** `GET /models`
+**端点：** `GET /models`
 
-Returns information about the model served by this server, including model path, task type, pipeline configuration, and precision settings.
+返回本服务端所服务模型的信息，包括模型路径、任务类型、流水线配置和精度设置。
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash curl
 curl -sS -X GET "http://localhost:30010/models"
 ```
 
-**Response Example:**
+**响应示例：**
 
 ```json
 {
@@ -60,21 +60,21 @@ curl -sS -X GET "http://localhost:30010/models"
 
 ---
 
-## Endpoints
+## 端点
 
-### Image Generation
+### 图像生成
 
-The server implements an OpenAI-compatible Images API under the `/v1/images` namespace.
+服务端在 `/v1/images` 命名空间下实现了兼容 OpenAI 的 Images API。
 
-**Create an image**
+**创建一张图像**
 
-**Endpoint:** `POST /v1/images/generations`
+**端点：** `POST /v1/images/generations`
 
-#### Request quality
+#### 请求质量
 
-`quality` selects a model-owned sampling level when that model advertises one: use `lossless` for the reference path or `high` for a validated accelerated path. Omit it (or send OpenAI's default `auto`) to keep the runtime default. It is distinct from `output_quality`, which controls only output-file compression. The same extension is accepted by image edits and video requests.
+`quality` 在模型公布了采样级别时选择模型自有的采样级别：`lossless` 走参考路径，`high` 走经过验证的加速路径。省略它（或传 OpenAI 默认的 `auto`）则保持运行时默认值。它与只控制输出文件压缩的 `output_quality` 不同。同一个扩展参数也适用于图像编辑和视频请求。
 
-**Python Example (b64_json response):**
+**Python 示例（b64_json 响应）：**
 
 ```python Python
 import base64
@@ -94,7 +94,7 @@ with open("output.png", "wb") as f:
     f.write(image_bytes)
 ```
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash curl
 curl -sS -X POST "http://localhost:30010/v1/images/generations" \
@@ -108,17 +108,16 @@ curl -sS -X POST "http://localhost:30010/v1/images/generations" \
       }'
 ```
 
-> **Note**
-> If `response_format=url` is used and cloud storage is not configured, the API returns
-> a relative URL like `/v1/images/<IMAGE_ID>/content`.
+> **注意**
+> 如果使用 `response_format=url` 且没有配置云存储，API 会返回相对 URL，例如 `/v1/images/<IMAGE_ID>/content`。
 
-**Edit an image**
+**编辑一张图像**
 
-**Endpoint:** `POST /v1/images/edits`
+**端点：** `POST /v1/images/edits`
 
-This endpoint accepts a multipart form upload with input images and a text prompt. The server can return either a base64-encoded image or a URL to download the image.
+该端点接受带输入图像和文本提示词的多部分表单上传。服务端可以返回 base64 编码的图像，或返回可下载图像的 URL。
 
-**Curl Example (b64_json response):**
+**Curl 示例（b64_json 响应）：**
 
 ```bash Command
 curl -sS -X POST "http://localhost:30010/v1/images/edits" \
@@ -130,7 +129,7 @@ curl -sS -X POST "http://localhost:30010/v1/images/edits" \
   -F "response_format=b64_json"
 ```
 
-**Curl Example (URL response):**
+**Curl 示例（URL 响应）：**
 
 ```bash Command
 curl -sS -X POST "http://localhost:30010/v1/images/edits" \
@@ -142,14 +141,14 @@ curl -sS -X POST "http://localhost:30010/v1/images/edits" \
   -F "response_format=url"
 ```
 
-**Download image content**
+**下载图像内容**
 
-When `response_format=url` is used with `POST /v1/images/generations` or `POST /v1/images/edits`,
-the API returns a relative URL like `/v1/images/<IMAGE_ID>/content`.
+当 `POST /v1/images/generations` 或 `POST /v1/images/edits` 使用 `response_format=url` 时，
+API 会返回相对 URL，例如 `/v1/images/<IMAGE_ID>/content`。
 
-**Endpoint:** `GET /v1/images/&#123;image_id&#125;/content`
+**端点：** `GET /v1/images/&#123;image_id&#125;/content`
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash
 curl -sS -L "http://localhost:30010/v1/images/<IMAGE_ID>/content" \
@@ -157,15 +156,15 @@ curl -sS -L "http://localhost:30010/v1/images/<IMAGE_ID>/content" \
   -o output.png
 ```
 
-### Video Generation
+### 视频生成
 
-The server implements a subset of the OpenAI Videos API under the `/v1/videos` namespace.
+服务端在 `/v1/videos` 命名空间下实现了 OpenAI Videos API 的一个子集。
 
-**Create a video (text-to-video)**
+**创建一个视频（文生视频）**
 
-**Endpoint:** `POST /v1/videos`
+**端点：** `POST /v1/videos`
 
-**Python Example:**
+**Python 示例：**
 
 ```python Python
 from openai import OpenAI
@@ -179,7 +178,7 @@ video = client.videos.create(
 print(f"Video ID: {video.id}, Status: {video.status}")
 ```
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash curl
 curl -sS -X POST "http://localhost:30010/v1/videos" \
@@ -191,11 +190,11 @@ curl -sS -X POST "http://localhost:30010/v1/videos" \
       }'
 ```
 
-**Create a video (image-to-video)**
+**创建一个视频（图生视频）**
 
-For I2V or TI2V models (e.g., Wan2.1 I2V, LTX-2.3 two-stage), pass an input image via multipart form upload or a reference URL.
+对 I2V 或 TI2V 模型（例如 Wan2.1 I2V、LTX-2.3 两阶段），通过多部分表单上传或参考 URL 传入输入图像。
 
-**Curl Example (multipart form upload):**
+**Curl 示例（多部分表单上传）：**
 
 ```bash Command
 curl -sS -X POST "http://localhost:30010/v1/videos" \
@@ -205,7 +204,7 @@ curl -sS -X POST "http://localhost:30010/v1/videos" \
   -F "size=1280x720"
 ```
 
-**Curl Example (reference URL):**
+**Curl 示例（参考 URL）：**
 
 ```bash Command
 curl -sS -X POST "http://localhost:30010/v1/videos" \
@@ -218,11 +217,11 @@ curl -sS -X POST "http://localhost:30010/v1/videos" \
       }'
 ```
 
-**List videos**
+**列出视频**
 
-**Endpoint:** `GET /v1/videos`
+**端点：** `GET /v1/videos`
 
-**Python Example:**
+**Python 示例：**
 
 ```python Python
 videos = client.videos.list()
@@ -230,18 +229,18 @@ for item in videos.data:
     print(item.id, item.status)
 ```
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash curl
 curl -sS -X GET "http://localhost:30010/v1/videos" \
   -H "Authorization: Bearer sk-proj-1234567890"
 ```
 
-**Download video content**
+**下载视频内容**
 
-**Endpoint:** `GET /v1/videos/&#123;video_id&#125;/content`
+**端点：** `GET /v1/videos/&#123;video_id&#125;/content`
 
-**Python Example:**
+**Python 示例：**
 
 ```python Python
 import time
@@ -260,7 +259,7 @@ with open("output.mp4", "wb") as f:
     f.write(resp.read())
 ```
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash curl
 curl -sS -L "http://localhost:30010/v1/videos/<VIDEO_ID>/content" \
@@ -270,33 +269,33 @@ curl -sS -L "http://localhost:30010/v1/videos/<VIDEO_ID>/content" \
 
 ---
 
-### LoRA Management
+### LoRA 管理
 
-The server supports dynamic loading, merging, and unmerging of LoRA adapters.
+服务端支持 LoRA 适配器的动态加载、合并和取消合并。
 
-**Important Notes:**
-- Mutual Exclusion: Only one LoRA configuration can be active per target at a time
-- Switching: To switch LoRAs, deactivate the current LoRA with `unmerge_lora_weights`, then `set` the new one
-- Caching: The server caches loaded LoRA weights in memory. Switching back to a previously loaded LoRA (same path) has little cost
+**重要说明：**
+- 互斥：每个目标同一时刻只能有一个 LoRA 配置处于激活状态
+- 切换：要切换 LoRA，先用 `unmerge_lora_weights` 停用当前 LoRA，再 `set` 新的
+- 缓存：服务端会在内存中缓存已加载的 LoRA 权重。切回之前加载过的 LoRA（相同路径）成本很低
 
-**Set LoRA Adapter**
+**设置 LoRA 适配器**
 
-Loads one or more LoRA adapters and applies them to the model. By default, regular weights are statically merged, while FSDP-sharded weights use dynamic LoRA to avoid full-gather memory peaks.
+加载一个或多个 LoRA 适配器并应用到模型。默认情况下，常规权重会被静态合并，而 FSDP 分片的权重使用动态 LoRA，以避免 full-gather 内存峰值。
 
-**Endpoint:** `POST /v1/set_lora`
+**端点：** `POST /v1/set_lora`
 
-**Parameters:**
-- `lora_nickname` (string or list of strings, required): A unique identifier for the LoRA adapter(s). Can be a single string or a list of strings for multiple LoRAs
-- `lora_path` (string or list of strings/None, optional): Path to the `.safetensors` file(s) or Hugging Face repo ID(s). Required for the first load; optional if re-activating a cached nickname. If a list, must match the length of `lora_nickname`
-- `target` (string or list of strings, optional): Which transformer(s) to apply the LoRA to. If a list, must match the length of `lora_nickname`. Valid values:
-  - `"all"` (default): Apply to all transformers
-  - `"transformer"`: Apply only to the primary transformer (high noise for Wan2.2)
-  - `"transformer_2"`: Apply only to transformer_2 (low noise for Wan2.2)
-  - `"critic"`: Apply only to the critic model
-- `strength` (float or list of floats, optional): LoRA strength for merge, default 1.0. If a list, must match the length of `lora_nickname`. Values < 1.0 reduce the effect, values > 1.0 amplify the effect
-- `merge_mode` (string, optional): `"auto"` (default server policy), `"merge"` (force static merge), or `"dynamic"` (apply LoRA at forward time)
+**参数：**
+- `lora_nickname`（字符串或字符串列表，必填）：LoRA 适配器的唯一标识。可以是单个字符串，也可以是多个 LoRA 的字符串列表
+- `lora_path`（字符串、字符串列表或 None，可选）：`.safetensors` 文件或 Hugging Face 仓库 ID 的路径。首次加载必填；重新激活已缓存的 nickname 时可省略。如果是列表，长度必须与 `lora_nickname` 一致
+- `target`（字符串或字符串列表，可选）：要应用 LoRA 的 transformer。如果是列表，长度必须与 `lora_nickname` 一致。合法值：
+  - `"all"`（默认）：应用到所有 transformer
+  - `"transformer"`：只应用到主 transformer（Wan2.2 的高噪声部分）
+  - `"transformer_2"`：只应用到 transformer_2（Wan2.2 的低噪声部分）
+  - `"critic"`：只应用到 critic 模型
+- `strength`（浮点数或浮点数列表，可选）：合并时的 LoRA 强度，默认 1.0。如果是列表，长度必须与 `lora_nickname` 一致。小于 1.0 削弱效果，大于 1.0 增强效果
+- `merge_mode`（字符串，可选）：`"auto"`（默认服务端策略）、`"merge"`（强制静态合并）或 `"dynamic"`（在前向时应用 LoRA）
 
-**Single LoRA Example:**
+**单个 LoRA 示例：**
 
 ```bash Command
 curl -X POST http://localhost:30010/v1/set_lora \
@@ -309,7 +308,7 @@ curl -X POST http://localhost:30010/v1/set_lora \
       }'
 ```
 
-**Multiple LoRA Example:**
+**多个 LoRA 示例：**
 
 ```bash Command
 curl -X POST http://localhost:30010/v1/set_lora \
@@ -322,7 +321,7 @@ curl -X POST http://localhost:30010/v1/set_lora \
       }'
 ```
 
-**Multiple LoRA with Same Target:**
+**多个 LoRA 应用同一目标：**
 
 ```bash Command
 curl -X POST http://localhost:30010/v1/set_lora \
@@ -336,26 +335,26 @@ curl -X POST http://localhost:30010/v1/set_lora \
 ```
 
 > [!NOTE]
-> When using multiple LoRAs:
-> - All list parameters (`lora_nickname`, `lora_path`, `target`, `strength`) must have the same length
-> - If `target` or `strength` is a single value, it will be applied to all LoRAs
-> - Multiple LoRAs applied to the same target are applied in order
+> 使用多个 LoRA 时：
+> - 所有列表参数（`lora_nickname`、`lora_path`、`target`、`strength`）的长度必须一致
+> - 如果 `target` 或 `strength` 是单个值，它会应用到所有 LoRA
+> - 应用到同一目标的多个 LoRA 会按顺序应用
 
 
-**Merge LoRA Weights**
+**合并 LoRA 权重**
 
-Manually merges the currently set LoRA weights into the base model.
+手动把当前设置的 LoRA 权重合并进基础模型。
 
 > [!NOTE]
-> With FSDP-sharded weights, manual merge may require a full-gather and can OOM. Use `set_lora` with `merge_mode="auto"` or `"dynamic"` for the lower-peak path.
+> 对 FSDP 分片的权重，手动合并可能需要 full-gather，可能 OOM。低峰值路径请用 `merge_mode="auto"` 或 `"dynamic"` 的 `set_lora`。
 
-**Endpoint:** `POST /v1/merge_lora_weights`
+**端点：** `POST /v1/merge_lora_weights`
 
-**Parameters:**
-- `target` (string, optional): Which transformer(s) to merge. One of "all" (default), "transformer", "transformer_2", "critic"
-- `strength` (float, optional): LoRA strength for merge, default 1.0. Values < 1.0 reduce the effect, values > 1.0 amplify the effect
+**参数：**
+- `target`（字符串，可选）：要合并的 transformer。`"all"`（默认）、`"transformer"`、`"transformer_2"`、`"critic"` 之一
+- `strength`（浮点数，可选）：合并时的 LoRA 强度，默认 1.0。小于 1.0 削弱效果，大于 1.0 增强效果
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash
 curl -X POST http://localhost:30010/v1/merge_lora_weights \
@@ -364,32 +363,32 @@ curl -X POST http://localhost:30010/v1/merge_lora_weights \
 ```
 
 
-**Unmerge LoRA Weights**
+**取消合并 LoRA 权重**
 
-Unmerges the currently active LoRA weights from the base model, restoring it to its original state. This **must** be called before setting a different LoRA.
+把当前激活的 LoRA 权重从基础模型中取消合并，恢复其原始状态。设置不同的 LoRA 之前**必须**调用它。
 
-**Endpoint:** `POST /v1/unmerge_lora_weights`
+**端点：** `POST /v1/unmerge_lora_weights`
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash
 curl -X POST http://localhost:30010/v1/unmerge_lora_weights \
   -H "Content-Type: application/json"
 ```
 
-**List LoRA Adapters**
+**列出 LoRA 适配器**
 
-Returns loaded LoRA adapters and current application status per module.
+返回已加载的 LoRA 适配器以及每个模块当前的应用状态。
 
-**Endpoint:** `GET /v1/list_loras`
+**端点：** `GET /v1/list_loras`
 
-**Curl Example:**
+**Curl 示例：**
 
 ```bash
 curl -sS -X GET "http://localhost:30010/v1/list_loras"
 ```
 
-**Response Example:**
+**响应示例：**
 
 ```json
 {
@@ -411,46 +410,46 @@ curl -sS -X GET "http://localhost:30010/v1/list_loras"
 }
 ```
 
-Notes:
-- If LoRA is not enabled for the current pipeline, the server will return an error.
-- `num_lora_layers_with_weights` counts only layers that have LoRA weights applied for the active adapter.
+说明：
+- 如果当前流水线未启用 LoRA，服务端会返回错误。
+- `num_lora_layers_with_weights` 只统计激活适配器实际应用了 LoRA 权重的层数。
 
-### Example: Switching LoRAs
+### 示例：切换 LoRA
 
-1.  Set LoRA A:
+1.  设置 LoRA A：
     ```bash Command
     curl -X POST http://localhost:30010/v1/set_lora -d '{"lora_nickname": "lora_a", "lora_path": "path/to/A"}'
     ```
-2.  Generate with LoRA A...
-3.  Unmerge LoRA A:
+2.  用 LoRA A 生成……
+3.  取消合并 LoRA A：
     ```bash Command
     curl -X POST http://localhost:30010/v1/unmerge_lora_weights
     ```
-4.  Set LoRA B:
+4.  设置 LoRA B：
     ```bash Command
     curl -X POST http://localhost:30010/v1/set_lora -d '{"lora_nickname": "lora_b", "lora_path": "path/to/B"}'
     ```
-5.  Generate with LoRA B...
+5.  用 LoRA B 生成……
 
-### Adjust Output Quality
+### 调整输出质量
 
-The server supports adjusting output quality and compression levels for both image and video generation through the `output-quality` and `output-compression` parameters.
+服务端支持通过 `output-quality` 和 `output-compression` 参数调整图像和视频生成的输出质量与压缩级别。
 
-#### Parameters
+#### 参数
 
-- **`output-quality`** (string, optional): Preset quality level that automatically sets compression. **Default is `"default"`**. Valid values:
-  - `"maximum"`: Highest quality (100)
-  - `"high"`: High quality (90)
-  - `"medium"`: Medium quality (55)
-  - `"low"`: Lower quality (35)
-  - `"default"`: Auto-adjust based on media type (50 for video, 75 for image)
+- **`output-quality`**（字符串，可选）：自动设置压缩级别的预设质量档。**默认是 `"default"`**。合法值：
+  - `"maximum"`：最高质量（100）
+  - `"high"`：高质量（90）
+  - `"medium"`：中等质量（55）
+  - `"low"`：较低质量（35）
+  - `"default"`：按媒体类型自动调整（视频 50，图像 75）
 
-- **`output-compression`** (integer, optional): Direct compression level override (0-100). **Default is `None`**. When provided (not `None`), takes precedence over `output-quality`.
-  - `0`: Lowest quality, smallest file size
-  - `100`: Highest quality, largest file size
+- **`output-compression`**（整数，可选）：直接覆盖压缩级别（0-100）。**默认是 `None`**。提供时（非 `None`）优先于 `output-quality`。
+  - `0`：最低质量，最小文件体积
+  - `100`：最高质量，最大文件体积
 
-#### Notes
+#### 说明
 
-- **Precedence**: When both `output-quality` and `output-compression` are provided, `output-compression` takes precedence
-- **Format Support**: Quality settings apply to JPEG, and video formats. PNG uses lossless compression and ignores these settings
-- **File Size vs Quality**: Lower compression values (or "low" quality preset) produce smaller files but may show visible artifacts
+- **优先级**：同时提供 `output-quality` 和 `output-compression` 时，`output-compression` 优先
+- **格式支持**：质量设置适用于 JPEG 和视频格式。PNG 使用无损压缩，会忽略这些设置
+- **文件体积与质量**：更低的压缩值（或 "low" 质量预设）会产生更小的文件，但可能出现可见的伪影

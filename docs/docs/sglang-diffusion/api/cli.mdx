@@ -1,18 +1,17 @@
 ---
-title: CLI reference
+title: CLI 参考
 sidebarTitle: CLI
-description: Run one-off generation tasks and launch the HTTP server from the command line.
+description: 从命令行运行一次性生成任务，并启动 HTTP 服务端。
 ---
-Use the CLI for one-off generation with `sglang generate` or to start a persistent HTTP server with `sglang serve`.
+用 `sglang generate` 做一次性生成，或用 `sglang serve` 启动常驻 HTTP 服务端。
 
-### Overlay repos for non-diffusers models
+### 非 diffusers 模型的 Overlay 仓库
 
-If `--model-path` points to a supported non-diffusers source repo, SGLang can resolve it
-through a self-hosted overlay repo.
+如果 `--model-path` 指向一个受支持的非 diffusers 源仓库，SGLang 可以通过自托管的 overlay 仓库解析它。
 
-SGLang first checks a built-in overlay registry. Concrete built-in mappings can be added over time without changing the CLI surface.
+SGLang 首先检查内置的 overlay 注册表。具体的内置映射可以随时间添加，而无需改变 CLI 表面。
 
-Override example:
+覆盖示例：
 
 ```bash Command
 export SGLANG_DIFFUSION_MODEL_OVERLAY_REGISTRY='{
@@ -27,24 +26,21 @@ sglang generate \
   --config configs/wan_s2v.yaml
 ```
 
-The overlay repo should be a complete diffusers-style/componentized repo
+overlay 仓库应该是一个完整的 diffusers 风格/组件化仓库。
 
-You can also pass the overlay repo itself as `--model-path` if it contains `_overlay/overlay_manifest.json`.
+如果某个仓库包含 `_overlay/overlay_manifest.json`，你也可以把 overlay 仓库本身作为 `--model-path` 传入。
 
-Notes:
-1. `SGLANG_DIFFUSION_MODEL_OVERLAY_REGISTRY` is only an optional override for
-development and debugging. It accepts either a JSON object or a path to a JSON
-file, and can extend or replace built-in entries for the current process.
-2. On the first load, SGLang will:
-   - download overlay metadata from the overlay repo
-   - download the required files from the original source repo
-   - materialize a local standard component repo under `~/.cache/sgl_diffusion/materialized_models/`
-3. Later loads reuse the materialized local repo. The materialized repo is what the runtime loads as a normal componentized model directory.
+注意事项：
+1. `SGLANG_DIFFUSION_MODEL_OVERLAY_REGISTRY` 只是用于开发和调试的可选覆盖。它接受 JSON 对象或 JSON 文件路径，可以为当前进程扩展或替换内置条目。
+2. 首次加载时，SGLang 会：
+   - 从 overlay 仓库下载 overlay 元数据
+   - 从原始源仓库下载所需文件
+   - 在 `~/.cache/sgl_diffusion/materialized_models/` 下物化出一个本地标准组件仓库
+3. 之后的加载会复用物化后的本地仓库。运行时把物化仓库当作普通的组件化模型目录加载。
 
+## 快速上手
 
-## Quick Start
-
-### Generate
+### 生成
 
 ```bash Command
 sglang generate \
@@ -53,7 +49,7 @@ sglang generate \
   --save-output
 ```
 
-### Serve
+### 服务
 
 ```bash Command
 sglang serve \
@@ -64,83 +60,83 @@ sglang serve \
   --port 30010
 ```
 
-For request and response examples, see [OpenAI-Compatible API](./openai_api).
+请求和响应示例见 [OpenAI 兼容 API](./openai_api)。
 
 <Tip>
-Use `sglang generate --help` and `sglang serve --help` for the full argument list. The CLI help output is the source of truth for exhaustive flags.
+用 `sglang generate --help` 和 `sglang serve --help` 查看完整参数列表。CLI 帮助输出是穷尽参数列表的权威来源。
 </Tip>
 
-## Common Options
+## 常用选项
 
-### Model and runtime
+### 模型与运行时
 
-- `--model-path {MODEL}`: model path or Hugging Face model ID
-- `--model-variant {NAME}`: semantic checkpoint variant to load when one model repository contains multiple weight partitions. The pipeline maps this stable name to the repository layout before loading; for example, MiniMax-H3 accepts `fl2va` and `ref2va`. This is a server/load-time choice, unlike a request's `task`.
-- `--model-subfolder {PATH}`: advanced direct override for a component subfolder inside the model repository. Prefer `--model-variant` when the pipeline exposes semantic routing. If both are supplied, they must resolve to the same weight partition.
-- `--lora-path {PATH}` and `--lora-nickname {NAME}`: load a LoRA adapter
-- `--lora-merge-mode {auto|merge|dynamic}`: choose how LoRA is applied. `auto` statically merges regular weights and uses dynamic LoRA for FSDP-sharded weights to avoid full-gather peaks.
-- `--num-gpus {N}`: number of GPUs to use
-- `--performance-mode {manual|auto|speed|memory}` / `--mode`: preset for latency/throughput and memory defaults. `auto` is the default and keeps safe offload defaults, using FSDP only for validated DiT-offload replacement paths; `speed` also enables `--enable-torch-compile` unless the model-specific deployment config opts out or you explicitly disable it. Use `manual` to keep performance-related server args under explicit user control. Explicit offload, FSDP, and parallelism flags take precedence in all modes.
-- `--tp-size {N}`: tensor parallelism size. Depending on the pipeline, it can shard the DiT, one or more encoders, or both.
-- `--sp-degree {N}`: sequence parallelism size
-- `--dp-size {N}` (alias `--data-parallel-size`): number of data-parallel replicas. Each replica is a full copy of the engine on `num_gpus / N` GPUs with its own ingress; generation requests round-robin across replicas, realtime sessions stick to the replica holding their state, and control operations (weights, LoRA, memory occupation, shutdown) apply to every replica. Combines with the other parallelism axes (`num_gpus = dp × cfg × tp × sp`); monolithic serving only.
-- `--ulysses-degree {N}` and `--ring-degree {N}`: USP parallelism controls
-- `--kv-gather-degree {N}`: sequence-parallel degree that splits rows inside attention and exchanges with one K/V all-gather (queries stay local) instead of Ulysses all-to-all. Non-causal attention only; does not compose with `--ulysses-degree`/`--ring-degree` yet. When no SP degree is set explicitly, `sp_degree=2` defaults to `kv_gather_degree=2` (its measured-win zone) and higher degrees default to Ulysses; under that auto assignment, attention calls the gather path cannot take fall back to the Ulysses exchange, while an explicit degree fails instead of degrading.
-- `--enable-cfg-parallel {true|false}`: enable or explicitly disable CFG parallelism
-- `--encoder-parallel {auto|fold|dp|replicate}`: how the text/image encoders use the GPUs the DiT replica leaves idle during encoding. `auto` (the default for both `generate` and `serve`) TP-folds an encoder wide enough to pay for the per-layer all-reduce, selects DP for a server batch when it can engage, and otherwise replicates; `fold` forces the shard whenever the dims allow it; `dp` splits a batched encode across ranks and needs `--batching-max-size > 1` to engage; `replicate` encodes redundantly on every rank. `fold` and `replicate` are bitwise-identical to single-GPU encoding. See [Encoder Parallelism](/docs/sglang-diffusion/encoder_parallel).
-- `--warmup-mode {off|request|server}`: control startup warmup for `sglang serve`; `off` skips warmup, `request` primes the request path, and `server` runs a full synthetic server warmup before serving traffic
-- `--enable-torch-compile {true|false}`: compile native diffusion hot paths. When no warmup mode is configured, this also enables server warmup so first real requests do not pay compile latency.
-- `--offload-during-compile {true|false}`: when compile warmup is active, temporarily layerwise-offload DiT weights and move resident non-DiT components off-device so `max-autotune` fits on tighter-memory GPUs; the configured serving residency is restored before real traffic. Skipped under existing layerwise offload, Cache-DiT, or FSDP.
-- `--enable-breakable-cuda-graph {true|false}`: capture supported DiT forwards as breakable CUDA graph segments to reduce launch overhead. Requires `--warmup-resolutions` for every served resolution because each resolution is captured separately.
-- `--bcg-text-buckets {N...}`: prompt-length padding buckets for breakable CUDA graph capture/replay reuse.
-- `--attention-backend {BACKEND}`: attention backend for native SGLang and diffusers pipelines
-- `--component-attention-backends {MAP}`: per-component attention backend overrides, for example `text_encoder=torch_sdpa,transformer=fa`
-- `--attention-backend-config {CONFIG}`: attention backend configuration
-- `--srt-encoder-url {HTTPADDRESS}`: address of SGLang srt server with AR model for GLM-Image like models. See [Models with AR Stage](../models_with_ar).
-- `--srt-encoder-timeout {SECONDS}`: Timeout in seconds for HTTP requests to the SGLang encoder server
-- `--srt-encoder-connection-timeout {SECONDS}`: TCP connection timeout in seconds for SGLang encoder server
-- `--pe-server-url {HTTPADDRESS}`: url of SGLang server hosting the PE model (e.g., for ERNIE-Image). See [Models with Prompt Enhancement](../models_with_pe).
+- `--model-path {MODEL}`：模型路径或 Hugging Face 模型 ID
+- `--model-variant {NAME}`：当单个模型仓库包含多个权重分区时，要加载的语义化检查点变体。加载前，流水线会把这个稳定名称映射到仓库布局；例如 MiniMax-H3 接受 `fl2va` 和 `ref2va`。这是服务端/加载时的选择，不同于请求里的 `task`。
+- `--model-subfolder {PATH}`：对模型仓库内某个组件子文件夹的高级直接覆盖。当流水线暴露语义化路由时，优先用 `--model-variant`。如果两者都提供，它们必须解析到同一个权重分区。
+- `--lora-path {PATH}` 和 `--lora-nickname {NAME}`：加载一个 LoRA 适配器
+- `--lora-merge-mode {auto|merge|dynamic}`：选择 LoRA 的应用方式。`auto` 静态合并常规权重，并对 FSDP 分片的权重使用动态 LoRA，以避免 full-gather 峰值。
+- `--num-gpus {N}`：要使用的 GPU 数量
+- `--performance-mode {manual|auto|speed|memory}` / `--mode`：延迟/吞吐与内存默认值的预设。`auto` 是默认值，保留安全的卸载默认值，只在已验证的 DiT 卸载替代路径上使用 FSDP；`speed` 还会启用 `--enable-torch-compile`，除非模型专属部署配置选择退出或你显式禁用它。用 `manual` 把性能相关的服务端参数保持在显式用户控制下。在所有模式下，显式的卸载、FSDP 和并行参数都优先。
+- `--tp-size {N}`：张量并行大小。取决于流水线，它可以分片 DiT、一个或多个编码器，或两者都分片。
+- `--sp-degree {N}`：序列并行大小
+- `--dp-size {N}`（别名 `--data-parallel-size`）：数据并行副本数。每个副本都是引擎在 `num_gpus / N` 块 GPU 上的完整拷贝，自带入口；生成请求在各副本间轮询分配，实时会话固定在持有其状态的副本上，控制操作（权重、LoRA、内存占用、关闭）会应用到每个副本。可与其它并行轴组合（`num_gpus = dp × cfg × tp × sp`）；仅限单体服务。
+- `--ulysses-degree {N}` 和 `--ring-degree {N}`：USP 并行控制项
+- `--kv-gather-degree {N}`：一种序列并行度数：在注意力内部按行拆分，并用一次 K/V all-gather 交换（查询保持局部），而不是 Ulysses 的 all-to-all。仅限非因果注意力；暂不能与 `--ulysses-degree`/`--ring-degree` 组合。没有显式设置 SP 度数时，`sp_degree=2` 默认使用 `kv_gather_degree=2`（其实测胜出的区间），更高度数默认使用 Ulysses；在该自动分配下，调用 gather 路径的注意力无法回退到 Ulysses 交换，而显式指定度数失败时会直接报错而不是降级。
+- `--enable-cfg-parallel {true|false}`：启用或显式禁用 CFG 并行
+- `--encoder-parallel {auto|fold|dp|replicate}`：文本/图像编码器如何使用 DiT 副本在编码期间闲置的 GPU。`auto`（`generate` 和 `serve` 的默认值）对足够宽的编码器做 TP 折叠以摊薄逐层 all-reduce 成本，在服务器批处理能生效时选择 DP，否则复制；`fold` 只要维度允许就强制分片；`dp` 把批量编码拆分到各 rank，需要 `--batching-max-size > 1` 才能生效；`replicate` 在每个 rank 上冗余编码。`fold` 和 `replicate` 与单 GPU 编码逐位一致。见[编码器并行](/docs/sglang-diffusion/encoder_parallel)。
+- `--warmup-mode {off|request|server}`：控制 `sglang serve` 的启动预热；`off` 跳过预热，`request` 预热请求路径，`server` 在开始服务流量前运行一次完整的合成服务端预热
+- `--enable-torch-compile {true|false}`：编译原生扩散热路径。未配置预热模式时，这也会启用服务端预热，让第一批真实请求不必承担编译延迟。
+- `--offload-during-compile {true|false}`：编译预热激活时，临时逐层卸载 DiT 权重并把常驻的非 DiT 组件移出设备，让 `max-autotune` 在内存更紧的 GPU 上装得下；真实流量到达前恢复配置好的服务驻留方式。在已有逐层卸载、Cache-DiT 或 FSDP 情况下会跳过。
+- `--enable-breakable-cuda-graph {true|false}`：把受支持的 DiT 前向过程捕获为可打断的 CUDA 图段，以降低启动开销。要求为每个服务的分辨率提供 `--warmup-resolutions`，因为每个分辨率都会单独捕获。
+- `--bcg-text-buckets {N...}`：可打断 CUDA 图捕获/重放复用的提示词长度填充桶。
+- `--attention-backend {BACKEND}`：原生 SGLang 和 diffusers 流水线的注意力后端
+- `--component-attention-backends {MAP}`：按组件覆盖注意力后端，例如 `text_encoder=torch_sdpa,transformer=fa`
+- `--attention-backend-config {CONFIG}`：注意力后端配置
+- `--srt-encoder-url {HTTPADDRESS}`：带 AR 模型的 SGLang srt 服务端地址，用于 GLM-Image 这类模型。见[带 AR 阶段的模型](../models_with_ar)。
+- `--srt-encoder-timeout {SECONDS}`：向 SGLang 编码器服务端发起 HTTP 请求的超时时间（秒）
+- `--srt-encoder-connection-timeout {SECONDS}`：SGLang 编码器服务端的 TCP 连接超时时间（秒）
+- `--pe-server-url {HTTPADDRESS}`：托管 PE 模型的 SGLang 服务端 URL（例如用于 ERNIE-Image）。见[带提示词增强的模型](../models_with_pe)。
 
-### Sampling and output
+### 采样与输出
 
-- `--prompt {PROMPT}` and `--negative-prompt {PROMPT}`
-- `--image-path {PATH} [{PATH} ...]`: input image(s) for image-to-video or image-to-image generation
-- `--num-inference-steps {STEPS}` and `--seed {SEED}`
-- `--num-outputs-per-prompt {N}` / `--num-outputs {N}`: generate multiple outputs for each prompt. A scalar seed expands as `seed + output_index`.
-- `--quality {lossless,high}`: request-level quality. `lossless` (default) keeps the exact reference path, bit-exact against the reference implementation; `high` opts into the model-owned validated accelerated path, whose quality stays guaranteed but is not bit-exact. Support and validated deployment constraints are model-specific.
-- `--height {HEIGHT}`, `--width {WIDTH}`, `--num-frames {N}`, `--fps {FPS}`
-- `--output-path {PATH}`, `--output-file-name {NAME}`, `--save-output`, `--return-frames`
+- `--prompt {PROMPT}` 和 `--negative-prompt {PROMPT}`
+- `--image-path {PATH} [{PATH} ...]`：图生视频或图生图生成的输入图像
+- `--num-inference-steps {STEPS}` 和 `--seed {SEED}`
+- `--num-outputs-per-prompt {N}` / `--num-outputs {N}`：为每个提示词生成多个输出。标量种子会按 `seed + output_index` 展开。
+- `--quality {lossless,high}`：请求级质量。`lossless`（默认）保持精确的参考路径，与参考实现逐位一致；`high` 选择模型自有的经过验证的加速路径，其质量仍有保证但不再逐位一致。支持情况和经过验证的部署约束因模型而异。
+- `--height {HEIGHT}`、`--width {WIDTH}`、`--num-frames {N}`、`--fps {FPS}`
+- `--output-path {PATH}`、`--output-file-name {NAME}`、`--save-output`、`--return-frames`
 
-For frame interpolation and upscaling, see [Post-Processing](./post_processing).
+帧插值和超分辨率见[后处理](./post_processing)。
 
-### Quantized transformers
+### 量化 transformer
 
-For quantized transformer checkpoints, prefer:
+对量化 transformer 检查点，优先使用：
 
-- `--model-path` for the base pipeline
-- `--transformer-path` for a quantized `transformers` transformer component folder
-- `--transformer-weights-path` for a quantized safetensors file, directory, or repo
-- `--quantization` for online quantization (apply quantization to unquantized models at load time, activations are quantized dynamically)
-- `--quantization-ignored-layers` layer name patterns to keep unquantized (e.g. `attention.to_`)
+- `--model-path`：基础流水线
+- `--transformer-path`：量化 `transformers` transformer 组件文件夹
+- `--transformer-weights-path`：量化的 safetensors 文件、目录或仓库
+- `--quantization`：在线量化（加载时对未量化模型应用量化，激活动态量化）
+- `--quantization-ignored-layers`：保持未量化的层名模式（例如 `attention.to_`）
 
-See [Quantization](../quantization) for supported quantization families and examples.
+受支持的量化家族和示例见[量化](../quantization)。
 
-### Request logging
+### 请求日志
 
-- `--log-requests`: Log user-facing fields of all requests (default: `False`). The verbosity is decided by `--log-requests-level`.
-- `--log-requests-level &#123;0|1|2|3&#125;`: Verbosity level for request logging (default: `2`). 0: Log metadata (request id). 1: Log metadata and sampling config (seed, steps, guidance, resolution, frames, fps, ...). 2: Log metadata, sampling config and prompt (truncated to 2 KiB). 3: Log metadata, sampling config and full prompt.
-- `--log-requests-format &#123;text|json&#125;`: Format for request logging (default: `text`). `text` is human-readable; `json` outputs structured JSON lines.
-- `--log-requests-target &#123;TARGET...&#125;`: Target(s) for request logging. Use `stdout` for console output and/or directory path(s) for file output. Can specify multiple targets, e.g., `--log-requests-target stdout /my/log/dir`.
+- `--log-requests`：记录所有请求的用户可见字段（默认：`False`）。详细程度由 `--log-requests-level` 决定。
+- `--log-requests-level &#123;0|1|2|3&#125;`：请求日志的详细级别（默认：`2`）。0：记录元数据（请求 id）。1：记录元数据和采样配置（seed、steps、guidance、resolution、frames、fps、……）。2：记录元数据、采样配置和提示词（截断到 2 KiB）。3：记录元数据、采样配置和完整提示词。
+- `--log-requests-format &#123;text|json&#125;`：请求日志的格式（默认：`text`）。`text` 是人类可读的；`json` 输出结构化的 JSON 行。
+- `--log-requests-target &#123;TARGET...&#125;`：请求日志的目标位置。用 `stdout` 输出到控制台，和/或用目录路径输出到文件。可以指定多个目标，例如 `--log-requests-target stdout /my/log/dir`。
 
-## Configuration Files
+## 配置文件
 
-Use `--config` to load JSON or YAML configuration. Command-line flags override values from the config file.
+用 `--config` 加载 JSON 或 YAML 配置。命令行参数会覆盖配置文件中的值。
 
 ```bash Command
 sglang generate --config config.yaml
 ```
 
-Example:
+示例：
 
 ```yaml Config
 model_path: FastVideo/FastHunyuan-diffusers
@@ -162,9 +158,9 @@ vae_sp: true
 enable_torch_compile: false
 ```
 
-## Generate
+## 生成
 
-`sglang generate` runs a single generation job and exits when the job finishes.
+`sglang generate` 运行单个生成任务，任务结束后退出。
 
 ```bash Command
 sglang generate \
@@ -181,16 +177,16 @@ sglang generate \
 ```
 
 <Note>
-HTTP server-only arguments are ignored by `sglang generate`.
+仅 HTTP 服务端使用的参数会被 `sglang generate` 忽略。
 </Note>
 
-For supported native pipelines, set `SGLANG_CACHE_DIT_ENABLED=true` to enable Cache-DiT. For the diffusers backend, use `--backend diffusers --cache-dit-config ...`. See [Cache-DiT](../cache_dit).
+对受支持的原生流水线，设置 `SGLANG_CACHE_DIT_ENABLED=true` 以启用 Cache-DiT。对 diffusers 后端，使用 `--backend diffusers --cache-dit-config ...`。见 [Cache-DiT](../cache_dit)。
 
-For supported image pipelines, breakable CUDA graph can be enabled with `--enable-breakable-cuda-graph`, but you must declare every served resolution in `--warmup-resolutions` so warmup captures matching graph signatures.
+对受支持的图像流水线，可以用 `--enable-breakable-cuda-graph` 启用可打断 CUDA 图，但你必须在 `--warmup-resolutions` 中声明每个服务的分辨率，让预热捕获到匹配的图签名。
 
-### Layerwise Offload
+### 逐层卸载
 
-Use layerwise offload when a large component does not fit comfortably in GPU memory. By default, `--dit-layerwise-offload` only applies to legacy DiT components. Use `--layerwise-offload-components` to select pipeline component names explicitly (`--layerwise-offload-modules` is accepted as an alias):
+当大组件无法舒适地放进 GPU 内存时，使用逐层卸载。默认情况下，`--dit-layerwise-offload` 只适用于旧版 DiT 组件。用 `--layerwise-offload-components` 显式选择流水线组件名（`--layerwise-offload-modules` 被接受为别名）：
 
 ```bash Command
 sglang generate \
@@ -201,11 +197,11 @@ sglang generate \
   --prompt "A quiet city street after rain"
 ```
 
-The values must match keys in the selected pipeline's `pipeline.modules`, such as `transformer`, `text_encoder`, `image_encoder`, `vae`, `condition_image_encoder`, `spatial_upsampler`, or `vocoder`. Use `all` to select every layerwise-offloadable component. Prefer the smallest component set that solves the memory issue because layerwise offload can increase latency.
+这些值必须匹配所选流水线 `pipeline.modules` 中的键，例如 `transformer`、`text_encoder`、`image_encoder`、`vae`、`condition_image_encoder`、`spatial_upsampler` 或 `vocoder`。用 `all` 选择所有可逐层卸载的组件。优先选择能解决内存问题的最小组件集，因为逐层卸载可能增加延迟。
 
-## Serve
+## 服务
 
-`sglang serve` starts the HTTP server and keeps the model loaded for repeated requests.
+`sglang serve` 启动 HTTP 服务端，并让模型保持加载以处理重复请求。
 
 ```bash Command
 sglang serve \
@@ -218,9 +214,9 @@ sglang serve \
   --port 30010
 ```
 
-### Cloud Storage
+### 云存储
 
-SGLang Diffusion can upload generated images and videos to S3-compatible object storage after generation.
+SGLang Diffusion 可以在生成后把图像和视频上传到兼容 S3 的对象存储。
 
 ```bash Command
 export SGLANG_CLOUD_STORAGE_TYPE=s3
@@ -230,11 +226,11 @@ export SGLANG_S3_SECRET_ACCESS_KEY=your-secret-key
 export SGLANG_S3_ENDPOINT_URL=https://minio.example.com
 ```
 
-See [Environment Variables](../environment_variables) for the full set of storage options.
+完整的存储选项见[环境变量](../environment_variables)。
 
-## Component Path Overrides
+## 组件路径覆盖
 
-Override individual pipeline components such as `vae`, `transformer`, or `text_encoder` with `--<component>-path`.
+用 `--<component>-path` 覆盖单个流水线组件，如 `vae`、`transformer` 或 `text_encoder`。
 
 ```bash Command
 sglang serve \
@@ -242,11 +238,11 @@ sglang serve \
   --vae-path fal/FLUX.2-Tiny-AutoEncoder
 ```
 
-The component key must match the key in the model's `model_index.json`, and the path must be either a Hugging Face repo ID or a complete component directory.
+组件键必须匹配模型 `model_index.json` 中的键，路径必须是 Hugging Face 仓库 ID 或完整的组件目录。
 
-## Component Attention Backend Overrides
+## 组件注意力后端覆盖
 
-Use `--component-attention-backends` when one pipeline component needs a different native attention backend from the global `--attention-backend`.
+当某个流水线组件需要与全局 `--attention-backend` 不同的原生注意力后端时，使用 `--component-attention-backends`。
 
 ```bash Command
 sglang generate \
@@ -255,9 +251,9 @@ sglang generate \
   --component-attention-backends text_encoder=torch_sdpa
 ```
 
-The component key must match a pipeline module key such as `text_encoder`, `text_encoder_2`, `transformer`, `transformer_2`, or `connectors`. Component overrides take precedence over the global `--attention-backend` only while that component is being constructed.
+组件键必须匹配流水线模块键，例如 `text_encoder`、`text_encoder_2`、`transformer`、`transformer_2` 或 `connectors`。只有在构建该组件期间，组件覆盖才优先于全局 `--attention-backend`。
 
-You can also pass dotted CLI entries:
+你也可以传点号分隔的 CLI 条目：
 
 ```bash Command
 sglang generate \
@@ -266,60 +262,60 @@ sglang generate \
   --component-attention-backends.transformer fa
 ```
 
-## Diffusers Backend
+## Diffusers 后端
 
-Use `--backend diffusers` to force vanilla diffusers pipelines when no native SGLang implementation exists or when a model requires a custom pipeline class.
+当没有原生 SGLang 实现、或模型需要自定义流水线类时，用 `--backend diffusers` 强制使用原版 diffusers 流水线。
 
-### Key Options
+### 关键选项
 
 <table>
   <thead>
     <tr>
-      <th>Argument</th>
-      <th>Values</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>可选值</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--backend</code></td>
-      <td><code>auto</code>, <code>sglang</code>, <code>diffusers</code></td>
-      <td>Choose native SGLang, force native, or force diffusers</td>
+      <td><code>auto</code>、<code>sglang</code>、<code>diffusers</code></td>
+      <td>选择原生 SGLang、强制原生或强制 diffusers</td>
     </tr>
     <tr>
       <td><code>--attention-backend</code></td>
-      <td><code>flash</code>, <code>_flash_3_hub</code>, <code>sage</code>, <code>xformers</code>, <code>native</code></td>
-      <td>Attention backend for diffusers pipelines</td>
+      <td><code>flash</code>、<code>_flash_3_hub</code>、<code>sage</code>、<code>xformers</code>、<code>native</code></td>
+      <td>diffusers 流水线的注意力后端</td>
     </tr>
     <tr>
       <td><code>--trust-remote-code</code></td>
       <td>flag</td>
-      <td>Required for models with custom pipeline classes</td>
+      <td>自定义流水线类的模型必需</td>
     </tr>
     <tr>
-      <td><code>--vae-tiling</code> and <code>--vae-slicing</code></td>
+      <td><code>--vae-tiling</code> 和 <code>--vae-slicing</code></td>
       <td>flag</td>
-      <td>Lower memory usage for VAE decode</td>
+      <td>降低 VAE 解码的内存占用</td>
     </tr>
     <tr>
-      <td><code>--dit-precision</code> and <code>--vae-precision</code></td>
-      <td><code>fp16</code>, <code>bf16</code>, <code>fp32</code></td>
-      <td>Precision controls</td>
+      <td><code>--dit-precision</code> 和 <code>--vae-precision</code></td>
+      <td><code>fp16</code>、<code>bf16</code>、<code>fp32</code></td>
+      <td>精度控制</td>
     </tr>
     <tr>
       <td><code>--enable-torch-compile</code></td>
       <td>flag</td>
-      <td>Enable <code>torch.compile</code></td>
+      <td>启用 <code>torch.compile</code></td>
     </tr>
     <tr>
       <td><code>--cache-dit-config</code></td>
       <td><code>{PATH}</code></td>
-      <td>Cache-DiT config for diffusers pipelines</td>
+      <td>diffusers 流水线的 Cache-DiT 配置</td>
     </tr>
   </tbody>
 </table>
 
-### Example
+### 示例
 
 ```bash
 sglang generate \
@@ -336,4 +332,4 @@ sglang generate \
   --output-file-name ovis_garden.png
 ```
 
-For pipeline-specific arguments not exposed in the CLI, pass `diffusers_kwargs` in a config file.
+对 CLI 未暴露的流水线专属参数，在配置文件中传入 `diffusers_kwargs`。

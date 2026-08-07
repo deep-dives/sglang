@@ -1,14 +1,18 @@
 ---
-title: "Disaggregated Diffusion Pipeline"
+title: "分离部署的扩散流水线"
 metatags:
-    description: "Split SGLang Diffusion pipelines into independent encoder, denoiser, and decoder services for disaggregated serving."
+    description: "把 SGLang Diffusion 流水线拆分为独立的编码器、去噪器和解码器服务，实现分离部署。"
 ---
 
-Split a monolithic text-to-video/image pipeline into independent **Encoder**, **Denoiser**, and **Decoder** roles, each running on its own GPU(s). A central **DiffusionServer** routes requests through the pipeline.
+把单体式文生视频/图流水线拆分为独立的 **Encoder（编码器）**、**Denoiser（去噪器）** 和 **Decoder（解码器）** 角色，各自运行在各自的 GPU 上。一个中央 **DiffusionServer** 负责把请求在流水线中路由。
 
-## Quick Start
+<Note>
+💡 AI Infra 学习笔记：分离部署（disaggregation）的思路源于 LLM 推理里的 PD 分离——prefill 阶段计算密集、decode 阶段受内存带宽约束，两者混跑会互相拖累，拆开后可独立扩缩容。扩散推理同样适用：DiT 去噪循环（Denoiser）是计算量最大的瓶颈（几十步迭代），而文本/图像编码（Encoder）和 VAE 解码（Decoder）相对轻量且各自有独立的扩展需求。把三者拆成独立服务，就能按各自负载独立加 GPU、做缓存或换硬件，代价是多了进程间张量传输与调度协调的开销。面试中常问的"为什么服务化推理要拆分阶段"正可以从这个角度回答。
+</Note>
 
-Disaggregation is controlled by a single flag: `--disagg-role`. Each component is launched independently, just like LLM PD disaggregation.
+## 快速上手
+
+分离部署由单个参数控制：`--disagg-role`。每个组件独立启动，和 LLM 的 PD 分离方式一样。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -18,40 +22,38 @@ Disaggregation is controlled by a single flag: `--disagg-role`. Each component i
   <thead>
     <tr>
       <th><code>--disagg-role</code></th>
-      <th>What it runs</th>
+      <th>运行的内容</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>monolithic</code></td>
-      <td>(Default) Standard single-server mode</td>
+      <td>（默认）标准单服务端模式</td>
     </tr>
     <tr>
       <td><code>encoder</code></td>
-      <td>All stages with the default <code>RoleType.ENCODER</code> affinity: <code>InputValidationStage</code>, <code>TextEncodingStage</code> (plus <code>ImageEncodingStage</code> / <code>ImageVAEEncodingStage</code> for image-conditioned pipelines), <code>LatentPreparationStage</code>, <code>TimestepPreparationStage</code>, and any model-specific "before denoising" stage (e.g. <code>QwenImageLayeredBeforeDenoisingStage</code>, <code>GlmImageBeforeDenoisingStage</code>).</td>
+      <td>所有默认 <code>RoleType.ENCODER</code> 亲和性的阶段：<code>InputValidationStage</code>、<code>TextEncodingStage</code>（图像条件流水线还包含 <code>ImageEncodingStage</code> / <code>ImageVAEEncodingStage</code>）、<code>LatentPreparationStage</code>、<code>TimestepPreparationStage</code>，以及任何模型专属的"去噪前"阶段（例如 <code>QwenImageLayeredBeforeDenoisingStage</code>、<code>GlmImageBeforeDenoisingStage</code>）。</td>
     </tr>
     <tr>
       <td><code>denoiser</code></td>
-      <td><code>DenoisingStage</code> (and its subclasses: <code>CausalDMDDenoisingStage</code>, <code>DmdDenoisingStage</code>, <code>LTX2AVDenoisingStage</code>, <code>LTX2RefinementStage</code>, <code>Hunyuan3DShapeDenoisingStage</code>, ...) — the DiT forward loop plus the scheduler stepping it drives.</td>
+      <td><code>DenoisingStage</code>（及其子类：<code>CausalDMDDenoisingStage</code>、<code>DmdDenoisingStage</code>、<code>LTX2AVDenoisingStage</code>、<code>LTX2RefinementStage</code>、<code>Hunyuan3DShapeDenoisingStage</code>、……）——即 DiT 前向循环加上驱动它的调度器步进。</td>
     </tr>
     <tr>
       <td><code>decoder</code></td>
-      <td><code>DecodingStage</code> (VAE decode) and its subclasses (<code>LTX2AVDecodingStage</code>, <code>HeliosDecodingStage</code>, ...).</td>
+      <td><code>DecodingStage</code>（VAE 解码）及其子类（<code>LTX2AVDecodingStage</code>、<code>HeliosDecodingStage</code>、……）。</td>
     </tr>
     <tr>
       <td><code>server</code></td>
-      <td>DiffusionServer head node + HTTP server (no GPU)</td>
+      <td>DiffusionServer 头节点 + HTTP 服务端（不需要 GPU）</td>
     </tr>
   </tbody>
 </table>
 
-> Each stage declares its role via the `role_affinity` property on `PipelineStage` (default `ENCODER`). When `--disagg-role` is not `monolithic`, the pipeline only instantiates stages whose affinity matches, so the above table is the source of truth for what actually runs in each process.
+> 每个阶段通过 `PipelineStage` 上的 `role_affinity` 属性声明自己的角色（默认 `ENCODER`）。当 `--disagg-role` 不是 `monolithic` 时，流水线只实例化亲和性匹配的阶段，所以上表是每个进程实际运行内容的唯一权威来源。
 
-### Single-Machine Example (Verified)
+### 单机示例（已验证）
 
-The following commands have been tested end-to-end on an 8×H200 machine with
-`Wan-AI/Wan2.1-T2V-1.3B-Diffusers`. Each role runs on a separate GPU via
-`--base-gpu-id`; the `server` head node requires no GPU.
+以下命令已在 8×H200 机器上使用 `Wan-AI/Wan2.1-T2V-1.3B-Diffusers` 端到端测试通过。每个角色通过 `--base-gpu-id` 运行在单独的 GPU 上；`server` 头节点不需要 GPU。
 
 ```bash
 # Terminal 1: Encoder (GPU 0)
@@ -90,18 +92,17 @@ curl http://127.0.0.1:22000/v1/videos \
     -d '{"model": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers", "prompt": "A curious raccoon exploring a garden, cinematic", "size": "832x480"}'
 ```
 
-> **Tested result (8×H200):**
-> Encoder 2.3 s (TextEncoding) → Denoiser 312.8 s (50 steps, layerwise offload) → Decoder 7.1 s (VAE decode).
-> Total ~322 s for 81-frame 1024×1024 video.
+> **测试结果（8×H200）：**
+> Encoder 2.3 s（TextEncoding）→ Denoiser 312.8 s（50 步，逐层卸载）→ Decoder 7.1 s（VAE 解码）。
+> 81 帧 1024×1024 视频总计约 322 s。
 
-> **Tip:** `--base-gpu-id` controls which physical GPU the role uses.
-> Encoder and Decoder can share a GPU (e.g. both `--base-gpu-id 0`) to save resources,
-> but make sure the combined GPU memory is sufficient.
+> **提示：** `--base-gpu-id` 控制该角色使用哪块物理 GPU。
+> Encoder 和 Decoder 可以共用一块 GPU（例如都设 `--base-gpu-id 0`）以节省资源，
+> 但要确保合并后的 GPU 内存足够。
 
-### Multi-Machine Example
+### 多机示例
 
-The exact same CLI pattern — just replace `127.0.0.1` with actual IPs and add
-RDMA flags for direct transfer:
+CLI 模式完全一样——只需把 `127.0.0.1` 换成实际 IP，并加上用于直接传输的 RDMA 参数：
 
 ```bash
 # Machine A (10.0.0.1): Encoder
@@ -139,11 +140,11 @@ sglang serve --model-path Wan-AI/Wan2.1-T2V-14B-Diffusers \
     --disagg-dispatch-policy max_free_slots
 ```
 
-> ZMQ handles startup order gracefully — instances and head can start in any order.
+> ZMQ 能优雅地处理启动顺序——实例和头节点可以任意顺序启动。
 
-## Multiple Instances per Role
+## 每个角色的多实例
 
-Use semicolons in `--*-urls` to register multiple instances:
+在 `--*-urls` 中用分号注册多个实例：
 
 ```bash
 # 2 encoders + 2 denoisers (4-GPU SP each) + 1 decoder
@@ -153,9 +154,9 @@ sglang serve --model-path ... --disagg-role server \
     --decoder-urls  "tcp://10.0.0.5:35000"
 ```
 
-## Port Convention
+## 端口约定
 
-Result endpoints are derived deterministically from the head node's `--scheduler-port` (default: 5555):
+结果端点由头节点的 `--scheduler-port`（默认：5555）确定性推导而来：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -165,53 +166,53 @@ Result endpoints are derived deterministically from the head node's `--scheduler
   <thead>
     <tr>
       <th>Socket</th>
-      <th>Port</th>
+      <th>端口</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>DS frontend (ROUTER)</td>
+      <td>DS 前端（ROUTER）</td>
       <td><code>scheduler_port</code></td>
     </tr>
     <tr>
-      <td>Encoder result (PULL)</td>
+      <td>Encoder 结果（PULL）</td>
       <td><code>scheduler_port + 1</code></td>
     </tr>
     <tr>
-      <td>Denoiser result (PULL)</td>
+      <td>Denoiser 结果（PULL）</td>
       <td><code>scheduler_port + 2</code></td>
     </tr>
     <tr>
-      <td>Decoder result (PULL)</td>
+      <td>Decoder 结果（PULL）</td>
       <td><code>scheduler_port + 3</code></td>
     </tr>
   </tbody>
 </table>
 
-Role instances derive their result endpoint automatically from `--disagg-server-addr`. No manual endpoint configuration needed.
+角色实例会自动从 `--disagg-server-addr` 推导自己的结果端点。无需手动配置端点。
 
-## Transfer Mechanism
+## 传输机制
 
-Tensor data between roles (encoder→denoiser, denoiser→decoder) is transferred via a P2P transfer engine. The DiffusionServer only routes lightweight control messages (alloc/push/ready); actual tensor data flows directly between instances.
+角色之间的张量数据（encoder→denoiser、denoiser→decoder）通过 P2P 传输引擎传递。DiffusionServer 只路由轻量控制消息（alloc/push/ready）；真正的张量数据直接在实例之间流动。
 
-**mooncake-transfer-engine** is required for disaggregated diffusion. It provides RDMA for direct GPU-to-GPU data movement.
+扩散模型的分离部署需要 **mooncake-transfer-engine**。它提供 RDMA 支持 GPU 到 GPU 的直接数据传输。
 
 ```bash
 pip install mooncake-transfer-engine
 ```
 
-### Transfer Flow
+### 传输流程
 
-1. **Sender** (encoder/denoiser) stages tensors: async copy to transfer buffer (GPU or CPU pinned, depending on GPUDirect support), overlapped with metadata JSON serialization.
-2. **Sender** sends `transfer_staged` control message to DiffusionServer (metadata only, no tensor data).
-3. **DiffusionServer** sends `transfer_alloc` to receiver → receiver allocates buffer slot → replies `transfer_allocated`.
-4. **DiffusionServer** sends `transfer_push` to receiver with sender's address info.
-5. **Receiver** pulls data via transfer engine (Mooncake RDMA or mock), sends `transfer_ready`.
-6. **Receiver** loads tensors async on a dedicated transfer stream, overlapped with the previous request's compute.
+1. **发送方**（encoder/denoiser）暂存张量：异步拷贝到传输缓冲区（GPU 或 CPU 锁页，取决于 GPUDirect 支持情况），与元数据 JSON 序列化重叠进行。
+2. **发送方**向 DiffusionServer 发送 `transfer_staged` 控制消息（只含元数据，不含张量数据）。
+3. **DiffusionServer** 向接收方发送 `transfer_alloc` → 接收方分配缓冲区槽位 → 回复 `transfer_allocated`。
+4. **DiffusionServer** 向接收方发送带发送方地址信息的 `transfer_push`。
+5. **接收方**通过传输引擎（Mooncake RDMA 或 mock）拉取数据，发送 `transfer_ready`。
+6. **接收方**在专用传输流上异步加载张量，与上一个请求的计算重叠进行。
 
-Decoder results (final output) flow back through DiffusionServer as raw ZMQ frames to the HTTP client.
+解码器结果（最终输出）以原始 ZMQ 帧的形式经 DiffusionServer 回流到 HTTP 客户端。
 
-### RDMA Flags
+### RDMA 参数
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -221,33 +222,33 @@ Decoder results (final output) flow back through DiffusionServer as raw ZMQ fram
   </colgroup>
   <thead>
     <tr>
-      <th>Flag</th>
-      <th>Default</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>默认值</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--disagg-p2p-hostname</code></td>
       <td><code>127.0.0.1</code></td>
-      <td>RDMA-reachable hostname/IP of this instance</td>
+      <td>本实例可被 RDMA 访问的主机名/IP</td>
     </tr>
     <tr>
       <td><code>--disagg-ib-device</code></td>
       <td><code>None</code></td>
-      <td>InfiniBand device (e.g., <code>mlx5_0</code>, <code>mlx5_roce0</code>)</td>
+      <td>InfiniBand 设备（例如 <code>mlx5_0</code>、<code>mlx5_roce0</code>）</td>
     </tr>
     <tr>
       <td><code>--disagg-transfer-pool-size</code></td>
       <td>256 MiB</td>
-      <td>Pinned memory pool per instance</td>
+      <td>每个实例的锁页内存池</td>
     </tr>
   </tbody>
 </table>
 
-Set `--disagg-p2p-hostname` to the actual IP on each machine. For multi-machine, `--disagg-ib-device` specifies the RDMA NIC.
+在每台机器上把 `--disagg-p2p-hostname` 设为实际 IP。多机部署中，`--disagg-ib-device` 指定 RDMA 网卡。
 
-## Per-Role Parallelism
+## 每个角色的并行
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -256,29 +257,29 @@ Set `--disagg-p2p-hostname` to the actual IP on each machine. For multi-machine,
   </colgroup>
   <thead>
     <tr>
-      <th>Flag</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--encoder-tp</code></td>
-      <td>Encoder tensor parallelism</td>
+      <td>Encoder 张量并行</td>
     </tr>
     <tr>
       <td><code>--denoiser-tp</code> / <code>--denoiser-sp</code> / <code>--denoiser-ulysses</code> / <code>--denoiser-ring</code></td>
-      <td>Denoiser parallelism</td>
+      <td>Denoiser 并行</td>
     </tr>
     <tr>
       <td><code>--decoder-sp</code></td>
-      <td>Decoder sequence parallelism</td>
+      <td>Decoder 序列并行</td>
     </tr>
   </tbody>
 </table>
 
-If not specified, parallelism is auto-derived from `--num-gpus`.
+未指定时，并行度会从 `--num-gpus` 自动推导。
 
-## Other Options
+## 其它选项
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -288,28 +289,28 @@ If not specified, parallelism is auto-derived from `--num-gpus`.
   </colgroup>
   <thead>
     <tr>
-      <th>Flag</th>
-      <th>Default</th>
-      <th>Description</th>
+      <th>参数</th>
+      <th>默认值</th>
+      <th>描述</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>--disagg-timeout</code></td>
       <td><code>600</code></td>
-      <td>Timeout (seconds) for pending requests</td>
+      <td>挂起请求的超时时间（秒）</td>
     </tr>
     <tr>
       <td><code>--disagg-dispatch-policy</code></td>
       <td><code>round_robin</code></td>
-      <td><code>round_robin</code> or <code>max_free_slots</code></td>
+      <td><code>round_robin</code> 或 <code>max_free_slots</code></td>
     </tr>
   </tbody>
 </table>
 
 ## Python API
 
-For programmatic single-machine deployment, `launch_pool_disagg_server()` is available:
+要用编程方式做单机部署，可以使用 `launch_pool_disagg_server()`：
 
 ```python
 from sglang.multimodal_gen.runtime.server_args import ServerArgs
@@ -329,7 +330,7 @@ launch_pool_disagg_server(
 )
 ```
 
-## Architecture
+## 架构
 
 ```
 Client ─── HTTP (port 30000) ──► FastAPI Server
@@ -348,7 +349,7 @@ Client ─── HTTP (port 30000) ──► FastAPI Server
                     PULL results ◄────┘  (decoder → DS → client)
 ```
 
-### Request State Machine
+### 请求状态机
 
 ```
 PENDING → ENCODER_WAITING → ENCODER_RUNNING → ENCODER_DONE
@@ -358,4 +359,4 @@ PENDING → ENCODER_WAITING → ENCODER_RUNNING → ENCODER_DONE
                                     DECODER_WAITING → DECODER_RUNNING → DONE
 ```
 
-Any state can transition to `FAILED` or `TIMED_OUT`.
+任何状态都可以转换到 `FAILED` 或 `TIMED_OUT`。

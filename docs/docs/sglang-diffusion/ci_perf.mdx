@@ -1,32 +1,32 @@
 ---
-title: "CI Performance Baselines"
-description: "Generate and update diffusion performance baselines used in CI."
+title: "CI 性能基线"
+description: "生成并更新 CI 中使用的扩散模型性能基线。"
 ---
-## Perf Baseline Generation Script
+## 性能基线生成脚本
 
-`python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py` starts a local diffusion server, issues requests for selected test cases, aggregates stage/denoise-step/E2E timings from the perf log, and writes the results back to the `scenarios` section of `perf_baselines.json`.
+`python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py` 会启动一个本地扩散服务端，为选中的测试用例发起请求，从性能日志中汇总各阶段/去噪步数/端到端（E2E）耗时，并把结果写回 `perf_baselines.json` 的 `scenarios` 部分。
 
-### Usage
+### 用法
 
-Update a single case:
+更新单个用例：
 
 ```bash
 python python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py --case qwen_image_t2i
 ```
 
-Select by regex:
+按正则表达式筛选：
 
 ```bash
 python python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py --match 'qwen_image_.*'
 ```
 
-Run all keys from the baseline file `scenarios`:
+运行基线文件 `scenarios` 中的全部键：
 
 ```bash
 python python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py --all-from-baseline
 ```
 
-Specify input/output paths and timeout:
+指定输入/输出路径与超时时间：
 
 ```bash
 python python/sglang/multimodal_gen/test/scripts/gen_perf_baselines.py --baseline python/sglang/multimodal_gen/test/server/perf_baselines.json --out /tmp/perf_baselines.json --timeout 600

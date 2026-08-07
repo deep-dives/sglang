@@ -1,17 +1,17 @@
 ---
 title: SGLang Diffusion
-description: Accelerated image and video generation with diffusion models.
+description: 利用扩散模型加速图像与视频生成。
 ---
-SGLang Diffusion is a high-performance inference framework for image and video generation. It provides native SGLang pipelines, diffusers backend support, an OpenAI-compatible server, and an optimized kernel stack built on both precompiled `sgl-kernel` operators and JIT kernels for key inference paths.
+SGLang Diffusion 是一个用于图像与视频生成的高性能推理框架。它提供原生的 SGLang 管线、diffusers 后端支持、兼容 OpenAI 的服务端，以及一套基于预编译 `sgl-kernel` 算子与 JIT kernel 构建的优化内核栈，覆盖关键推理路径。
 
-## Key Features
+## 核心特性
 
-- Broad model support across Wan, Hunyuan, Qwen-Image, FLUX, Z-Image, GLM-Image, and more
-- Fast inference with `sgl-kernel`, JIT kernels, scheduler improvements, and caching acceleration
-- Multiple interfaces: `sglang generate`, `sglang serve`, and an OpenAI-compatible API
-- Multi-platform support for NVIDIA, AMD, Intel XPU, Ascend, Apple Silicon, and Moore Threads
+- 广泛支持 Wan、Hunyuan、Qwen-Image、FLUX、Z-Image、GLM-Image 等模型
+- 借助 `sgl-kernel`、JIT kernel、调度器改进与缓存加速，实现快速推理
+- 多种接口：`sglang generate`、`sglang serve`，以及兼容 OpenAI 的 API
+- 多平台支持：NVIDIA、AMD、Intel XPU、Ascend、Apple Silicon 与摩尔线程
 
-## Quick Start
+## 快速上手
 
 ```bash
 uv pip install "sglang[diffusion]" --prerelease=allow
@@ -27,36 +27,40 @@ sglang generate --model-path Qwen/Qwen-Image \
 sglang serve --model-path Qwen/Qwen-Image --port 30010
 ```
 
-## Start Here
+<Note>
+💡 AI Infra 学习笔记：扩散模型推理与 LLM 推理的工作方式很不一样——LLM 是自回归式逐 token 生成（一次前向只产生一个 token），而扩散模型是迭代式去噪：固定步数内对同一份潜变量反复做全量前向，逐步把噪声"打磨"成图像/视频。因此扩散推理的优化重点是减少单步前向成本（如 Attention 后端、并行、缓存），而不是 KV 缓存或投机解码那一套。这也是评估 SGLang Diffusion 优化手段时的基本坐标系。
+</Note>
 
-- [Installation](/docs/sglang-diffusion/installation): install SGLang Diffusion and platform dependencies
-- [Supported Models and Optimization Compatibility](/docs/sglang-diffusion/compatibility_matrix): check supported model families, long-tail coverage, and optimization support
-- [CLI](/docs/sglang-diffusion/api/cli): run one-off generation jobs or launch a persistent server
-- [OpenAI-Compatible API](/docs/sglang-diffusion/api/openai_api): send image and video requests to the HTTP server
-- [Performance Overview](/docs/sglang-diffusion/performance-optimization): choose speed, memory, parallelism, caching, and quality-tradeoff levers
-- [Caching Acceleration](/docs/sglang-diffusion/caching-acceleration): use Cache-DiT, TeaCache, or Spectrum to reduce denoising cost
-- [Quantization](/docs/sglang-diffusion/quantization): load quantized transformer checkpoints
-- [Contributing](/docs/sglang-diffusion/contributing): contribution workflow, adding new models, and CI perf baselines
+## 从这里开始
 
-## Additional Documentation
+- [安装](/docs/sglang-diffusion/installation)：安装 SGLang Diffusion 与各平台依赖
+- [支持的模型与优化兼容性](/docs/sglang-diffusion/compatibility_matrix)：查看支持的模型家族、长尾覆盖与优化支持情况
+- [CLI](/docs/sglang-diffusion/api/cli)：运行单次生成任务或启动常驻服务端
+- [兼容 OpenAI 的 API](/docs/sglang-diffusion/api/openai_api)：向 HTTP 服务端发送图像与视频请求
+- [性能概览](/docs/sglang-diffusion/performance-optimization)：在速度、内存、并行、缓存与质量权衡之间选择合适的优化手段
+- [缓存加速](/docs/sglang-diffusion/caching-acceleration)：使用 Cache-DiT、TeaCache 或 Spectrum 降低去噪成本
+- [量化](/docs/sglang-diffusion/quantization)：加载量化后的 transformer 检查点
+- [贡献指南](/docs/sglang-diffusion/contributing)：贡献流程、新增模型与 CI 性能基线
 
-- [Post-Processing](/docs/sglang-diffusion/api/post_processing): frame interpolation and upscaling
-- [Models with AR Stage](/docs/sglang-diffusion/models_with_ar): run hybrid diffusion pipelines like GLM-Image with a separate AR encoder server
-- [Models with Prompt Enhancement](/docs/sglang-diffusion/models_with_pe): run ERNIE-Image with either built-in PE or a separate PE server
-- [Deployment and Performance Modes](/docs/sglang-diffusion/deployment_cookbook): choose `--performance-mode`, offload, FSDP, CFG parallelism, SP, and TP
-- [Attention Backends](/docs/sglang-diffusion/attention_backends): choose the best backend for your model and hardware
-- [Sequence Parallelism](/docs/sglang-diffusion/ring_sp_performance): configure SP, Ulysses, and ring-based splitting for long sequences
-- [Encoder Parallelism](/docs/sglang-diffusion/encoder_parallel): fold, data-parallel, or replicate the text/image encoders across idle GPUs
-- [Inference Batching](/docs/sglang-diffusion/dynamic_batching): batch compatible native diffusion requests during serving
-- [Progressive Resolution Generation](/docs/sglang-diffusion/progressive_resolution): run early denoising steps at lower latent resolution for selected pipelines
-- [Environment Variables](/docs/sglang-diffusion/environment_variables): platform, caching, storage, and debugging configuration
+## 更多文档
 
-## Developer Documentation
+- [后处理](/docs/sglang-diffusion/api/post_processing)：帧插值与超分辨率
+- [带 AR 阶段的模型](/docs/sglang-diffusion/models_with_ar)：运行 GLM-Image 等混合扩散管线，配合独立的 AR 编码器服务端
+- [带提示词增强的模型](/docs/sglang-diffusion/models_with_pe)：使用内置 PE 或独立 PE 服务端运行 ERNIE-Image
+- [部署与性能模式](/docs/sglang-diffusion/deployment_cookbook)：选择 `--performance-mode`、卸载、FSDP、CFG 并行、SP 与 TP
+- [Attention 后端](/docs/sglang-diffusion/attention_backends)：为你的模型与硬件选择最佳后端
+- [序列并行](/docs/sglang-diffusion/ring_sp_performance)：为长序列配置 SP、Ulysses 与环形切分
+- [编码器并行](/docs/sglang-diffusion/encoder_parallel)：将文本/图像编码器在空闲 GPU 上折叠、数据并行或复制
+- [推理批处理](/docs/sglang-diffusion/dynamic_batching)：服务化过程中对兼容的原生扩散请求进行批处理
+- [渐进式分辨率生成](/docs/sglang-diffusion/progressive_resolution)：在选定的管线中，以更低的潜变量分辨率运行早期去噪步骤
+- [环境变量](/docs/sglang-diffusion/environment_variables)：平台、缓存、存储与调试配置
 
-- [Support New Models](/docs/sglang-diffusion/support_new_models): implementation guide for new diffusion pipelines
-- [CI Performance Baselines](/docs/sglang-diffusion/ci_perf): generate and update performance baselines used in CI
+## 开发者文档
 
-## References
+- [支持新模型](/docs/sglang-diffusion/support_new_models)：新增扩散管线的实现指南
+- [CI 性能基线](/docs/sglang-diffusion/ci_perf)：生成并更新 CI 中使用的性能基线
+
+## 参考资料
 
 - [SGLang GitHub](https://github.com/sgl-project/sglang)
 - [Cache-DiT](https://github.com/vipshop/cache-dit)

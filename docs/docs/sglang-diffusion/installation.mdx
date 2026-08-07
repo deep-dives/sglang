@@ -1,14 +1,18 @@
 ---
-title: Install SGLang Diffusion
-description: Install SGLang Diffusion on NVIDIA, AMD, MUSA, and Ascend platforms.
+title: 安装 SGLang Diffusion
+description: 在 NVIDIA、AMD、MUSA 与 Ascend 平台上安装 SGLang Diffusion。
 ---
-You can install SGLang-Diffusion using one of the methods below. The standard installation already includes SGLang's optimized kernel stack, including both `sgl-kernel` and JIT kernels used by diffusion workloads.
+你可以通过以下任一方式安装 SGLang-Diffusion。标准安装已经包含 SGLang 的优化内核栈，包括扩散工作负载用到的 `sgl-kernel` 与 JIT kernel。
 
-## Standard Installation (NVIDIA GPUs)
+<Note>
+💡 AI Infra 学习笔记：SGLang Diffusion 的"安装"不只是装一个 Python 包——它还捆绑了 `sgl-kernel`（针对扩散模型关键算子预编译的 CUDA 扩展）与 JIT kernel（按需即时编译的内核）。这种"预编译 + JIT"的组合是推理引擎的常见架构：预编译算子保证热路径性能，JIT 内核补足灵活性，代价是安装与启动时多一层编译/调度逻辑。
+</Note>
 
-### Method 1: With pip or uv
+## 标准安装（NVIDIA GPU）
 
-It is recommended to use uv for a faster installation:
+### 方法一：使用 pip 或 uv
+
+推荐使用 uv 安装，速度更快：
 
 ```bash Command
 pip install --upgrade pip
@@ -16,7 +20,7 @@ pip install uv
 uv pip install "sglang[diffusion]" --prerelease=allow
 ```
 
-### Method 2: From source
+### 方法二：从源码安装
 
 ```bash Command
 # Use the latest release branch
@@ -31,10 +35,10 @@ pip install -e "python[diffusion]"
 uv pip install -e "python[diffusion]" --prerelease=allow
 ```
 
-### Method 3: Using Docker
+### 方法三：使用 Docker
 
-The Docker images are available on Docker Hub at [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang), built from the [Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/Dockerfile).
-Replace `<secret>` below with your HuggingFace Hub [token](https://huggingface.co/docs/hub/en/security-tokens).
+Docker 镜像发布在 Docker Hub 的 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang)，由 [Dockerfile](https://github.com/sgl-project/sglang/blob/main/docker/Dockerfile) 构建。
+把下面的 `<secret>` 替换成你的 HuggingFace Hub [token](https://huggingface.co/docs/hub/en/security-tokens)。
 
 ```bash Command
 docker run --gpus all \
@@ -55,9 +59,9 @@ docker run --gpus all \
     '
 ```
 
-## Platform-Specific: ROCm (AMD GPUs)
+## 平台专用：ROCm（AMD GPU）
 
-For AMD Instinct GPUs (e.g., MI300X), use a ROCm-enabled Docker image from [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang). The tag below is an example for ROCm 7.0 on MI300X and may lag the latest release tag:
+对于 AMD Instinct GPU（例如 MI300X），请使用 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang) 提供的支持 ROCm 的 Docker 镜像。下面的标签是针对 MI300X 上 ROCm 7.0 的示例，可能滞后于最新发布标签：
 
 ```bash Command
 docker run --device=/dev/kfd --device=/dev/dri --ipc=host \
@@ -67,11 +71,11 @@ docker run --device=/dev/kfd --device=/dev/dri --ipc=host \
   sglang generate --model-path black-forest-labs/FLUX.1-dev --prompt "A logo With Bold Large text: SGL Diffusion" --save-output
 ```
 
-For detailed ROCm system configuration and installation from source, see [AMD GPUs](../hardware-platforms/amd_gpu).
+关于 ROCm 系统配置与源码安装的详细信息，请参考 [AMD GPU](../hardware-platforms/amd_gpu)。
 
-## Platform-Specific: MUSA (Moore Threads GPUs)
+## 平台专用：MUSA（摩尔线程 GPU）
 
-For Moore Threads GPUs (MTGPU) with the MUSA software stack, follow the platform guide first. If the source tree still requires the alternate platform `pyproject` fallback, keep a backup of the default file before switching:
+对于使用 MUSA 软件栈的摩尔线程 GPU（MTGPU），请先按平台指南操作。如果源码树仍需要备用平台的 `pyproject` 回退方案，切换前请先备份默认文件：
 
 ```bash Command
 # Clone the repository
@@ -85,19 +89,19 @@ cp python/pyproject_other.toml python/pyproject.toml
 pip install -e "python[all_musa]"
 ```
 
-## Platform-Specific: Intel XPU
+## 平台专用：Intel XPU
 
-For Intel Data Center GPU Max or Arc GPUs, follow the [XPU installation guide](../hardware-platforms/xpu) to set up the base environment, then install diffusion dependencies:
+对于 Intel Data Center GPU Max 或 Arc GPU，请先按 [XPU 安装指南](../hardware-platforms/xpu) 搭建基础环境，然后安装扩散模型依赖：
 
 ```bash Command
 pip install -e "python[diffusion]"
 ```
 
-## Platform-Specific: Ascend NPU
+## 平台专用：Ascend NPU
 
-For Ascend NPU, please follow the [NPU installation guide](../hardware-platforms/ascend-npus/getting-started/installation).
+对于 Ascend NPU，请按 [NPU 安装指南](../hardware-platforms/ascend-npus/getting-started/installation) 操作。
 
-Quick test:
+快速测试：
 
 ```bash Command
 sglang generate --model-path black-forest-labs/FLUX.1-dev \
@@ -105,9 +109,9 @@ sglang generate --model-path black-forest-labs/FLUX.1-dev \
     --save-output
 ```
 
-## Platform-Specific: Apple MPS
+## 平台专用：Apple MPS
 
-For Apple MPS, follow the instructions below to install from source. If the source tree still requires the alternate platform `pyproject` fallback, keep a backup of the default file before switching:
+对于 Apple MPS，请按以下步骤从源码安装。如果源码树仍需要备用平台的 `pyproject` 回退方案，切换前请先备份默认文件：
 
 ```bash Command
 # Install ffmpeg

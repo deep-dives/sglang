@@ -1,77 +1,76 @@
 ---
-title: "Contributing to SGLang Diffusion"
+title: "为 SGLang Diffusion 做贡献"
 metatags:
-    description: "This guide outlines the requirements for contributing to the SGLang Diffusion module (sglang.multimodalgen)."
+    description: "本指南概述了为 SGLang Diffusion 模块（sglang.multimodal_gen）做贡献的要求。"
 ---
 
-This guide outlines the requirements for contributing to the SGLang Diffusion module (`sglang.multimodal_gen`).
+本指南概述了为 SGLang Diffusion 模块（`sglang.multimodal_gen`）做贡献的要求。
 
-## Contributor Guides
+## 贡献者指南
 
-- [Support New Models](./support_new_models): implementation guide for adding new diffusion pipelines
-- [CI Performance](./ci_perf): update and regenerate perf baselines
+- [支持新的模型](./support_new_models)：添加新的扩散流水线的实现指南
+- [CI 性能](./ci_perf)：更新并重新生成性能基线
 
+## 关于 AI 辅助（"Vibe Coding"）PR
 
-## On AI-Assisted ("Vibe Coding") PRs
+欢迎 Vibe Coding 产出的 PR——我们看的是代码质量，而不是它怎么来的。所有 PR 的标准一致：
 
-Vibe-coded PRs are welcome — we judge code quality, not how it was produced. The bar is the same for all PRs:
+- **不要过度注释。** 如果名字已经把意思说清楚了，就不要写 docstring。
+- **不要过度捕获异常。** 不要为实际几乎不会发生的错误加防护。
+- **提交前先测试。** AI 生成的代码可能隐藏微妙错误——务必端到端验证正确性。
 
-- **No over-commenting.** If the name says it all, skip the docstring.
-- **No over-catching.** Don't guard against errors that virtually never happen in practice.
-- **Test before submitting.** AI-generated code can be subtly wrong — verify correctness end-to-end.
+## 提交信息规范
 
-## Commit Message Convention
+我们采用结构化的提交信息格式，以保持历史记录整洁。
 
-We follow a structured commit message format to maintain a clean history.
-
-**Format:**
+**格式：**
 ```text
 [diffusion] <scope>: <subject>
 ```
 
-**Examples:**
+**示例：**
 - `[diffusion] cli: add --perf-dump-path argument`
 - `[diffusion] scheduler: fix deadlock in batch processing`
 - `[diffusion] model: support Stable Diffusion 3.5`
 
-**Rules:**
-- **Prefix**: Always start with `[diffusion]`.
-- **Scope** (Optional): `cli`, `scheduler`, `model`, `pipeline`, `docs`, etc.
-- **Subject**: Imperative mood, short and clear (e.g., "add feature" not "added feature").
+**规则：**
+- **前缀**：一律以 `[diffusion]` 开头。
+- **作用域**（可选）：`cli`、`scheduler`、`model`、`pipeline`、`docs` 等。
+- **主题**：用祈使句，简短清晰（例如 "add feature"，而不是 "added feature"）。
 
-## Performance Reporting
+## 性能报告
 
-For PRs that impact **latency**, **throughput**, or **memory usage**, you **should** provide a performance comparison report.
+对于会影响 **延迟**、**吞吐量** 或 **内存占用** 的 PR，你**应该**提供一份性能对比报告。
 
-### How to Generate a Report
+### 如何生成报告
 
-1.  **Baseline**: run the benchmark (for a single generation task)
+1.  **基线**：运行基准测试（针对单个生成任务）
     ```bash
     $ sglang generate --model-path <model> --prompt "A benchmark prompt" --perf-dump-path baseline.json
     ```
 
-2.  **New**: run the same benchmark, without modifying any server_args or sampling_params
+2.  **新实现**：运行同样的基准测试，不改动任何 server_args 或 sampling_params
     ```bash
     $ sglang generate --model-path <model> --prompt "A benchmark prompt" --perf-dump-path new.json
     ```
 
-3.  **Compare**: run the compare script, which will print a Markdown table to the console
+3.  **对比**：运行对比脚本，它会向控制台输出一张 Markdown 表格
     ```bash
     $ python python/sglang/multimodal_gen/benchmarks/compare_perf.py baseline.json new.json [new2.json ...]
     ### Performance Comparison Report
     ...
     ```
-4. **Paste**: paste the table into the PR description
+4. **粘贴**：把表格粘贴到 PR 描述里
 
-## CI-Based Change Protection
+## 基于 CI 的变更保护
 
-Consider adding tests to the `pr-test` or `nightly-test` suites to safeguard your changes, especially for PRs that:
+可以考虑往 `pr-test` 或 `nightly-test` 测试套件里加测试来保护你的改动，尤其是当 PR：
 
-- support a new model
-    - add a testcase for this new model to `testcase_configs.py`
-- support or fix important features
-- significantly improve performance
+- 支持了新模型
+    - 在 `testcase_configs.py` 中为这个新模型添加测试用例
+- 支持或修复了重要功能
+- 显著提升了性能
 
-Please run the according testcase, then update/add the baseline to `perf_baselines.json` by following the instruction in console if applicable.
+请运行对应的测试用例，然后按控制台提示（如有）更新或新增 `perf_baselines.json` 中的基线。
 
-See [test](https://github.com/sgl-project/sglang/tree/main/python/sglang/multimodal_gen/test) for examples
+示例参见 [test](https://github.com/sgl-project/sglang/tree/main/python/sglang/multimodal_gen/test)

@@ -1,13 +1,13 @@
 ---
-title: "Diffusion Models with Prompt Enhancement (PE)"
-description: "Run ERNIE-Image with built-in prompt enhancement or a separate SGLang-served PE model."
+title: "带提示词增强（PE）的扩散模型"
+description: "使用内置提示词增强或独立的 SGLang PE 模型服务运行 ERNIE-Image。"
 ---
 
-## Quick Start
+## 快速上手
 
-By default, the PE model is loaded by the diffusion model server, which may not provide optimal performance. For higher performance, the PE model can be deployed as a separate SGLang server. This document uses `baidu/ERNIE-Image` as an example.
+默认情况下，PE 模型由扩散模型服务端加载，这可能无法提供最优性能。为了更高的性能，可以把 PE 模型部署为独立的 SGLang 服务端。本文档以 `baidu/ERNIE-Image` 为例。
 
-Run the model with the built-in Transformers PE implementation (default):
+使用内置 Transformers PE 实现运行模型（默认）：
 
 ```bash
 # Terminal 1: launch server
@@ -27,7 +27,7 @@ curl -X POST http://${HOST}:${PORT}/v1/images/generations \
   }'
 ```
 
-Run the model with an SGLang-served PE model (high performance):
+使用 SGLang 服务的 PE 模型运行模型（高性能）：
 
 ```bash
 # Terminal 1: launch SGLang PE model server
@@ -53,12 +53,16 @@ curl -X POST http://${HOST}:${PORT}/v1/images/generations \
   }'
 ```
 
-## Support matrix
+## 支持矩阵
 
-| Model | Built-in PE | SGLang PE Server |
+| 模型 | 内置 PE | SGLang PE 服务端 |
 |-------|-------------|------------------|
 | ERNIE-Image | ✅ | ✅ |
 
-## Ascend NPU Environment
+<Note>
+💡 AI Infra 学习笔记：提示词增强（PE）是生成式图像模型里一类"先润色、再生成"的流程——一个小模型先把用户简短/随意的提示词扩写成更详细、更利于出图的描述，再喂给主扩散模型。把 PE 模型拆成独立 SGLang 服务端，本质上是把"编码器负载"从主扩散服务端剥离出去：主服务端专注 DiT 去噪，PE 由另一个进程按它自己的并行/批处理方式优化，避免挤占主路径资源。
+</Note>
 
-See [Diffusion models with AR stage like GLM-Image](/docs/sglang-diffusion/models_with_ar#ascend-npu-env).
+## Ascend NPU 环境
+
+参见 [带 AR 阶段的扩散模型（如 GLM-Image）](/docs/sglang-diffusion/models_with_ar#ascend-npu-env)。
