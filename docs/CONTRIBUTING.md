@@ -1,34 +1,34 @@
-> **Customize this file**: Tailor this template to your project by noting specific contribution types you're looking for, adding a Code of Conduct, or adjusting the writing guidelines to match your style.
+> **自定义本文件**：根据你的项目调整这份模板——注明你需要的贡献类型、添加行为准则，或按你的风格调整写作规范。
 
-# Contribute to the documentation
+# 为文档做贡献
 
-Thank you for your interest in contributing to our documentation! This guide will help you get started.
+感谢你有兴趣为我们的文档做贡献！本指南帮助你快速上手。
 
-## How to contribute
+## 如何贡献
 
-### Option 1: Edit directly on GitHub
+### 方式一：直接在 GitHub 上编辑
 
-1. Navigate to the page you want to edit
-2. Click the "Edit this file" button (the pencil icon)
-3. Make your changes and submit a pull request
+1. 打开你要编辑的页面
+2. 点击「Edit this file」按钮（铅笔图标）
+3. 修改内容并提交 pull request
 
-### Option 2: Local development
+### 方式二：本地开发
 
-1. Fork and clone this repository
-2. Install the Mintlify CLI: `npm i -g mint`
-3. Create a branch for your changes
-4. Make changes
-5. Run `mint dev`
-6. Preview your changes at `http://localhost:3000`
-7. Commit your changes and submit a pull request
+1. Fork 并克隆本仓库
+2. 安装 Mintlify CLI：`npm i -g mint`
+3. 为你的修改创建分支
+4. 进行修改
+5. 运行 `mint dev`
+6. 在 `http://localhost:3000` 预览你的修改
+7. 提交修改并提交 pull request
 
-For more details on local development, see our [development guide](development.mdx).
+本地开发的更多细节参见我们的[开发指南](development.mdx)。
 
-## Writing guidelines
+## 写作规范
 
-- **Use active voice**: "Run the command" not "The command should be run"
-- **Address the reader directly**: Use "you" instead of "the user"
-- **Keep sentences concise**: Aim for one idea per sentence
-- **Lead with the goal**: Start instructions with what the user wants to accomplish
-- **Use consistent terminology**: Don't alternate between synonyms for the same concept
-- **Include examples**: Show, don't just tell
+- **使用主动语态**：「运行这个命令」，而不是「该命令应被运行」
+- **直接称呼读者**：用「你」，而不是「用户」
+- **句子保持简洁**：一句话一个意思
+- **先给目标**：从读者想完成的事情开始写指令
+- **术语保持一致**：不要为同一概念交替使用不同说法
+- **包含示例**：用例子说明，而不是空讲

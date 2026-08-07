@@ -1,12 +1,16 @@
 ---
-title: Server Arguments
+title: 服务端参数
 metatags:
-    description: "SGLang server CLI arguments reference - tensor parallelism, data parallelism, expert parallelism, and configuration options."
+    description: "SGLang 服务端 CLI 参数参考——张量并行、数据并行、专家并行及其它配置选项。"
 ---
 
-This guide explains the parallelism configuration fields used in SGLang model configurations and how they map to SGLang server command-line arguments.
+本指南介绍 SGLang 模型配置中使用的并行配置字段，以及它们如何对应到 SGLang 服务端的命令行参数。
 
-## Quick Reference
+<Note>
+💡 AI Infra 学习笔记：张量并行（TP）把单层权重切分到多张 GPU 上共同计算；数据并行（DP）复制整份模型，不同副本处理不同请求；专家并行（EP）用于 MoE 模型，把各专家分布到不同 GPU。理解这三种并行的组合方式（例如 enable_dp_attention 让 Attention 走 DP、FFN 走 TP）是配置多卡推理服务的核心。
+</Note>
+
+## 快速参考
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -16,31 +20,31 @@ This guide explains the parallelism configuration fields used in SGLang model co
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Config Field</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>SGLang CLI Argument</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>配置字段</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>SGLang CLI 参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`tp`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`--tp-size`, `--tensor-parallel-size`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Tensor Parallelism - splits model across GPUs</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>张量并行（TP）——把模型切分到多张 GPU 上</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`dp`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`--dp-size`, `--data-parallel-size`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Data Parallelism - runs multiple model replicas</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>数据并行（DP）——运行多个模型副本</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`ep`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`--ep-size`, `--expert-parallel-size`, `--ep`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Expert Parallelism - distributes MoE experts</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>专家并行（EP）——把 MoE 专家分布到多张 GPU 上</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`enable_dp_attention`</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>`--enable-dp-attention`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>DP for attention, TP for FFN (hybrid)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>Attention 用 DP、FFN 用 TP（混合并行）</td>
     </tr>
   </tbody>
 </table>

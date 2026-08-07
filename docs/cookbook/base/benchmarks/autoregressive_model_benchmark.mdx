@@ -1,24 +1,24 @@
 ---
-title: Autoregressive Model Benchmark Documentation
+title: 自回归模型基准测试文档
 metatags:
-    description: "Benchmark LLM and VLM serving throughput and latency with sglang.bench_serving - supports SGLang, vLLM, and multiple datasets."
+    description: "使用 sglang.bench_serving 对 LLM 与 VLM 的服务化吞吐量和延迟进行基准测试——支持 SGLang、vLLM 以及多种数据集。"
 ---
 
-`sglang.bench_serving` is a command-line tool designed to benchmark the online serving throughput and latency of Large Language Models (LLMs) and Vision Language Models(VLMs). It supports various backends (`SGLang`, `vLLM`, etc.) and offers flexible configurations for request rates, dataset types, and profiling.
+`sglang.bench_serving` 是一个命令行工具，用于对大型语言模型（LLM）和视觉语言模型（VLM）的在线服务化吞吐量与延迟做基准测试。它支持多种后端（`SGLang`、`vLLM` 等），并能灵活配置请求速率、数据集类型和性能剖析。
 
-## 1. Quick Start
+## 1. 快速开始
 
-### Basic Usage (Random Data)
+### 基本用法（随机数据）
 
-Run a benchmark using randomly generated prompts with a local SGLang server.
+用随机生成的提示词对本地 SGLang 服务端运行基准测试。
 
 ```bash Command
 python -m sglang.bench_serving --backend sglang --port 30000 --dataset-name random --num-prompts 100
 ```
 
-### Real-World Data (ShareGPT)
+### 真实数据（ShareGPT）
 
-Run a benchmark using the ShareGPT dataset with a specific request rate.
+使用 ShareGPT 数据集以指定的请求速率运行基准测试。
 
 ```shell Command
 python -m sglang.bench_serving \
@@ -29,11 +29,11 @@ python -m sglang.bench_serving \
   --request-rate 10
 ```
 
-## 2. Parameter Reference
+## 2. 参数参考
 
-### 2.1 Backend & Server Configuration
+### 2.1 后端与服务端配置
 
-These parameters define the target server and the inference engine being used.
+这些参数用于指定目标服务端和所使用的推理引擎。
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
     <col style={{width: "50%"}} />
@@ -41,45 +41,45 @@ These parameters define the target server and the inference engine being used.
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--backend`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>**Required.** Specifies the backend engine. Options: `sglang`, `sglang-native`, `sglang-oai`, `sglang-oai-chat`, `vllm`, `vllm-chat`, `lmdeploy`, `lmdeploy-chat`, `trt`, `gserver`, `truss`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>**必填。** 指定后端引擎。可选值：`sglang`、`sglang-native`、`sglang-oai`、`sglang-oai-chat`、`vllm`、`vllm-chat`、`lmdeploy`、`lmdeploy-chat`、`trt`、`gserver`、`truss`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--base-url`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>The API base URL (if not using specific host/port flags).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>API 的基础 URL（如果不使用单独的 host/port 参数）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--host`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Server hostname. Default: `0.0.0.0`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务端主机名。默认：`0.0.0.0`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--port`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Server port. If not set, it defaults to the specific backend's standard port.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>服务端端口。未设置时默认为对应后端的标准端口。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--model`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Model name or path. If unset, it queries `/v1/models` for configuration.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>模型名称或路径。未设置时会查询 `/v1/models` 获取配置。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--served-model-name`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>The model name used in the API request body. Defaults to the value of `--model`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>API 请求体中使用的模型名称。默认为 `--model` 的值。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tokenizer`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path or name of the tokenizer. Defaults to the model configuration.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>分词器的路径或名称。默认取模型配置。</td>
     </tr>
   </tbody>
 </table>
 
-### 2.2 Dataset Configuration
+### 2.2 数据集配置
 
-Controls the source of the prompts used for benchmarking.
+控制基准测试所用提示词的来源。
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
     <col style={{width: "50%"}} />
@@ -87,59 +87,59 @@ Controls the source of the prompts used for benchmarking.
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--dataset-name`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>The type of dataset. Options: `sharegpt`, `custom`, `random`, `random-ids`, `generated-shared-prefix`, `mmmu`, `image`, `mooncake`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>数据集类型。可选值：`sharegpt`、`custom`、`random`、`random-ids`、`generated-shared-prefix`、`mmmu`、`image`、`mooncake`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--dataset-path`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>File path to the dataset (e.g., local JSON file for ShareGPT).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>数据集的文件路径（例如 ShareGPT 的本地 JSON 文件）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--num-prompts`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Total number of prompts to process. Default: `1000`.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>要处理的提示词总数。默认：`1000`。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--seed`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Random seed for reproducibility.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>用于保证结果可复现的随机种子。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tokenize-prompt`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Uses integer IDs instead of strings for inputs. Useful for precise length control.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>输入使用整数 ID 而非字符串。适合需要精确控制长度时使用。</td>
     </tr>
   </tbody>
 </table>
 
-### 2.3 Input/Output Length Control
+### 2.3 输入/输出长度控制
 
-Parameters to control the shape of requests (context length and generation length).
+用于控制请求形态（上下文长度与生成长度）的参数。
 
-#### For Random/Image Datasets:
+#### 随机/图像数据集：
 
-- `--random-input-len`: Number of input tokens per request.
-- `--random-output-len`: Number of output tokens per request.
-- `--random-range-ratio`: Range ratio for sampling input/output lengths.
+- `--random-input-len`：每个请求的输入 token 数。
+- `--random-output-len`：每个请求的输出 token 数。
+- `--random-range-ratio`：采样输入/输出长度时使用的范围比例。
 
-#### For ShareGPT Dataset:
+#### ShareGPT 数据集：
 
-- `--sharegpt-output-len`: Overrides the output length defined in the dataset for each request.
-- `--sharegpt-context-len`: Max context length. Requests exceeding this are dropped.
+- `--sharegpt-output-len`：覆盖数据集中为每个请求定义的输出长度。
+- `--sharegpt-context-len`：最大上下文长度，超过该长度的请求会被丢弃。
 
-#### General Request Modifiers:
+#### 通用请求修饰项：
 
-- `--extra-request-body`: Appends a JSON object to the request payload (e.g., \{"key": "value"\}). Useful for passing sampling parameters.
-- `--prompt-suffix`: A string suffix appended to all user prompts.
-- `--disable-ignore-eos`: If set, the model will stop generation upon hitting the EOS token (benchmarks usually ignore EOS to force max generation length).
-- `--apply-chat-template`: Applies the model's chat template to the input.
+- `--extra-request-body`：向请求负载追加一个 JSON 对象（例如 \{"key": "value"\}）。适合用来传递采样参数。
+- `--prompt-suffix`：追加到所有用户提示词末尾的字符串后缀。
+- `--disable-ignore-eos`：设置后，模型遇到 EOS token 即停止生成（基准测试通常会忽略 EOS，以强制达到最大生成长度）。
+- `--apply-chat-template`：对输入应用模型的对话模板。
 
-### 2.4 Traffic & Concurrency
+### 2.4 流量与并发
 
-Controls how fast requests are sent to the server.
+控制请求以多快的速度发送到服务端。
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
     <col style={{width: "50%"}} />
@@ -147,31 +147,31 @@ Controls how fast requests are sent to the server.
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--request-rate`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Requests per second (RPS). If `inf` (default), all requests are sent immediately (burst). Otherwise, arrival times follow a Poisson process.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>每秒请求数（RPS）。设为 `inf`（默认）时所有请求立即发送（突发模式）；否则请求到达时间服从泊松过程。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--max-concurrency`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>The maximum number of active requests allowed at once. Even if `request-rate` is high, the client will hold back requests if this limit is reached.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>同一时刻允许的最大并发请求数。即使 `request-rate` 很高，达到该上限后客户端也会暂缓发送请求。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--warmup-requests`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Number of requests to run before the actual measurement begins to warm up the server.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>正式测量前用于预热服务端而执行的请求数。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--flush-cache`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Flushes the server cache before starting the benchmark.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>开始基准测试前清空服务端缓存。</td>
     </tr>
   </tbody>
 </table>
 
-### 2.5 Output & Logging
+### 2.5 输出与日志
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -180,108 +180,112 @@ Controls how fast requests are sent to the server.
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Parameter</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Description</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>参数</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>说明</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--output-file`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Path to save the results in JSONL format.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>以 JSONL 格式保存结果的路径。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--output-details`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Includes detailed metrics in the output.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>在输出中包含详细指标。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--print-requests`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Prints requests to stdout as they are sent (useful for debugging).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>发送请求时将其打印到标准输出（便于调试）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--disable-tqdm`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Hides the progress bar.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>隐藏进度条。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--disable-stream`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Disables streaming mode (waits for full response).</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>禁用流式模式（等待完整响应）。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--return-logprob`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Requests logprobs from the server.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>向服务端请求返回 logprobs。</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>`--tag`</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>An arbitrary string tag added to the output file for identification.</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>添加到输出文件中用于标识的任意字符串标签。</td>
     </tr>
   </tbody>
 </table>
 
-### 2.6 Advanced
+### 2.6 高级选项
 
-#### 2.6.1 Image / Multi-modal
+#### 2.6.1 图像 / 多模态
 
-Only applicable when --dataset-name is set to image.
+仅当 --dataset-name 设置为 image 时适用。
 
-- `--image-count`: Number of images per request.
-- `--image-resolution`: Resolution (e.g., 1080p, 4k, or custom 1080x1920).
-- `--image-format`: jpeg or png.
-- `--image-content`: random (noise) or blank.
+- `--image-count`：每个请求的图像数量。
+- `--image-resolution`：分辨率（例如 1080p、4k 或自定义的 1080x1920）。
+- `--image-format`：jpeg 或 png。
+- `--image-content`：random（噪声）或 blank。
 
-#### 2.6.2 LoRA Benchmarking
+#### 2.6.2 LoRA 基准测试
 
-Used to simulate multi-LoRA serving scenarios.
+用于模拟多 LoRA 服务化场景。
 
-- `--lora-name`: A list of LoRA adapter names (e.g., `--lora-name` adapter1 adapter2).
-- `--lora-request-distribution`: How requests are assigned to adapters:
-  - `uniform`: Equal probability.
-  - `distinct`: New adapter for every request.
-  - `skewed`: Follows a Zipf distribution (simulating hot/cold adapters).
-- `--lora-zipf-alpha`: The alpha parameter for the Zipf distribution (if `skewed` is used).
+- `--lora-name`：LoRA 适配器名称列表（例如 `--lora-name` adapter1 adapter2）。
+- `--lora-request-distribution`：请求如何分配给各适配器：
+  - `uniform`：等概率分配。
+  - `distinct`：每个请求使用新适配器。
+  - `skewed`：服从 Zipf 分布（模拟热/冷适配器）。
+- `--lora-zipf-alpha`：Zipf 分布的 alpha 参数（使用 `skewed` 时）。
 
-#### 2.6.3 Profiling
+#### 2.6.3 性能剖析
 
-Tools for deep performance analysis.
+用于深入性能分析的选项。
 
-- `--profile`: Enables Torch Profiler (Requires `SGLANG_TORCH_PROFILER_DIR` env var on server).
-- `--plot-throughput`: Generates throughput/concurrency plots (requires `termplotlib` and `gnuplot`).
-- `--profile-activities`: Activities to profile (CPU, GPU, CUDA_PROFILER).
-- `--profile-num-steps`: Number of steps to profile.
-- `--profile-by-stage` / `--profile-stages`: Profile specific processing stages.
+- `--profile`：启用 Torch Profiler（需要服务端设置 `SGLANG_TORCH_PROFILER_DIR` 环境变量）。
+- `--plot-throughput`：生成吞吐量/并发图（需要 `termplotlib` 和 `gnuplot`）。
+- `--profile-activities`：要剖析的活动（CPU、GPU、CUDA_PROFILER）。
+- `--profile-num-steps`：要剖析的步数。
+- `--profile-by-stage` / `--profile-stages`：剖析特定的处理阶段。
 
-#### 2.6.4 PD Disaggregation
+#### 2.6.4 PD 分离部署
 
-For benchmarking Prefill-Decode (PD) separated architectures.
+用于对 Prefill-Decode（PD）分离架构做基准测试。
 
-- `--pd-separated`: Enable PD disaggregation benchmarking.
-- `--profile-prefill-url`: URL(s) of prefill workers for profiling.
-- `--profile-decode-url`: URL(s) of decode workers for profiling.
+- `--pd-separated`：启用 PD 分离部署基准测试。
+- `--profile-prefill-url`：用于剖析的 prefill worker 的 URL。
+- `--profile-decode-url`：用于剖析的 decode worker 的 URL。
 
-<span style={{color:"red"}}>Note</span>: In PD mode, `prefill` and `decode` must be profiled separately.
+<span style={{color:"red"}}>注意</span>：在 PD 模式下，`prefill` 和 `decode` 必须分别剖析。
 
-### 2.7 Specialized Datasets
+### 2.7 专用数据集
 
-#### 2.7.1 Generated Shared Prefix (GSP):
+#### 2.7.1 生成的共享前缀（GSP）：
 
-Designed to test system prompt caching/prefix sharing performance.
+用于测试系统提示词缓存/前缀共享性能。
 
-- `--gsp-num-groups`: Number of unique system prompts.
-- `--gsp-prompts-per-group`: How many user questions share the same system prompt.
-- `--gsp-system-prompt-len`: Length of the shared prefix.
-- `--gsp-fast-prepare`: Skips some statistics calculation for faster startup.
+- `--gsp-num-groups`：唯一系统提示词的数量。
+- `--gsp-prompts-per-group`：共享同一系统提示词的用户问题数量。
+- `--gsp-system-prompt-len`：共享前缀的长度。
+- `--gsp-fast-prepare`：跳过部分统计计算以加快启动。
 
 #### 2.7.2 Mooncake
 
-Designed for trace replay.
+用于轨迹回放（trace replay）。
 
-- `--mooncake-slowdown-factor`: Slows down the trace replay (e.g., 2.0 = 2x slower).
-- `--mooncake-num-rounds`: Number of conversation rounds (supports multi-turn).
-- `--use-trace-timestamps`: Schedules requests based on timestamps found in the trace file.
+- `--mooncake-slowdown-factor`：放慢轨迹回放的速度（例如 2.0 = 慢 2 倍）。
+- `--mooncake-num-rounds`：对话轮数（支持多轮）。
+- `--use-trace-timestamps`：根据轨迹文件中的时间戳调度请求。
 
-## 3. Metrics
+## 3. 指标
 
-After running the benchmark, the tool generally reports:
+运行基准测试后，工具通常会报告以下指标：
 
-- `E2E` (End-to-End Latency): The total time from sending the request to receiving the final token.
-- `TTFT` (Time To First Token): The time between sending the request and seeing the first word appear. This represents the Prefill time (processing the image and text prompt).
-- `TPOT` (Time per Output Token): The average time it takes to generate one token (excluding the first one). This is calculated per request.
-- `ITL` (Inter-Token Latency): The time gap between two distinct streaming packets. While TPOT is an average, ITL measures the "jitter" or smoothness of the stream.
+<Note>
+💡 AI Infra 学习笔记：TTFT、TPOT、ITL 是衡量在线推理服务体验的三大核心指标。TTFT 对应首 token 延迟（主要受预填充阶段影响），TPOT/ITL 反映生成阶段的吞吐与流畅度。做性能优化或对比不同引擎时，这三项指标比单纯的端到端耗时更能定位瓶颈。
+</Note>
+
+- `E2E`（端到端延迟）：从发送请求到收到最后一个 token 的总耗时。
+- `TTFT`（首 token 时间）：从发送请求到看到第一个字出现之间的时间。它反映的是 Prefill（预填充）耗时，即处理图像和文本提示词的时间。
+- `TPOT`（每个输出 token 的时间）：生成单个 token 的平均耗时（不含第一个 token），按每个请求分别计算。
+- `ITL`（token 间延迟）：两个相邻流式数据包之间的时间间隔。TPOT 是平均值，而 ITL 衡量的是流的"抖动"或平滑度。

@@ -1,17 +1,21 @@
 ---
-title: Supported Models
+title: 支持的模型
 metatags:
-    description: "SpecBundle supported EAGLE3 draft models for speculative decoding - Llama, Qwen, DeepSeek, GLM, and more."
+    description: "SpecBundle 支持的 EAGLE3 投机解码草稿模型——Llama、Qwen、DeepSeek、GLM 等。"
 ---
 
-## [Released Models](https://huggingface.co/collections/lmsys/specbundle)
+## [已发布模型](https://huggingface.co/collections/lmsys/specbundle)
 
-We list the models released by the SpecForge and several industrial partners below. These models are released as part of the SpecBundle models, which are trained on large-scale multi-domain datasets and deliver exceptional performance on various benchmarks.
+下面列出 SpecForge 及多家产业伙伴发布的模型。这些模型作为 SpecBundle 系列发布，在大规模多领域数据集上训练，在多种基准测试中表现优异。
 
-> We also include some of the models previously trained by the SpecForge team but not technically part of the SpecBundle release.
-> We mark models trained on ShareGPT+Ultrachat datasets with a **\*** mark and models trained on Perfect-Blend datasets but released before SpecBundle with **+** mark.
+> 这里也包含一些 SpecForge 团队此前训练、但不属于 SpecBundle 正式发布的模型。
+> 用 **\*** 标记在 ShareGPT+Ultrachat 数据集上训练的模型，用 **+** 标记在 Perfect-Blend 数据集上训练但在 SpecBundle 发布之前的模型。
 
-### Llama Series
+<Note>
+💡 AI Infra 学习笔记：使用这些草稿模型时，目标模型与草稿模型需要配套——草稿模型是在对应目标模型（如 Qwen3-30B-A3B）之上训练的 EAGLE3 头。部署时把目标模型路径传给 `--model`、草稿路径传给 `--speculative-draft-model-path`，两者不匹配会导致 token 接受率下降甚至推理出错。
+</Note>
+
+### Llama 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -20,8 +24,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -44,7 +48,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### Qwen Series
+### Qwen 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -53,8 +57,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -73,7 +77,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### Qwen Coder Series
+### Qwen Coder 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -82,8 +86,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -98,7 +102,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### Ling Series
+### Ling 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -107,8 +111,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -119,7 +123,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### Kimi Series
+### Kimi 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -128,8 +132,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -140,7 +144,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### GPT-OSS Series
+### GPT-OSS 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -149,8 +153,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>
@@ -165,7 +169,7 @@ We list the models released by the SpecForge and several industrial partners bel
   </tbody>
 </table>
 
-### Nex Series
+### Nex 系列
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -174,8 +178,8 @@ We list the models released by the SpecForge and several industrial partners bel
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Target Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 Draft Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>目标模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>EAGLE3 草稿模型</th>
     </tr>
   </thead>
   <tbody>

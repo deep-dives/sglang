@@ -1,14 +1,18 @@
 ---
-title: Overview
+title: 概述
 mode: wide
-description: Practical guides for deploying and using Vision-Language-Action policies with SGLang.
+description: 使用 SGLang 部署和运行视觉-语言-动作（VLA）策略的实用指南。
 metatags:
-    description: "Explore SGLang Vision-Language-Action policy cookbooks for robot action serving, OpenPI compatibility, caching, and performance tuning."
+    description: "探索 SGLang 视觉-语言-动作（VLA）策略食谱库，涵盖机器人动作服务化、OpenPI 兼容性、缓存与性能调优。"
 ---
 
-Vision-Language-Action policies map camera observations, language instructions, and robot state into continuous action chunks. They share some runtime machinery with diffusion pipelines, but the user-facing workload is robot action inference rather than image or video generation.
+视觉-语言-动作（VLA）策略把相机观测、语言指令和机器人状态映射为连续的动作片段。它们与扩散流水线共享部分运行时机制，但面向用户的工作负载是机器人动作推理，而不是图像或视频生成。
 
-This section keeps VLA policies separate from the diffusion model cookbook so robot deployments can document their own input schemas, policy endpoints, cache behavior, and control-loop performance targets.
+<Note>
+💡 AI Infra 学习笔记：VLA（Vision-Language-Action）是机器人领域的三模态模型——输入摄像头画面、语言指令和机器人状态，输出连续动作。它与扩散模型的相似处在于都常使用去噪/扩散式解码输出，因此调度与缓存策略可以复用扩散引擎的机制；差异在于它更看重低延迟的闭环控制，对单步推理耗时敏感。
+</Note>
+
+本节把 VLA 策略与扩散模型食谱库分开维护，这样机器人部署可以单独记录自己的输入模式、策略端点、缓存行为和闭环控制性能目标。
 
 ## OpenPI
 

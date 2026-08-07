@@ -1,52 +1,55 @@
 ---
-title: SGLang Cookbook
+title: SGLang 食谱库
 metatags:
-    description: The SGLang Cookbook is a practical collection of examples and guides that show developers how to efficiently run SGLang with a variety of models on different platforms.
+    description: SGLang 食谱库是一套实用的示例与指南合集，帮助开发者在不同平台上高效地用 SGLang 运行各类模型。
 ---
 
-A community-maintained repository of practical guides and recipes for deploying and using SGLang in production environments. Our mission is simple: answer the question **"How do I use SGLang (and related models) on hardware Y for task Z?"** with clear, actionable solutions.
+一个由社区维护的实用指南与食谱集合，用于在生产环境中部署和使用 SGLang。我们的目标很简单：用清晰、可落地的方案回答一个问题——**"如何在硬件 Y 上用 SGLang（及相关模型）完成任务 Z？"**
 
 import { popularModels } from "/src/snippets/configs/popular-models.jsx";
 import { PopularModels } from "/src/snippets/_popular_models.jsx";
 
-{/* Edit the list in /src/snippets/configs/popular-models.jsx — the docs landing
-    page's featured hero reads the same file. */}
+{/* 编辑 /src/snippets/configs/popular-models.jsx 中的列表——文档首页的精选 hero 区域读取的是同一个文件。 */}
 <PopularModels models={popularModels} />
 
-## Guides
+<Note>
+💡 AI Infra 学习笔记：食谱库按模态与模型类型组织——自回归（LLM/VLM）、扩散（图像/视频生成）、全模态（语音）和 VLA（机器人策略），每份食谱围绕「在特定硬件上用某个模型完成某个任务」展开，覆盖部署、调用、优化与基准测试。想找某个模型的具体用法，直接在对应分类下查找即可。
+</Note>
+
+## 指南
 
 <CardGroup cols={3}>
   <Card
-    title="Autoregressive Models"
+    title="自回归模型"
     mode="card"
     href="./autoregressive/intro"
     img="/cards/Autoregressive-card.png"
   />
   <Card
-    title="Diffusion Models"
+    title="扩散模型"
     mode="card"
     href="./diffusion/intro"
     img="/cards/Diffusion-card.png"
   />
   <Card
-    title="VLA (Vision-Language-Action) Models"
+    title="VLA（视觉-语言-动作）模型"
     mode="card"
     href="./vla/intro"
     img="/cards/VLA-card.png"
   />
 </CardGroup>
 
-## Benchmarks
+## 基准测试
 
 <CardGroup cols={2}>
   <Card
-    title="Autoregressive Model Benchmark"
+    title="自回归模型基准测试"
     mode="card"
     href="./base/benchmarks/autoregressive_model_benchmark"
     img="/cards/Autoregressive-benchmark-card.png"
   />
   <Card
-    title="Diffusion Model Benchmark"
+    title="扩散模型基准测试"
     mode="card"
     href="./base/benchmarks/diffusion_model_benchmark"
     img="/cards/Diffusion-benchmark-card.png"

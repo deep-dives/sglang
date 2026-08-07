@@ -1,38 +1,42 @@
 ---
-title: "Diffusion Cookbook"
-description: "Cookbook recipes for running diffusion models with SGLang"
+title: "扩散模型食谱库"
+description: "使用 SGLang 运行扩散模型的食谱"
 metatags:
-    description: "Explore SGLang diffusion cookbook structure, categories, and contribution guidance for image and video generation recipes."
+    description: "探索 SGLang 扩散模型食谱库的结构、分类与贡献指南，涵盖图像与视频生成食谱。"
 ---
 
-# SGLang Diffusion Cookbook
+# SGLang 扩散模型食谱库
 
 <div style={{display: 'flex', gap: '8px'}}>
-  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License" /></a>
-  <a href="https://github.com/sgl-project/sglang/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs Welcome" /></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="许可证" /></a>
+  <a href="https://github.com/sgl-project/sglang/pulls"><img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="欢迎提交 PR" /></a>
 </div>
 
-Create a comprehensive cookbook for diffusion models in SGLang, demonstrating SGLang's performance advantages for image and video generation workloads.
+为 SGLang 打造一份全面的扩散模型食谱库，展示 SGLang 在图像与视频生成负载上的性能优势。
 
-## 🎯 What You'll Find Here
+## 🎯 你能在这里找到什么
 
-This cookbook aggregates battle-tested SGLang recipes covering:
+这份食谱库汇集了经过实战检验的 SGLang 食谱，涵盖：
 
-- **Models**: Mainstream Image and Video generation  Models
-- **Use Cases**: Inference serving, deployment strategies
-- **Hardware**: GPU and CPU configurations, optimization for different accelerators
-- **Best Practices**: Configuration templates, performance tuning, troubleshooting guides
+- **模型**：主流的图像与视频生成模型
+- **用例**：推理服务化、部署策略
+- **硬件**：GPU 与 CPU 配置、面向不同加速器的优化
+- **最佳实践**：配置模板、性能调优、故障排查指南
 
-Each recipe provides step-by-step instructions to help you quickly implement SGLang solutions for your specific requirements.
+每份食谱都提供分步说明，帮助你针对自己的具体需求快速落地 SGLang 方案。
 
-## 🚀 Quick Start
+<Note>
+💡 AI Infra 学习笔记：食谱库目录按模型系列组织（每个厂商/系列一个子目录），同一系列下的不同版本（如 Wan2.1/Wan2.2）各自成页。各食谱的正文结构通常一致——先讲部署参数，再讲调用方式、性能调优和故障排查，方便横向对比。
+</Note>
 
-1. Browse the recipe index above to find your model
-2. Follow the step-by-step instructions in each guide
-3. Adapt configurations to your specific hardware and requirements
-4. Join our community to share feedback and improvements
+## 🚀 快速开始
 
-The sglang diffusion cookbook directory structure are shown below:
+1. 在上面的食谱索引中找到你的模型
+2. 按每份指南的分步说明操作
+3. 根据你的具体硬件和需求调整配置
+4. 加入社区，分享反馈和改进建议
+
+sglang 扩散模型食谱库的目录结构如下：
 
 ```text Example
 docs/cookbook/diffusion/
@@ -50,19 +54,19 @@ docs/cookbook/diffusion/
 └── ...
 ```
 
-## 🤝 Contributing
+## 🤝 参与贡献
 
-We believe the best documentation comes from practitioners. Whether you've optimized SGLang for a specific model, solved a tricky deployment challenge, or discovered performance improvements, we encourage you to contribute your recipes!
+我们相信最好的文档来自实践者。无论你是针对某个模型优化过 SGLang、解决过棘手的部署难题，还是发现了性能改进点，都欢迎贡献你的食谱！
 
-**💪How to Contribute**
+**💪 如何贡献**
 
-- Comment below if interested (mention which role)
-- Join discussion on implementation details
-- Fork repo and work on assigned section
-- Submit PR following SGLang cookbook standards
-- Iterate based on review feedback
+- 感兴趣就在下方留言（说明你负责哪个部分）
+- 参与实现细节的讨论
+- fork 仓库并处理分配给你的部分
+- 按照 SGLang 食谱库的标准提交 PR
+- 根据评审反馈迭代
 
-**To contribute:**
+**贡献步骤：**
 
 ```shell Command
 # Fork the repo and clone locally
@@ -76,18 +80,18 @@ git checkout -b add-my-recipe
 # Submit a PR!
 ```
 
-## 📖 Resources
+## 📖 资源
 
 - [SGLang GitHub](https://github.com/sgl-project/sglang)
-- [SGLang Documentation](/)
-- [SGLang Diffusion Documentation](/docs/sglang-diffusion/index)
-- [SLACK Channel](https://sgl-fru7574.slack.com/archives/C07GLLLESNR)
-- [Community Slack/Discord](https://discord.gg/MpEEuAeb)
+- [SGLang 文档](/)
+- [SGLang 扩散模型文档](/docs/sglang-diffusion/index)
+- [Slack 频道](https://sgl-fru7574.slack.com/archives/C07GLLLESNR)
+- [社区 Slack/Discord](https://discord.gg/MpEEuAeb)
 
-## 📄 License
+## 📄 许可协议
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](https://github.com/sgl-project/sglang/blob/main/LICENSE) file for details.
+本项目采用 Apache License 2.0 许可，详情请查看 [LICENSE](https://github.com/sgl-project/sglang/blob/main/LICENSE) 文件。
 
 ---
 
-**Let's build this resource together!** 🚀 Star the repo and contribute your recipes to help the SGLang community grow.
+**让我们一起把这个资源库建设起来吧！** 🚀 点亮 star 并贡献你的食谱，帮助 SGLang 社区成长。

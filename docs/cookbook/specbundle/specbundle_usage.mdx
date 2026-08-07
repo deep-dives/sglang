@@ -1,32 +1,36 @@
 ---
-title: SpecBundle Usage
+title: SpecBundle 使用指南
 metatags:
-    description: "SpecBundle usage guide - production-grade EAGLE3 speculative decoding with SGLang for faster LLM inference."
+    description: "SpecBundle 使用指南——使用 SGLang 的 EAGLE3 投机解码加速 LLM 推理，达到生产级水准。"
 ---
 
-![specbundle logo](/logo/logo.png)
+![SpecBundle 标志](/logo/logo.png)
 
-## About SpecBundle
+## 关于 SpecBundle
 
-Speculative decoding, especially EAGLE3, offer strong theoretical guarantees alongside consistent empirical improvements in token acceptance rate and end-to-end inference speed. However, despite these advances, adoption of speculative decoding—especially EAGLE3—remains limited in the open-source ecosystem, due primarily to three key factors.
+投机解码（speculative decoding），尤其是 EAGLE3，既有很强的理论保证，也在 token 接受率和端到端推理速度上带来稳定的实证提升。然而，尽管有这些进展，投机解码——特别是 EAGLE3——在开源生态中的采用仍然有限，主要原因有三个。
 
-1. Lack of production-ready training infrastructure: Existing speculative decoding toolchains are largely research prototypes, offering limited system-level optimization and inadequate support for diverse architectures and large-scale models.
-2. Scarcity of high-quality draft models: Effective speculative decoding depends on strong draft models, yet publicly available EAGLE3-compatible checkpoints are extremely limited, primarily originating from the original authors.
-3. Insufficient training scale of existing drafts: Most available draft models are trained on small or curated datasets and fail to generalize to the large, diverse corpora used in modern LLM training, resulting in low token acceptance rates and diminished practical speedups.
+1. 缺乏生产可用的训练基础设施：现有的投机解码工具链大多是研究原型，系统级优化有限，对多样化的架构和大规模模型支持不足。
+2. 高质量草稿模型稀缺：有效的投机解码依赖强力的草稿模型，而公开可用的 EAGLE3 兼容检查点极少，主要来自原作者。
+3. 现有草稿模型的训练规模不足：大多数可用的草稿模型都是在小型或经过挑选的数据集上训练的，无法泛化到现代 LLM 训练所用的大规模多样语料，导致 token 接受率低、实际加速效果大打折扣。
 
-**SpecBundle** is a direct response to these limitations. Jointly driven by the open-source community and industry partners including **Ant Group**, **Meituan**, **Nex-AGI** and **EigenAI**, **SpecBundle** represents the **first open initiative** aimed at democratizing speculative decoding by providing high-performance, production-grade EAGLE3 draft model weights for mainstream open-source LLMs. This initiative also serves to verify the robustness of the [**SpecForge**](https://github.com/sgl-project/SpecForge) framework through multiple scales and architectures.
+<Note>
+💡 AI Infra 学习笔记：投机解码的核心思路是让一个更小的「草稿模型」快速猜测多个 token，再由目标模型一次性并行验证；猜中的 token 越多，实际加速越明显。EAGLE3 是其中的代表方案，它复用目标模型的隐藏状态做自回归草稿，接受率更高。草稿模型质量直接决定收益，这正是 SpecBundle 致力于补齐高质量草稿权重的背景。
+</Note>
 
-## Installation
+**SpecBundle** 正是针对这些局限的直接回应。它由开源社区与 **蚂蚁集团**（Ant Group）、**美团**（Meituan）、**Nex-AGI**、**EigenAI** 等产业伙伴共同推动，是**首个开放计划**，旨在普及投机解码——为主流开源 LLM 提供高性能、生产级的 EAGLE3 草稿模型权重。这一计划也通过多种规模与架构来验证 [**SpecForge**](https://github.com/sgl-project/SpecForge) 框架的健壮性。
+
+## 安装
 
 ```bash Command
 git clone https://github.com/sgl-project/SpecForge.git
 ```
 
-## Usage
+## 使用方法
 
-### Launch SGLang Server with SpecBundle models
+### 用 SpecBundle 模型启动 SGLang 服务端
 
-You can use the following command to launch the SGLang server with SpecBundle models. Please add `--tp`, `--ep` and `--mem-fraction-static` arguments when you encounter memory issues.
+可以用下面的命令用 SpecBundle 模型启动 SGLang 服务端。遇到内存问题时，请加上 `--tp`、`--ep` 和 `--mem-fraction-static` 参数。
 
 ```bash Command
 python3 -m sglang.launch_server \
@@ -38,7 +42,7 @@ python3 -m sglang.launch_server \
     --speculative-num-draft-tokens 4
 ```
 
-For example:
+例如：
 
 ```bash Command
 SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 python3 -m sglang.launch_server \
@@ -51,13 +55,13 @@ SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 python3 -m sglang.launch_server \
     --tp 4
 ```
 
-### Use SpecBundle to compare the performance of Speculative Decoding draft models
+### 用 SpecBundle 对比投机解码草稿模型的性能
 
-We provide a benchmark suite to evaluate the performance of SpecBundle draft models [here](https://github.com/sgl-project/SpecForge/tree/main/benchmarks).
+我们提供了一个基准测试套件，用来评估 SpecBundle 草稿模型的性能，见[这里](https://github.com/sgl-project/SpecForge/tree/main/benchmarks)。
 
-#### Example:
+#### 示例：
 
-1. Launch a SGLang Server
+1. 启动一个 SGLang 服务端
 
 ```bash Command
 SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 python3 -m sglang.launch_server \
@@ -70,19 +74,19 @@ SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 python3 -m sglang.launch_server \
     --tp 4
 ```
 
-2. Use the benchmark suite to evaluate the performance of SpecBundle draft models
+2. 用基准测试套件评估 SpecBundle 草稿模型的性能
 
-`bench_eagle3.py` can help you launch a SGLang server process and a Benchmarking process concurrently. In this way, you don't have to launch the SGLang server manually, this script will manually handle the SGLang launch under different speculative decoding configurations. Some important arguments are:
+`bench_eagle3.py` 可以同时启动一个 SGLang 服务端进程和一个基准测试进程。这样你就不用手动启动 SGLang 服务端了——脚本会在不同的投机解码配置下自动处理 SGLang 的启动。一些重要参数如下：
 
-- `--model-path`: the path to the target model.
-- `--speculative-draft-model-path`: the path to the draft model.
-- `--port`: the port to launch the SGLang server.
-- `--trust-remote-code`: trust the remote code.
-- `--mem-fraction-static`: the memory fraction for the static memory.
-- `--tp-size`: the tensor parallelism size.
-- `--attention-backend`: the attention backend.
-- `--config-list`: the list of speculative decoding configuration to test, the format is `<batch-size>,<num-steps>,<topk>,<num-draft-tokens>`.
-- `--benchmark-list`: the list of benchmarks to test, the format is `<benchmark-name>:<num-prompts>:<subset>`.
+- `--model-path`：目标模型的路径。
+- `--speculative-draft-model-path`：草稿模型的路径。
+- `--port`：启动 SGLang 服务端的端口。
+- `--trust-remote-code`：信任远程代码。
+- `--mem-fraction-static`：静态内存占用的比例。
+- `--tp-size`：张量并行大小。
+- `--attention-backend`：Attention 后端。
+- `--config-list`：要测试的投机解码配置列表，格式为 `<batch-size>,<num-steps>,<topk>,<num-draft-tokens>`。
+- `--benchmark-list`：要测试的基准测试列表，格式为 `<benchmark-name>:<num-prompts>:<subset>`。
 
 ```bash Command
 cd SpecForge/benchmarks
@@ -94,13 +98,13 @@ python bench_eagle3.py \
     --skip-launch-server
 ```
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate test command for your model and benchmark.
+**交互式命令生成器**：使用下面的配置选择器，为你的模型和基准测试自动生成合适的测试命令。
 
 import { SpecBundleDeployment } from "/src/snippets/specbundle/specbundle-deployment.jsx";
 
 <SpecBundleDeployment />
 
-It will generate a json file, content is listed below:
+它会生成一个 JSON 文件，内容如下：
 
 ```json Config
 {
@@ -147,6 +151,6 @@ It will generate a json file, content is listed below:
 }
 ```
 
-## Performance Scores
+## 性能分数
 
-We evaluate the performance of SpecBundle draft models on various benchmarks, please visit the [Performance Dashboard](https://docs.sglang.io/SpecForge/SpecBundle/index.html) for more details.
+我们在多种基准测试上评估了 SpecBundle 草稿模型的性能，更多细节请访问[性能看板](https://docs.sglang.io/SpecForge/SpecBundle/index.html)。
