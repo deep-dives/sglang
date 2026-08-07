@@ -1,19 +1,19 @@
 ---
-title: "Evaluating New Models with SGLang"
+title: "用 SGLang 评估新模型"
 metatags:
-    description: "SGLang model evaluation: MMLU, GSM8K, GPQA, HumanEval, MMMU benchmarks. Latency and throughput testing commands."
+    description: "SGLang 模型评估：MMLU、GSM8K、GPQA、HumanEval、MMMU 基准测试。延迟与吞吐量测试命令。"
 ---
-This document provides commands for evaluating models' accuracy and performance. Before open-sourcing new models, we strongly suggest running these commands to verify whether the score matches your internal benchmark results.
+本文档提供评估模型精度与性能的命令。在开源新模型之前，我们强烈建议运行这些命令，以确认得分与你们内部的基准测试结果一致。
 
-**For cross verification, please submit commands for installation, server launching, and benchmark running with all the scores and hardware requirements when open-sourcing your models.**
+**为便于交叉验证，开源模型时请随所有得分和硬件要求一并提交安装、服务端启动和基准测试运行的命令。**
 
-[Reference: MiniMax M2](https://github.com/sgl-project/sglang/pull/12129)
+[参考：MiniMax M2](https://github.com/sgl-project/sglang/pull/12129)
 
-## Accuracy
+## 精度
 
-### LLMs
+### LLM
 
-SGLang provides built-in scripts to evaluate common benchmarks.
+SGLang 内置了评估常见基准测试的脚本。
 
 **MMLU**
 
@@ -57,7 +57,7 @@ python -m sglang.test.run_eval \
 ```
 
 <Tip>
-For reasoning models, add `--thinking-mode <mode>` (e.g., `qwen3`, `deepseek-r1`, `deepseek-v3`). You may skip it if the model has forced thinking enabled.
+对于推理（思维）模型，加上 `--thinking-mode <mode>`（例如 `qwen3`、`deepseek-r1`、`deepseek-v3`）。如果模型本身强制开启了思维模式，可以省略。
 </Tip>
 
 **HumanEval**
@@ -71,7 +71,7 @@ python -m sglang.test.run_eval \
   --port 30000
 ```
 
-### VLMs
+### VLM
 
 **MMMU**
 
@@ -82,20 +82,24 @@ python benchmark/mmmu/bench_sglang.py \
 ```
 
 <Tip>
-You can set max tokens by passing `--extra-request-body '{"max_tokens": 4096}'`.
+可以通过传 `--extra-request-body '{"max_tokens": 4096}'` 来设置最大 token 数。
 </Tip>
 
-For models capable of processing video, we recommend extending the evaluation to include `VideoMME`, `MVBench`, and other relevant benchmarks.
+对于支持视频处理的模型，我们建议把评估扩展到 `VideoMME`、`MVBench` 等相关的基准测试。
 
-## Performance
+## 性能
 
-Performance benchmarks measure **Latency** (Time To First Token - TTFT) and **Throughput** (tokens/second).
+性能基准测试测量**延迟**（首 token 时间，TTFT）和**吞吐量**（token/秒）。
 
-### LLMs
+<Note>
+💡 AI Infra 学习笔记：性能评估要分清「延迟」与「吞吐量」两个目标——TTFT（首 token 时间）决定用户的体感响应速度，吞吐量（token/秒）决定系统的经济性（同样成本能服务多少并发）。低并发测延迟、高并发测吞吐是行业标准做法，因为二者往往此消彼长：batch 越大吞吐越高，但单请求延迟也会被排队拉长。
+</Note>
 
-**Latency-Sensitive Benchmark**
+### LLM
 
-This simulates a scenario with low concurrency (e.g., single user) to measure latency.
+**延迟敏感型基准测试**
+
+该测试模拟低并发场景（例如单用户）来测量延迟。
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -107,9 +111,9 @@ python -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-**Throughput-Sensitive Benchmark**
+**吞吐量敏感型基准测试**
 
-This simulates a high-traffic scenario to measure maximum system throughput.
+该测试模拟高流量场景来测量系统最大吞吐量。
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -121,9 +125,9 @@ python -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-**Single Batch Performance**
+**单批性能**
 
-You can also benchmark the performance of processing a single batch offline.
+你也可以离线评估处理单个 batch 的性能。
 
 ```bash Command
 python -m sglang.bench_one_batch_server \
@@ -133,17 +137,17 @@ python -m sglang.bench_one_batch_server \
   --output-len 1024
 ```
 
-You can run more granular benchmarks:
+你可以运行更细粒度的基准测试：
 
-- **Low Concurrency**: `--num-prompts 10 --max-concurrency 1`
-- **Medium Concurrency**: `--num-prompts 80 --max-concurrency 16`
-- **High Concurrency**: `--num-prompts 500 --max-concurrency 100`
+- **低并发**：`--num-prompts 10 --max-concurrency 1`
+- **中并发**：`--num-prompts 80 --max-concurrency 16`
+- **高并发**：`--num-prompts 500 --max-concurrency 100`
 
-## Reporting Results
+## 结果报告
 
-For each evaluation, please report:
+对每次评估，请报告：
 
-1.  **Metric Score**: Accuracy % (LLMs and VLMs); Latency (ms) and Throughput (tok/s) (LLMs only).
-2.  **Environment settings**: GPU type/count, SGLang commit hash.
-3.  **Launch configuration**: Model path, TP size, and any special flags.
-4.  **Evaluation parameters**: Number of shots, examples, max tokens.
+1.  **指标得分**：精度 %（LLM 与 VLM）；延迟（ms）与吞吐量（tok/s）（仅 LLM）。
+2.  **环境设置**：GPU 类型/数量、SGLang commit 哈希。
+3.  **启动配置**：模型路径、TP 大小，以及任何特殊参数。
+4.  **评估参数**：few-shot 数、示例数、最大 token 数。

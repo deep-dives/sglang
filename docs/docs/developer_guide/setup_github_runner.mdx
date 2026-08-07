@@ -1,14 +1,19 @@
 ---
-title: "Set Up Self-Hosted Runners for GitHub Action"
+title: "为 GitHub Action 搭建自托管 Runner"
 metatags:
-    description: "SGLang GitHub Actions self-hosted runner: Docker setup for NVIDIA/AMD GPUs, config.sh and run.sh."
+    description: "SGLang GitHub Actions 自托管 runner：NVIDIA/AMD GPU 的 Docker 搭建、config.sh 与 run.sh。"
 ---
-## Add a Runner
 
-### Step 1: Start a docker container.
+<Note>
+💡 AI Infra 学习笔记：SGLang 的 CI 需要自托管 GPU runner，是因为推理引擎的测试（kernel 正确性、精度对齐、端到端生成）都依赖真实 GPU 环境，公共 CI 无法提供。理解自托管 runner 的搭建方式，也是了解「AI 基础设施里测试成本为何高企」的入口——一次 CI 触发就要占一整块 GPU 十几分钟。
+</Note>
 
-**You can mount a folder for the shared huggingface model weights cache. **
-The command below uses `/tmp/huggingface` as an example.
+## 添加 Runner
+
+### 第一步：启动一个 docker 容器
+
+**你可以挂载一个文件夹，作为共享的 HuggingFace 模型权重缓存。**
+下面以 `/tmp/huggingface` 为例。
 
 ```
 docker pull nvidia/cuda:13.0.3-devel-ubuntu22.04
@@ -20,9 +25,9 @@ docker run --rm --device=/dev/kfd --device=/dev/dri --group-add video --shm-size
 docker run --rm --device=/dev/kfd --device=/dev/dri/renderD176 --device=/dev/dri/renderD184 --group-add video --shm-size 128g -it -v /tmp/huggingface:/hf_home lmsysorg/sglang:v0.5.8-rocm700-mi30x /bin/bash
 ```
 
-### Step 2: Configure the runner by `config.sh`
+### 第二步：用 `config.sh` 配置 runner
 
-Run these commands inside the container.
+在容器内运行以下命令。
 
 ```text Output
 apt update && apt install -y curl python3-pip git
@@ -30,16 +35,16 @@ pip install --upgrade pip
 export RUNNER_ALLOW_RUNASROOT=1
 ```
 
-Then follow https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners to run `config.sh`
+然后按照 https://docs.github.com/en/actions/hosting-your-own-runners/managing-self-hosted-runners/adding-self-hosted-runners 运行 `config.sh`
 
-**Notes**
-- Do not need to specify the runner group
-- Give it a name (e.g., `test-sgl-gpu-0`) and some labels (e.g., `1-gpu-h100`). The labels can be edited later in Github Settings.
-- Do not need to change the work folder.
+**注意事项**
+- 不需要指定 runner group
+- 给它一个名称（如 `test-sgl-gpu-0`）和一些标签（如 `1-gpu-h100`）。标签可以在之后于 GitHub Settings 中编辑。
+- 不需要修改工作文件夹。
 
-### Step 3: Run the runner by `run.sh`
+### 第三步：用 `run.sh` 运行 runner
 
-- Set up environment variables
+- 设置环境变量
 ```text Output
 export HF_HOME=/hf_home
 export SGLANG_IS_IN_CI=true
@@ -48,7 +53,7 @@ export OPENAI_API_KEY=sk-xxx
 export CUDA_VISIBLE_DEVICES=0
 ```
 
-- Run it forever
+- 让它一直运行
 ```text Output
 while true; do ./run.sh; echo "Restarting..."; sleep 2; done
 ```

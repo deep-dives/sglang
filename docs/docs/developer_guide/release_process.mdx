@@ -1,12 +1,16 @@
 ---
-title: "PyPI Package Release Process"
+title: "PyPI 包发布流程"
 metatags:
-    description: "SGLang PyPI release: version update, upload_pypi.sh script, GitHub release creation."
+    description: "SGLang PyPI 发布：版本更新、upload_pypi.sh 脚本、GitHub release 创建。"
 ---
-## Update the version in code
-Update the package version in `python/pyproject.toml` and `python/sglang/__init__.py`.
+<Note>
+💡 AI Infra 学习笔记：推理引擎的发布节奏（daily nightly + 定期 stable）是 AI Infra 的典型工程实践——kernel、算子库与上层框架演进极快，nightly 让用户提前拿到新特性与修复，stable 则保证可复现部署。发布流程本身很简单，但「版本更新 → 打包上传 → GitHub release」这一步，是理解开源 AI 项目如何把代码变成用户可安装产物的最小样本。
+</Note>
 
-## Upload the PyPI package
+## 更新代码中的版本号
+在 `python/pyproject.toml` 和 `python/sglang/__init__.py` 中更新包的版本号。
+
+## 上传 PyPI 包
 
 ```text Output
 pip install build twine
@@ -17,5 +21,5 @@ cd python
 bash upload_pypi.sh
 ```
 
-## Make a release in GitHub
-Make a new release https://github.com/sgl-project/sglang/releases/new.
+## 在 GitHub 上创建 release
+创建一个新 release：https://github.com/sgl-project/sglang/releases/new。

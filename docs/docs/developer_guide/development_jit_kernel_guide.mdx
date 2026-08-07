@@ -1,49 +1,54 @@
 ---
-title: "Development Guide for JIT Kernels"
+title: "JIT Kernel 开发指南"
 sidebarTitle: "JIT Kernels"
 metatags:
-    description: "SGLang JIT kernel development: clangd setup, TensorMatcher, LaunchKernel, add_constant example walkthrough."
+    description: "SGLang JIT kernel 开发：clangd 配置、TensorMatcher、LaunchKernel、add_constant 示例全流程。"
 ---
-## Environment Setup
 
-We strongly recommend using `clangd` as the language server for JIT kernel development.
-For Ubuntu/Debian, you can download clangd from [apt.llvm.org](https://apt.llvm.org/).
-If you are using VS Code, we recommend installing the `clangd` extension for better IDE integration.
+<Note>
+💡 AI Infra 学习笔记：JIT（just-in-time）kernel 在推理引擎中的作用，是把「C++/CUDA 代码」在运行时即时编译成针对当前 GPU 的机器码，从而绕开「每种模型/形状都预编译一份」的 AOT 方案。SGLang 对 attention 等热点算子同时维护 AOT（sgl-kernel）与 JIT（`python/sglang/kernels/jit`）两套 kernel：JIT 适合快速迭代、按需特化（如把常量作为模板参数），但首次调用要付一次编译开销；AOT 则把编译成本前置到发版时。理解这套「以编译换灵活性、以缓存换编译开销」的取舍，是推理引擎 kernel 开发的基础。
+</Note>
 
-All JIT-related files are located in `python/sglang/kernels/jit`.
-Unlike `sgl-kernel`, which compiles CUDA/C++ binaries ahead of time (AOT), just-in-time (JIT) kernels are compiled at runtime.
-Consequently, a static `compile_commands.json` cannot be generated.
-To enable code completion with `clangd`, run `python -m sglang.kernels.jit` to generate a `.clangd` configuration file in your current directory.
-After generating the file, restart the clangd language server. It should now recognize all JIT kernel files.
+## 环境搭建
 
-## Code Structure
+我们强烈推荐使用 `clangd` 作为 JIT kernel 开发的语言服务器。
+对于 Ubuntu/Debian，你可以从 [apt.llvm.org](https://apt.llvm.org/) 下载 clangd。
+如果你使用 VS Code，我们建议安装 `clangd` 扩展以获得更好的 IDE 集成。
 
-### C++ Implementation
+所有 JIT 相关文件位于 `python/sglang/kernels/jit`。
+与提前（AOT）编译 CUDA/C++ 二进制的 `sgl-kernel` 不同，just-in-time（JIT）kernel 在运行时编译。
+因此，无法生成静态的 `compile_commands.json`。
+要启用 clangd 的代码补全，运行 `python -m sglang.kernels.jit` 在当前目录生成 `.clangd` 配置文件。
+生成后重启 clangd 语言服务器，它就能识别所有 JIT kernel 文件了。
 
-C++ source code is located in `python/sglang/kernels/jit/csrc`.
-Reusable functions should be placed in `python/sglang/kernels/jit/include`.
+## 代码结构
 
-We use [tvm-ffi](https://github.com/apache/tvm-ffi) for efficient foreign language bindings.
-Refer to the [documentation](https://tvm.apache.org/ffi/) for advanced usage, such as exporting C++ objects.
-Typically, `tvm::ffi::TensorView` is sufficient for passing PyTorch Tensors from Python.
+### C++ 实现
 
-### Python Interface
+C++ 源码位于 `python/sglang/kernels/jit/csrc`。
+可复用的函数应放在 `python/sglang/kernels/jit/include`。
 
-Python interfaces are defined in `python/sglang/kernels/jit`.
-The `load_jit` utility function in `python/sglang/kernels/jit/utils/compile.py` loads and returns the compiled module.
-To export a C++ function (e.g., `cpp_func`), pass `cuda_wrappers=[("func", "cpp_func")]` to `load_jit`.
-The function can then be called in Python as `module.func`.
+我们使用 [tvm-ffi](https://github.com/apache/tvm-ffi) 实现高效的跨语言绑定。
+高级用法（如导出 C++ 对象）请参考[文档](https://tvm.apache.org/ffi/)。
+通常 `tvm::ffi::TensorView` 就足以从 Python 传递 PyTorch Tensor。
 
-For caching compiled modules, prefer `sglang.kernels.jit.utils.cache_once` over `functools.lru_cache`.
-`functools.lru_cache` is not compatible with `torch.compile`.
+### Python 接口
 
-### C++ Utilities
+Python 接口定义在 `python/sglang/kernels/jit`。
+`python/sglang/kernels/jit/utils/compile.py` 中的 `load_jit` 工具函数负责加载并返回编译好的模块。
+要导出一个 C++ 函数（例如 `cpp_func`），向 `load_jit` 传 `cuda_wrappers=[("func", "cpp_func")]`。
+之后就可以在 Python 中以 `module.func` 的方式调用该函数。
 
-The following C++ utilities are available:
+对于编译后模块的缓存，优先使用 `sglang.kernels.jit.utils.cache_once` 而不是 `functools.lru_cache`。
+`functools.lru_cache` 与 `torch.compile` 不兼容。
 
-#### Integer Range
+### C++ 工具
 
-Similar to PyTorch, we provide an `irange` function to represent an integer range.
+下面这些 C++ 工具可用：
+
+#### 整数区间
+
+与 PyTorch 类似，我们提供了表示整数区间的 `irange` 函数。
 
 ```C++ Example
 #include <sgl_kernel/utils.h>
@@ -59,14 +64,11 @@ void test() {
 
 ```
 
-#### Runtime Checking
+#### 运行时检查
 
-`CHECK_HOST` is the preferred runtime check: stream-style, and zero overhead when the
-check passes — the message expressions are only evaluated on failure.
-`RuntimeCheck` is the function-style alternative; note its message arguments are always
-evaluated, even when the check passes.
-`RuntimeDeviceCheck` verifies the status of the last kernel launch, and `CHECK_CUDA`
-is its stream-style equivalent for checking a `cudaError_t` with extra context.
+`CHECK_HOST` 是推荐的运行时检查方式：流式风格，检查通过时零开销——消息表达式只在失败时才求值。
+`RuntimeCheck` 是函数式风格的替代；注意它的消息参数无论检查是否通过都会求值。
+`RuntimeDeviceCheck` 校验上一次 kernel 启动的状态，`CHECK_CUDA` 是它的流式风格等价物，用于带额外上下文检查 `cudaError_t`。
 
 ```C++ Example
 #include <sgl_kernel/utils.h>
@@ -83,9 +85,9 @@ void test() {
 
 ```
 
-#### Tensor Checking
+#### 张量检查
 
-`TensorMatcher` provides a readable way to validate and extract tensor shape information.
+`TensorMatcher` 提供了一种可读的方式来校验并提取张量形状信息。
 
 ```cpp Example
 #include <sgl_kernel/tensor.h>
@@ -107,24 +109,24 @@ void test(const tvm::ffi::TensorView k_cache, const tvm::ffi::TensorView v_cache
 }
 ```
 
-Configure the `TensorMatcher` with expected stride, dtype, and device properties before verification.
-- If `with_strides` is omitted, the tensor is expected to be contiguous.
-- Template arguments in `with_dtype` restrict the allowed data types.
-- Template arguments in `with_device` restrict the allowed devices.
-- Values passed to `with_xxx` methods enforce equality checks.
-- Passing `-1` for size or stride allows matching any value.
+在验证前，先用期望的 stride、dtype 和设备属性配置 `TensorMatcher`。
+- 如果省略 `with_strides`，张量应被视为连续（contiguous）。
+- `with_dtype` 的模板参数限制了允许的数据类型。
+- `with_device` 的模板参数限制了允许的设备。
+- 传给 `with_xxx` 方法的值会强制相等检查。
+- 对 size 或 stride 传 `-1` 表示匹配任意值。
 
-A `Symbolic` variable must resolve to the same value across all verifications.
-Use `.unwrap()` to retrieve the matched value after verification.
+一个 `Symbolic` 变量必须在所有验证中解析为相同的值。
+验证后使用 `.unwrap()` 取回匹配到的值。
 
-> Note: `TensorMatcher` is a temporary expression and should not be stored in a variable.
+> Note: `TensorMatcher` 是一个临时表达式，不应该存储到变量中。
 
-> Tip: Add `//` at the end of the `TensorMatcher` chain to enforce proper indentation.
+> Tip: 在 `TensorMatcher` 链末尾加 `//` 以保证正确的缩进。
 
-#### Kernel Launching
+#### Kernel 启动
 
-`LaunchKernel::resolve_device` retrieves the current `cudaStream` from PyTorch.
-Kernels can also be launched directly using `LaunchKernel`.
+`LaunchKernel::resolve_device` 从 PyTorch 获取当前的 `cudaStream`。
+也可以直接用 `LaunchKernel` 启动 kernel。
 
 ```cpp Example
 #include <sgl_kernel/utils.cuh>
@@ -147,21 +149,21 @@ void test() {
 
 ```
 
-## Add new kernels
+## 添加新 kernel
 
-This section walks through a complete, end-to-end example of adding a new JIT kernel to the system.
-We use a simple add_constant kernel as a running example, which adds a constant integer value to every element of an input tensor.
+本节用一个完整的端到端示例，介绍如何向系统添加一个新的 JIT kernel。
+我们用简单的 add_constant kernel 作为贯穿示例，它给输入张量的每个元素加上一个常量整数值。
 
-Conceptually, the Python interface looks like this:
+概念上，Python 接口看起来是这样的：
 
 ```python Example
 def add_constant(src: torch.Tensor, c: int):
     return src + c
 ```
 
-### STEP 1: Write the C++ kernel
+### 第一步：编写 C++ kernel
 
-Write your CUDA kernel in [kernels/jit/csrc/add_constant.cuh](https://github.com/sgl-project/sglang/blob/main/python/sglang/kernels/jit/csrc/add_constant.cuh). For demonstration purposes, we pass the constant value as a template parameter.
+在 [kernels/jit/csrc/add_constant.cuh](https://github.com/sgl-project/sglang/blob/main/python/sglang/kernels/jit/csrc/add_constant.cuh) 中编写你的 CUDA kernel。为了演示，我们把常量值作为模板参数传入。
 
 ```cpp Example
 #include <sgl_kernel/tensor.h>   // For TensorMatcher, SymbolicSize, SymbolicDevice
@@ -221,10 +223,10 @@ void add_constant(tvm::ffi::TensorView dst, tvm::ffi::TensorView src) {
 
 ```
 
-### STEP 2: Create Python Interfaces
+### 第二步：创建 Python 接口
 
-Next, expose the kernel through a Python wrapper.
-Create a new file at [kernels/ops/attention/add_constant.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/kernels/ops/attention/add_constant.py) and expose the needed interfaces.
+接下来，通过一个 Python 包装器暴露该 kernel。
+在 [kernels/ops/attention/add_constant.py](https://github.com/sgl-project/sglang/blob/main/python/sglang/kernels/ops/attention/add_constant.py) 创建新文件，并暴露所需的接口。
 
 ```python Example
 from __future__ import annotations
@@ -261,170 +263,167 @@ def add_constant(src: torch.Tensor, constant: int) -> torch.Tensor:
 
 ```
 
-Keep the Python wrapper thin, but still validate the basic invariants such as device and dtype before dispatch. In the current JIT/FFI path, invalid tensors are not always rejected safely before launch.
+Python 包装器要保持轻薄，但在分发前仍要校验基本的不可变约束（如设备与 dtype）。在当前 JIT/FFI 路径下，非法张量并不总是在启动前被安全拒绝。
 
-### STEP 3: Use your kernel
+### 第三步：使用你的 kernel
 
-Finally, import and use the kernel like a regular Python function:
+最后，像普通 Python 函数一样导入并使用该 kernel：
 
 ```python Example
 from sglang.kernels.jit.add_constant import add_constant
 ```
 
-For a complete, runnable example, refer to [test_add_constant.py](https://github.com/sgl-project/sglang/blob/main/test/registered/jit/test_add_constant.py).
+完整的可运行示例，请参考 [test_add_constant.py](https://github.com/sgl-project/sglang/blob/main/test/registered/jit/test_add_constant.py)。
 
-## C++ Include Library Reference
+## C++ Include 库参考
 
-The JIT kernel framework provides a set of reusable C++ headers in
-`python/sglang/kernels/jit/include/sgl_kernel/`. Each header is designed
-to be lightweight and self-contained. Below is a summary of each header
-and its key APIs.
+JIT kernel 框架在 `python/sglang/kernels/jit/include/sgl_kernel/` 中提供了一套可复用的 C++ 头文件。每个头文件都设计得轻量且自包含。下面汇总了每个头文件及其关键 API。
 
-### Core Utilities
+### 核心工具
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>utils.h</code></td>
       <td><code>host</code></td>
-      <td>Host-side essentials: <code>RuntimeCheck</code>, <code>CHECK_HOST(cond) &lt;&lt; ...</code>, <code>Panic</code>, <code>div_ceil</code>, <code>irange</code></td>
+      <td>主机侧必备工具：<code>RuntimeCheck</code>、<code>CHECK_HOST(cond) &lt;&lt; ...</code>、<code>Panic</code>、<code>div_ceil</code>、<code>irange</code></td>
     </tr>
     <tr>
       <td><code>utils.cuh</code></td>
       <td><code>device</code> / <code>host</code></td>
-      <td>Type aliases (<code>fp16_t</code>, <code>bf16_t</code>, ...), <code>SGL_DEVICE</code> macro, PDL helpers, <code>LaunchKernel</code>, <code>RuntimeDeviceCheck</code>, <code>CHECK_CUDA(expr) &lt;&lt; ...</code></td>
+      <td>类型别名（<code>fp16_t</code>、<code>bf16_t</code>、...）、<code>SGL_DEVICE</code> 宏、PDL 辅助、<code>LaunchKernel</code>、<code>RuntimeDeviceCheck</code>、<code>CHECK_CUDA(expr) &lt;&lt; ...</code></td>
     </tr>
     <tr>
       <td><code>source_location.h</code></td>
-      <td>(global)</td>
-      <td>Portable <code>std::source_location</code> wrapper for error reporting</td>
+      <td>（全局）</td>
+      <td>可移植的 <code>std::source_location</code> 包装，用于错误报告</td>
     </tr>
     <tr>
       <td><code>runtime.cuh</code></td>
       <td><code>host::runtime</code></td>
-      <td>CUDA runtime queries: <code>get_blocks_per_sm</code>, <code>get_sm_count</code>, <code>get_cc_major</code>, <code>get_runtime_version</code>, <code>get_available_dynamic_smem_per_block</code></td>
+      <td>CUDA 运行时查询：<code>get_blocks_per_sm</code>、<code>get_sm_count</code>、<code>get_cc_major</code>、<code>get_runtime_version</code>、<code>get_available_dynamic_smem_per_block</code></td>
     </tr>
   </tbody>
 </table>
 
-### Tensor Validation
+### 张量校验
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>tensor.h</code></td>
       <td><code>host</code></td>
-      <td><code>TensorMatcher</code>, <code>SymbolicSize</code>, <code>SymbolicDType</code>, <code>SymbolicDevice</code></td>
+      <td><code>TensorMatcher</code>、<code>SymbolicSize</code>、<code>SymbolicDType</code>、<code>SymbolicDevice</code></td>
     </tr>
   </tbody>
 </table>
 
-### Math & Type System
+### 数学与类型系统
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>math.cuh</code></td>
       <td><code>device::math</code></td>
-      <td><code>max</code>, <code>min</code>, <code>abs</code>, <code>sqrt</code>, <code>rsqrt</code>, <code>exp</code>, <code>sin</code>, <code>cos</code>, constants</td>
+      <td><code>max</code>、<code>min</code>、<code>abs</code>、<code>sqrt</code>、<code>rsqrt</code>、<code>exp</code>、<code>sin</code>、<code>cos</code>、常量</td>
     </tr>
     <tr>
       <td><code>type.cuh</code></td>
-      <td>(global) / <code>device</code></td>
-      <td><code>DTypeTrait&lt;T&gt;</code>, <code>packed_t&lt;T&gt;</code>, <code>device::cast&lt;To&gt;(from)</code></td>
+      <td>（全局）/ <code>device</code></td>
+      <td><code>DTypeTrait&lt;T&gt;</code>、<code>packed_t&lt;T&gt;</code>、<code>device::cast&lt;To&gt;(from)</code></td>
     </tr>
   </tbody>
 </table>
 
-### Memory Access
+### 内存访问
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>vec.cuh</code></td>
       <td><code>device</code></td>
-      <td><code>AlignedVector&lt;T, N&gt;</code> - vectorized load/store (up to 128-bit; 256-bit requires Blackwell GPUs)</td>
+      <td><code>AlignedVector&lt;T, N&gt;</code> - 向量化 load/store（最高 128-bit；256-bit 需要 Blackwell GPU）</td>
     </tr>
     <tr>
       <td><code>tile.cuh</code></td>
       <td><code>device::tile</code></td>
-      <td><code>Memory&lt;T&gt;</code> - cooperative tiled memory I/O (thread/warp/CTA)</td>
+      <td><code>Memory&lt;T&gt;</code> - 协作式分块内存 I/O（thread/warp/CTA）</td>
     </tr>
   </tbody>
 </table>
 
-### Parallel Primitives
+### 并行原语
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>warp.cuh</code></td>
       <td><code>device::warp</code></td>
-      <td><code>reduce&lt;Op, kNumThreads, kInner&gt;</code> (SUM/MAX/MIN, grouped or inter-group) and <code>reduce_sum</code> / <code>reduce_max</code> / <code>reduce_min</code> wrappers via <code>__shfl_xor_sync</code></td>
+      <td><code>reduce&lt;Op, kNumThreads, kInner&gt;</code>（SUM/MAX/MIN，分组或组间）以及基于 <code>__shfl_xor_sync</code> 的 <code>reduce_sum</code> / <code>reduce_max</code> / <code>reduce_min</code> 包装</td>
     </tr>
     <tr>
       <td><code>cta.cuh</code></td>
       <td><code>device::cta</code></td>
-      <td><code>reduce_max</code> across warps via shared memory</td>
+      <td>通过共享内存跨 warp 做 <code>reduce_max</code></td>
     </tr>
     <tr>
       <td><code>atomic.cuh</code></td>
       <td><code>device::atomic</code></td>
-      <td><code>max</code> - atomic float max (CUDA + ROCm fallback)</td>
+      <td><code>max</code> - 原子浮点 max（CUDA + ROCm 回退）</td>
     </tr>
   </tbody>
 </table>
 
-### Reusable Kernel Templates
+### 可复用的 kernel 模板
 
 <table>
   <thead>
     <tr>
-      <th>Header</th>
-      <th>Namespace</th>
-      <th>Purpose</th>
+      <th>头文件</th>
+      <th>命名空间</th>
+      <th>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>impl/norm.cuh</code></td>
       <td><code>host::norm</code> / <code>device::norm</code></td>
-      <td>RMSNorm building blocks (warp &amp; CTA paths, <code>StorageType</code>)</td>
+      <td>RMSNorm 构建块（warp 与 CTA 路径、<code>StorageType</code>）</td>
     </tr>
   </tbody>
 </table>

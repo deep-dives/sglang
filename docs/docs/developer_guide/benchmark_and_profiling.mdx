@@ -1,83 +1,91 @@
 ---
-title: "Benchmark and Profiling"
+title: "基准测试与性能剖析"
 metatags:
-    description: "SGLang benchmarking and profiling: PyTorch Profiler, Nsight Systems, layerwise NVTX, PD disaggregation profiling."
+    description: "SGLang 基准测试与性能剖析：PyTorch Profiler、Nsight Systems、逐层 NVTX、PD 分离模式剖析。"
 ---
-## Benchmark
+## 基准测试 {#benchmark}
 
-SGLang provides four benchmark tools that operate at different levels of the stack. The table below summarizes their key differences:
+SGLang 提供了四个作用于软件栈不同层级的基准测试工具。下表总结了它们的关键差异：
 
 <table>
   <thead>
     <tr>
-      <th>Tool</th>
-      <th>HTTP Server</th>
-      <th>Scheduler</th>
-      <th>Use Case</th>
+      <th>工具</th>
+      <th>HTTP 服务端</th>
+      <th>调度器</th>
+      <th>适用场景</th>
     </tr>
   </thead>
   <tbody>
     <tr>
       <td><code>bench_serving</code></td>
-      <td>Yes (async HTTP client to a running server)</td>
-      <td>Yes (indirectly, via server)</td>
-      <td>Realistic online serving benchmarks with latency metrics (TTFT, TPOT, ITL)</td>
+      <td>是（作为异步 HTTP 客户端访问运行中的服务端）</td>
+      <td>是（间接地，经由服务端）</td>
+      <td>带延迟指标（TTFT、TPOT、ITL）的真实在线服务基准测试</td>
     </tr>
     <tr>
       <td><code>bench_one_batch_server</code></td>
-      <td>Yes (sends HTTP requests to a running server)</td>
-      <td>Yes (indirectly, via server)</td>
-      <td>End-to-end single-batch latency including HTTP and scheduler overhead</td>
+      <td>是（向运行中的服务端发送 HTTP 请求）</td>
+      <td>是（间接地，经由服务端）</td>
+      <td>包含 HTTP 与调度器开销的端到端单批延迟</td>
     </tr>
     <tr>
       <td><code>bench_offline_throughput</code></td>
-      <td>No</td>
-      <td>Yes (directly uses <code>Engine</code> in-process)</td>
-      <td>Maximum throughput measurement without HTTP overhead</td>
+      <td>否</td>
+      <td>是（进程内直接使用 <code>Engine</code>）</td>
+      <td>无 HTTP 开销的最大吞吐量测量</td>
     </tr>
     <tr>
       <td><code>bench_one_batch</code></td>
-      <td>No</td>
-      <td>No (directly calls <code>ModelRunner</code>)</td>
-      <td>Kernel-level latency profiling of a single static batch</td>
+      <td>否</td>
+      <td>否（直接调用 <code>ModelRunner</code>）</td>
+      <td>单个静态 batch 的 kernel 级延迟性能剖析</td>
     </tr>
   </tbody>
 </table>
 
-Use `bench_serving` by default unless there are specific needs.
+除非有特定需求，否则默认使用 `bench_serving`。
 
-**`bench_serving`** is an async HTTP load-testing client that sends requests at controlled rates with configurable concurrency to a running server. It measures realistic online serving metrics including time-to-first-token (TTFT), time-per-output-token (TPOT), inter-token latency (ITL), and throughput. Use `num-prompts >= 5 * max-concurrency` to measure steady-state performance. Launch a server with `sglang.launch_server` first.
+<Note>
+💡 AI Infra 学习笔记：四个工具覆盖了「系统级 → 组件级」的完整剖析栈——`bench_serving` 测真实在线场景（含调度与网络）、`bench_one_batch_server` 测单批端到端、`bench_offline_throughput` 排除网络干扰、`bench_one_batch` 直达 kernel。做性能优化时要按「问题出在哪一层」选工具：系统吞吐低先用 `bench_serving`，怀疑某个 kernel 慢再用 `bench_one_batch` 配合 profiler。理解这些工具各自的偏差（例如 `bench_one_batch` 无动态批处理、指标偏乐观），是正确解读基准测试的前提。
+</Note>
+
+**`bench_serving`** 是一个异步 HTTP 负载测试客户端，以可控速率和可配置的并发度向运行中的服务端发送请求。它测量真实的在线服务指标，包括首 token 时间（TTFT）、每输出 token 时间（TPOT）、token 间延迟（ITL）与吞吐量。用 `num-prompts >= 5 * max-concurrency` 来测量稳态性能。请先用 `sglang.launch_server` 启动服务端。
 
   ```bash Command
   python3 -m sglang.bench_serving --backend sglang --max-concurrency 16 --num-prompts 80 --random-input-len 256 --random-output-len 32 --dataset-name random
   ```
 
-**`bench_one_batch_server`** sends a single batch as one HTTP request to a running server. Due to only having a single batch, the server is never in a steady-state and metrics will be biased. Launch a server with `sglang.launch_server` first.
+<Note>
+💡 AI Infra 学习笔记：为什么 benchmark 要控制变量？——请求数要远大于并发上限（`num-prompts >= 5 * max-concurrency`），是为了让系统进入稳态：只有当整个 pipeline 被持续灌满、批处理队列始终非空时，测出的吞吐才是「系统真实能力」而不是「启动瞬态」。类似地，预热（warmup）、固定随机种子、关闭前缀缓存等，都是为了排除噪声源，让 A/B 对比只反映你改的那一行代码的差异。
+</Note>
+
+**`bench_one_batch_server`** 把单个 batch 作为一个 HTTP 请求发给运行中的服务端。由于只有一个 batch，服务端永远不会进入稳态，指标会有偏差。请先用 `sglang.launch_server` 启动服务端。
 
   ```bash Command
   python3 -m sglang.bench_one_batch_server --base-url http://127.0.0.1:30000 --model-path meta-llama/Meta-Llama-3.1-8B-Instruct --batch-size 32 --input-len 256 --output-len 32
   ```
 
-  - Pass `--enable-multi-batch` and set `--batch-size` to a multiple of the server's `--max-running-requests` to stabilize throughput measurements. Surplus requests are queued by the scheduler and promoted batch-by-batch, amortizing per-request prefill and first-step transients into steady-state decode. Under this flag, only `overall_throughput` is authoritative; `input_throughput`, `output_throughput`, `last_ttft`, and ITL include cross-batch queueing in their denominators and should be treated as informational.
-  - Pass `--lora-name <name>` to route every prompt through a pre-loaded LoRA adapter. Requires the server to be launched with `--enable-lora --lora-paths <name>=<path>`.
+  - 传 `--enable-multi-batch` 并把 `--batch-size` 设为服务端 `--max-running-requests` 的倍数，可以让吞吐量测量更稳定。多余的请求由调度器排队，并逐批提升，从而把每个请求的预填充和第一步的瞬态开销摊薄进稳态解码。在该参数下，只有 `overall_throughput` 是权威的；`input_throughput`、`output_throughput`、`last_ttft` 与 ITL 的分母里包含跨 batch 排队时间，应视为参考信息。
+  - 传 `--lora-name <name>` 可以把每个提示词都路由到预先加载的 LoRA 适配器。要求服务端以 `--enable-lora --lora-paths <name>=<path>` 启动。
 
-**`bench_offline_throughput`** directly instantiates the `Engine` object in-process (no HTTP server) and submits all requests at once via `engine.generate()`. The engine's scheduler handles batching and execution. This measures maximum achievable throughput without any network overhead.
+**`bench_offline_throughput`** 在进程内直接实例化 `Engine` 对象（无 HTTP 服务端），并通过 `engine.generate()` 一次性提交所有请求。引擎的调度器负责批处理与执行。这测量的是没有任何网络开销时能达到的最大吞吐量。
 
   ```bash Command
   python3 -m sglang.bench_offline_throughput --model-path meta-llama/Meta-Llama-3.1-8B-Instruct --num-prompts 10
   ```
 
-**`bench_one_batch`** is the lowest-level tool. It directly instantiates a `ModelRunner` and calls `extend()` / `decode()` on a fixed static batch, bypassing the scheduler entirely. The prefill and decode phases are run separately, making profiling easier but rendering the metrics unrealistic. Because there is no dynamic batching, it may run out of memory for batch sizes that a real server can handle (a real server chunks prefill into smaller batches). This is best suited for profiling individual kernel performance.
+**`bench_one_batch`** 是最底层的工具。它直接实例化一个 `ModelRunner`，在固定的静态 batch 上调用 `extend()` / `decode()`，完全绕过调度器。预填充和解码阶段分开运行，便于性能剖析，但也让指标变得不真实。由于没有动态批处理，对于真实服务端能处理的 batch 大小，它可能会内存不足（真实服务端会把预填充切成更小的 batch）。它最适合剖析单个 kernel 的性能。
 
   ```bash Command
   python3 -m sglang.bench_one_batch --model-path meta-llama/Meta-Llama-3.1-8B-Instruct --batch-size 32 --input-len 256 --output-len 32
   ```
 
-## Profile with PyTorch Profiler
+## 用 PyTorch Profiler 进行性能剖析
 
-[Pytorch Profiler](https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html) is a convenient basic tool to inspect kernel execution time, call stack, and kernel overlap and occupancy.
+[Pytorch Profiler](https://pytorch.org/tutorials/recipes/recipes/profiler_recipe.html) 是一个方便的基础工具，用于查看 kernel 执行时间、调用栈、kernel 重叠与占用率。
 
-### Profile a server with `sglang.bench_serving`
+### 用 `sglang.bench_serving` 剖析服务端
 
 ```bash Command
 # set trace path
@@ -90,18 +98,18 @@ python -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct
 python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 10 --sharegpt-output-len 100 --profile
 ```
 
-For `bench_serving --profile`, the output directory is selected on the client side from `--profile-output-dir` or `SGLANG_TORCH_PROFILER_DIR` (fallback: `/tmp`), then sent in the `/start_profile` request.
-If you call `/start_profile` directly and do not provide `output_dir`, the server uses its own `SGLANG_TORCH_PROFILER_DIR` (fallback: `/tmp`).
+对 `bench_serving --profile`，输出目录在客户端由 `--profile-output-dir` 或 `SGLANG_TORCH_PROFILER_DIR`（回退：`/tmp`）选择，然后随 `/start_profile` 请求发送。
+如果你直接调用 `/start_profile` 且未提供 `output_dir`，服务端会使用它自己的 `SGLANG_TORCH_PROFILER_DIR`（回退：`/tmp`）。
 
-Setting `SGLANG_TORCH_PROFILER_DIR` on both server and client is still recommended to avoid confusion about where traces are written.
+仍建议在服务端和客户端都设置 `SGLANG_TORCH_PROFILER_DIR`，以免搞不清追踪写到哪里。
 
-For more details, please refer to [Bench Serving Guide](./bench_serving).
+更多细节请参考 [Bench Serving 指南](./bench_serving)。
 
-### Profile In PD Disaggregation Mode
+### PD 分离模式下的性能剖析 {#profile-in-pd-disaggregation-mode}
 
-When profiling in PD disaggregation mode, prefill and decode workers **must be profiled separately** due to torch profiler limitations. The `bench_serving` command provides dedicated options for this:
+在 PD 分离模式下进行性能剖析时，由于 torch profiler 的限制，预填充和解码 worker **必须分开剖析**。`bench_serving` 命令为这种情况提供了专用选项：
 
-#### Profile Prefill Workers
+#### 剖析预填充 Worker
 
 ```bash Command
 # set trace path
@@ -118,17 +126,17 @@ python -m sglang_router.launch_router --pd-disaggregation --prefill http://127.0
 python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 10 --sharegpt-output-len 100 --profile --pd-separated --profile-prefill-url http://127.0.0.1:30000
 ```
 
-#### Profile Decode Workers
+#### 剖析解码 Worker
 
 ```bash Command
 # send profiling request targeting decode workers
 python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 10 --sharegpt-output-len 100 --profile --pd-separated --profile-decode-url http://127.0.0.1:30001
 ```
 
-#### Important Notes
+#### 重要注意事项
 
-- `--profile-prefill-url` and `--profile-decode-url` are **mutually exclusive** - you cannot profile both at the same time
-- Both options support multiple worker URLs for multi-instance setups:
+- `--profile-prefill-url` 和 `--profile-decode-url` **互斥**——你不能同时剖析两者
+- 两个选项都支持多 worker URL，用于多实例场景：
   ```bash Command
   # Profile multiple prefill workers
   python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 10 --profile --pd-separated --profile-prefill-url http://127.0.0.1:30000 http://127.0.0.1:30002
@@ -136,10 +144,10 @@ python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-
   # Profile multiple decode workers
   python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 10 --profile --pd-separated --profile-decode-url http://127.0.0.1:30001 http://127.0.0.1:30003
   ```
-- Make sure `SGLANG_TORCH_PROFILER_DIR` is set on all worker nodes before starting the servers
-- For more details on setting up PD disaggregation, see [PD Disaggregation Guide](../advanced_features/pd_disaggregation)
+- 启动服务端前，确保在所有 worker 节点上都设置了 `SGLANG_TORCH_PROFILER_DIR`
+- 关于 PD 分离的搭建细节，参见 [PD 分离指南](../advanced_features/pd_disaggregation)
 
-### Profile a server with `sglang.bench_offline_throughput`
+### 用 `sglang.bench_offline_throughput` 剖析服务端
 ```bash Command
 export SGLANG_TORCH_PROFILER_DIR=/root/sglang/profile_log
 
@@ -151,11 +159,11 @@ python3 -m sglang.bench_one_batch --model-path meta-llama/Llama-3.1-8B-Instruct 
 python -m sglang.bench_offline_throughput --model-path meta-llama/Llama-3.1-8B-Instruct --dataset-name random --num-prompts 10 --profile --mem-frac=0.8
 ```
 
-### Profile a server with `sglang.profiler`
+### 用 `sglang.profiler` 剖析服务端
 
-When the server is running (e.g., processing a decoding request), you can start live profiling immediately by sending a profile request to the server.
+当服务端正在运行（例如正在处理解码请求）时，你可以通过向服务端发送一个 profile 请求来立即开始实时剖析。
 
-You can do this by running `python3 -m sglang.profiler`. For example:
+可以运行 `python3 -m sglang.profiler` 来实现。例如：
 
 ```text Output
 # Terminal 1: Send a generation request
@@ -166,21 +174,21 @@ python3 -m sglang.test.send_one
 python3 -m sglang.profiler
 ```
 
-You can also combine the above operations into a single command
+你也可以把上面的操作合并成一条命令
 
 ```text Output
 python3 -m sglang.test.send_one --profile
 ```
 
-### Profile a server with HTTP API endpoints
+### 用 HTTP API 端点剖析服务端
 
-SGLang provides HTTP API endpoints to control profiling on a running server. This allows you to start and stop profiling programmatically, which is useful for capturing specific workload patterns.
+SGLang 提供了 HTTP API 端点，用于控制运行中服务端的剖析。这样你就可以编程式地开始和停止剖析，便于捕捉特定的负载模式。
 
-#### Using `/start_profile` endpoint
+#### 使用 `/start_profile` 端点
 
-The `/start_profile` endpoint starts profiling on the server. You can control when profiling begins and how long it runs using the following parameters:
+`/start_profile` 端点在服务端上开始剖析。你可以用以下参数控制剖析何时开始以及持续多久：
 
-**Basic usage:**
+**基本用法：**
 
 ```bash Command
 # Start profiling immediately for 10 steps
@@ -191,17 +199,17 @@ curl -X POST http://127.0.0.1:30000/start_profile \
   }'
 ```
 
-**Parameters:**
+**参数：**
 
-- `output_dir` (optional): Directory where profile traces will be saved. If not specified, uses `SGLANG_TORCH_PROFILER_DIR` environment variable, or `/tmp` as the default
-- `num_steps` (optional): Number of steps to profile. If not specified, profiling continues until manually stopped with `/stop_profile`
-- `start_step` (optional): Step number at which to start profiling (inclusive). Useful for skipping warmup iterations
-- `activities` (optional): List of activities to profile, e.g., `["CPU", "GPU"]`. Default is `["CPU", "GPU"]`
-- `merge_profiles` (optional): Whether to merge distributed traces. Default is `false`
+- `output_dir`（可选）：剖析追踪的保存目录。未指定时使用 `SGLANG_TORCH_PROFILER_DIR` 环境变量，默认回退到 `/tmp`
+- `num_steps`（可选）：要剖析的步数。未指定时，剖析会一直持续到用 `/stop_profile` 手动停止
+- `start_step`（可选）：开始剖析的步号（含）。用于跳过预热迭代
+- `activities`（可选）：要剖析的活动列表，例如 `["CPU", "GPU"]`。默认是 `["CPU", "GPU"]`
+- `merge_profiles`（可选）：是否合并分布式追踪。默认是 `false`
 
-**Note on step ranges:** Profiling starts at `start_step` (inclusive) and continues for `num_steps` iterations. For example, with `start_step=3` and `num_steps=10`, profiling captures steps 3, 4, 5, 6, 7, 8, 9, 10, 11, and 12 (10 steps total, starting from step 3).
+**关于步数范围的说明：** 剖析从 `start_step`（含）开始，持续 `num_steps` 次迭代。例如，`start_step=3` 与 `num_steps=10` 时，剖析会捕获第 3、4、5、6、7、8、9、10、11、12 步（共 10 步，从第 3 步开始）。
 
-**Advanced usage with `start_step`:**
+**配合 `start_step` 的高级用法：**
 
 ```bash Command
 # Wait 5 steps (warmup), then profile for 10 steps
@@ -215,25 +223,25 @@ curl -X POST http://127.0.0.1:30000/start_profile \
   }'
 ```
 
-**Continuous profiling (manual stop):**
+**持续剖析（手动停止）：**
 
 ```bash Command
 # Start profiling without num_steps - must manually stop with /stop_profile
 curl -X POST http://127.0.0.1:30000/start_profile
 ```
 
-#### Using `/stop_profile` endpoint
+#### 使用 `/stop_profile` 端点
 
-The `/stop_profile` endpoint stops an ongoing profiling session and saves the trace file.
+`/stop_profile` 端点停止进行中的剖析会话并保存追踪文件。
 
 ```bash Command
 # Stop profiling and save traces
 curl -X POST http://127.0.0.1:30000/stop_profile
 ```
 
-This is only needed when you start profiling without specifying `num_steps`. If `num_steps` is specified, profiling will automatically stop after that many steps.
+只有当你未指定 `num_steps` 就开始了剖析时才需要它。如果指定了 `num_steps`，剖析会在那么多步之后自动停止。
 
-#### Example workflow
+#### 示例工作流
 
 ```bash Command
 # Terminal 1: Start the server
@@ -254,17 +262,17 @@ python -m sglang.bench_serving --backend sglang --num-prompts 100
 curl -X POST http://127.0.0.1:30000/stop_profile
 ```
 
-### Profiler Trace Merger for Distributed Traces
+### 分布式追踪的 Profiler Trace 合并 {#profiler-trace-merger-for-distributed-traces}
 
-SGLang now supports automatic merging of profiling traces from distributed setups with multiple parallelism types (TP, DP, PP, EP). This feature is particularly useful for analyzing performance across distributed runs.
+SGLang 现在支持自动合并来自含多种并行度（TP、DP、PP、EP）的分布式环境中的剖析追踪。这个特性对分析分布式运行中的性能尤其有用。
 
-#### Multi-Node Profiling and Shared Storage Considerations
+#### 多节点剖析与共享存储的考量
 
-Single-node profiler output merging is completely supported. When profiling in distributed environments spanning multiple nodes, shared storage (e.g., NFS, Lustre) should be accessible by all nodes for the output directory to enable merging of trace files.
+单节点 profiler 输出合并完全受支持。在跨多个节点的分布式环境中剖析时，所有节点都应能访问共享存储（例如 NFS、Lustre）作为输出目录，才能合并追踪文件。
 
-If there is no shared storage accessible across nodes, automatic merging of trace files during profiling is not supported directly as of now.
+如果节点之间没有可访问的共享存储，目前无法直接支持剖析过程中的追踪文件自动合并。
 
-#### HTTP API Usage
+#### HTTP API 用法
 
 ```bash Command
 # Start profiling with automatic trace merging enabled
@@ -278,7 +286,7 @@ curl -X POST <BASE_URL>/start_profile \
   }'
 ```
 
-#### Command Line Usage
+#### 命令行用法
 
 ```bash Command
 # Start profiling with merge enabled
@@ -290,22 +298,22 @@ python -m sglang.profiler \
   --merge-profiles # optional argument to merge profile traces (default=False)
 ```
 
-#### Output Files
+#### 输出文件
 
-The profile merger generates:
-- Individual rank trace files: `&#123;profile_id&#125;-TP-&#123;tp&#125;-DP-&#123;dp&#125;-PP-&#123;pp&#125;-EP-&#123;ep&#125;.trace.json.gz`
-- Merged trace file: `merged-&#123;profile_id&#125;.trace.json.gz`
+profile 合并器会生成：
+- 每个 rank 的追踪文件：`&#123;profile_id&#125;-TP-&#123;tp&#125;-DP-&#123;dp&#125;-PP-&#123;pp&#125;-EP-&#123;ep&#125;.trace.json.gz`
+- 合并后的追踪文件：`merged-&#123;profile_id&#125;.trace.json.gz`
 
-### Profile the CUDA graph capture phase
+### 剖析 CUDA 图捕获阶段
 
-The tools above profile the steady-state runtime (prefill / decode). To instead profile the **CUDA graph capture phase** that runs once at server startup, launch the server with `--enable-profile-cuda-graph`. This runs a PyTorch Profiler pass over the decode CUDA-graph capture, which is useful for diagnosing slow or memory-heavy graph capture.
+上面的工具剖析的是稳态运行时（预填充/解码）。如果想改为剖析服务端启动时只运行一次的 **CUDA 图捕获阶段**，请用 `--enable-profile-cuda-graph` 启动服务端。这会针对解码 CUDA 图捕获运行一次 PyTorch Profiler 扫描，对诊断缓慢或内存吃紧的图捕获很有用。
 
-`--enable-profile-cuda-graph` (server arg) builds the capture profiler and always emits the per-kernel CPU/CUDA time summary tables and a CUDA memory snapshot. Persisting Chrome traces to disk is opt-in via one of two env vars (both no-ops unless `--enable-profile-cuda-graph` is also set):
+`--enable-profile-cuda-graph`（服务端参数）会构建捕获用 profiler，并始终输出每个 kernel 的 CPU/CUDA 时间汇总表与 CUDA 内存快照。把 Chrome 追踪持久化到磁盘是通过两个环境变量之一按需开启的（除非同时设置了 `--enable-profile-cuda-graph`，否则它们都是空操作）：
 
-- `SGLANG_ENABLE_CUDA_GRAPH_CAPTURE_TRACE=1` — writes **one combined trace per tensor-parallel rank** for the whole capture pass, named `cuda_graph_capture-&#123;runner&#125;-TP-&#123;tp_rank&#125;.json.gz`.
-- `SGLANG_GRAPH_BATCH_CAPTURE=1` — writes **one trace per captured batch size per rank**, named `&#123;runner&#125;_bs_&#123;bs&#125;_rank&#123;tp_rank&#125;.json.gz`. The profiler runs on a `wait=2, warmup=0, active=1` schedule (the two dummy runs before each capture are skipped) with `record_shapes`, `with_stack`, `with_flops`, and `profile_memory` enabled, giving per-shape kernel identities, input shapes, FLOPs, and memory.
+- `SGLANG_ENABLE_CUDA_GRAPH_CAPTURE_TRACE=1` — 为整个捕获过程写入**每个张量并行 rank 一份合并追踪**，命名为 `cuda_graph_capture-&#123;runner&#125;-TP-&#123;tp_rank&#125;.json.gz`。
+- `SGLANG_GRAPH_BATCH_CAPTURE=1` — 为每个捕获的 batch 大小写入**每个 rank 一份追踪**，命名为 `&#123;runner&#125;_bs_&#123;bs&#125;_rank&#123;tp_rank&#125;.json.gz`。profiler 以 `wait=2, warmup=0, active=1` 的调度运行（每次捕获前的两次 dummy 运行被跳过），并启用 `record_shapes`、`with_stack`、`with_flops` 与 `profile_memory`，从而给出按形状区分的 kernel 身份、输入形状、FLOPs 与内存。
 
-If both env vars are set, `SGLANG_ENABLE_CUDA_GRAPH_CAPTURE_TRACE` (the single combined trace) takes precedence.
+如果两个环境变量都设置了，`SGLANG_ENABLE_CUDA_GRAPH_CAPTURE_TRACE`（单个合并追踪）优先。
 
 ```bash Command
 # set trace path
@@ -319,51 +327,51 @@ export SGLANG_GRAPH_BATCH_CAPTURE=1
 python -m sglang.launch_server --model-path meta-llama/Llama-3.1-8B-Instruct --enable-profile-cuda-graph
 ```
 
-Behavior and output:
+行为与输出：
 
-- All traces are written to `$&#123;SGLANG_TORCH_PROFILER_DIR&#125;/graph_capture_profile/` (defaults to `/tmp/graph_capture_profile/` if the variable is unset). Files are namespaced by runner class and TP rank so concurrent capture passes (e.g. EAGLE target/draft/draft-extend) and ranks don't collide.
-- A CUDA memory snapshot (`cuda_graph_runner_memory_usage.pickle`) and per-kernel CPU/CUDA time summary tables are always emitted for the capture phase (independent of the env vars above).
-- Only the decode CUDA-graph runner is profiled.
+- 所有追踪都写到 `$&#123;SGLANG_TORCH_PROFILER_DIR&#125;/graph_capture_profile/`（未设置该变量时默认 `/tmp/graph_capture_profile/`）。文件按 runner 类和 TP rank 做命名空间隔离，因此并发的捕获过程（例如 EAGLE 的 target/draft/draft-extend）和不同 rank 不会冲突。
+- 捕获阶段始终会输出 CUDA 内存快照（`cuda_graph_runner_memory_usage.pickle`）和每个 kernel 的 CPU/CUDA 时间汇总表（与上面的环境变量无关）。
+- 只剖析解码 CUDA 图 runner。
 
-The capture traces are viewed the same way as other PyTorch Profiler traces (see [View traces](#view-traces)).
+捕获追踪的查看方式与其它 PyTorch Profiler 追踪相同（参见 [查看追踪](#view-traces)）。
 
-### Possible PyTorch bugs
-If in any cases you encounter the following error (for example, using qwen 2.5 VL):
+### 可能的 PyTorch bug
+如果你遇到下面的错误（例如使用 qwen 2.5 VL 时）：
 ```bash Command
 RuntimeError: !stack.empty() INTERNAL ASSERT FAILED at "/pytorch/torch/csrc/autograd/profiler_python.cpp":983, please report a bug to PyTorch. Python replay stack is empty.
 ```
-This is likely a PyTorch Bug reported in [Bug: vLLM Profiler](https://github.com/vllm-project/vllm/issues/18240) and [Bug: torch.profiler.profile](https://github.com/pytorch/pytorch/issues/101632). As a workaround, you may disable `with_stack` with an environment variable such as follows:
+这很可能是 [Bug: vLLM Profiler](https://github.com/vllm-project/vllm/issues/18240) 和 [Bug: torch.profiler.profile](https://github.com/pytorch/pytorch/issues/101632) 中报告的 PyTorch Bug。作为变通方案，你可以用类似下面的环境变量禁用 `with_stack`：
 ```bash Command
 export SGLANG_PROFILE_WITH_STACK=False
 python -m sglang.bench_offline_throughput --model-path meta-llama/Llama-3.1-8B-Instruct --dataset-name random --num-prompts 10 --profile --mem-frac=0.8
 ```
 
-### View traces
+### 查看追踪 {#view-traces}
 
-Trace files can be loaded and visualized from:
+追踪文件可以从以下位置加载和可视化：
 
-1. https://ui.perfetto.dev/ (any browser)
-2. chrome://tracing (Chrome browser only)
+1. https://ui.perfetto.dev/ （任意浏览器）
+2. chrome://tracing （仅 Chrome 浏览器）
 
-If browser cannot open trace file due to its large size,
-client can generate a small trace file (&lt;100MB) by controlling number of prompts and lengths of prompt outputs.
-For example, when profiling a server,
+如果因为文件过大，浏览器无法打开追踪文件，
+客户端可以通过控制提示词数量与提示词输出长度来生成一个小追踪文件（&lt;100MB）。
+例如，剖析一个服务端时，
 
 ```bash Command
 python -m sglang.bench_serving --backend sglang --model meta-llama/Llama-3.1-8B-Instruct --num-prompts 2 --sharegpt-output-len 100 --profile
 ```
 
-This command sets the number of prompts to 2 with `--num-prompts` argument and limits the length of output sequences to 100 with `--sharegpt-output-len` argument, which can generate a small trace file for browser to open smoothly.
+这条命令用 `--num-prompts` 参数把提示词数量设为 2，并用 `--sharegpt-output-len` 参数把输出序列长度限制为 100，可以生成一个浏览器能流畅打开的小追踪文件。
 
-Additionally, if you want to locate the SGLang Python source code through the cuda kernel in Trace, you need to disable CUDA Graph when starting the service. This can be done by using the `--disable-cuda-graph` parameter in the command to start the service.
+另外，如果你想通过 Trace 里的 cuda kernel 定位 SGLang Python 源码，需要在启动服务时禁用 CUDA Graph。可以通过在启动服务的命令中加 `--disable-cuda-graph` 参数实现。
 
-## Profile with Nsight
+## 用 Nsight 进行性能剖析 {#profile-with-nsight}
 
-[Nsight systems](https://docs.nvidia.com/nsight-systems/) is an advanced tool that exposes more profiling details, such as register and shared memory usage, annotated code regions and low-level CUDA APIs and events.
+[Nsight systems](https://docs.nvidia.com/nsight-systems/) 是一个高级工具，能暴露更多的剖析细节，例如寄存器与共享内存使用、带注释的代码区域，以及底层的 CUDA API 与事件。
 
-1. Prerequisite:
+1. 前置条件：
 
-   Install using apt, or run inside a [NVIDIA Docker container](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch/tags) or [SGLang Docker container](https://github.com/sgl-project/sglang/tree/main/docker).
+   用 apt 安装，或在 [NVIDIA Docker 容器](https://catalog.ngc.nvidia.com/orgs/nvidia/containers/pytorch/tags) 或 [SGLang Docker 容器](https://github.com/sgl-project/sglang/tree/main/docker) 内运行。
 
    ```bash Command
    # install nsys
@@ -376,13 +384,13 @@ Additionally, if you want to locate the SGLang Python source code through the cu
    apt install nsight-systems-cli
    ```
 
-2. To profile a single batch, use
+2. 要剖析单个 batch，请用
 
    ```bash Command
    nsys profile --trace-fork-before-exec=true --cuda-graph-trace=node python3 -m sglang.bench_one_batch --model meta-llama/Meta-Llama-3-8B --batch-size 64 --input-len 512
    ```
 
-3. To profile a server, e.g.
+3. 要剖析一个服务端，例如
 
    ```bash Command
    # launch the server, set the delay and duration times according to needs
@@ -394,21 +402,21 @@ Additionally, if you want to locate the SGLang Python source code through the cu
    python3 -m sglang.bench_serving --backend sglang --num-prompts 1000 --dataset-name random --random-input 1024 --random-output 512
    ```
 
-   In practice, we recommend users to set `--duration` argument to a large value. Whenever user wants the server to stop profiling. Firstly run:
+   实践中，我们建议把 `--duration` 参数设成很大的值。当用户想让服务端停止剖析时，先运行：
 
    ```bash Command
    nsys sessions list
    ```
 
-   to get the session id in the form of `profile-XXXXX`, then run:
+   获取形如 `profile-XXXXX` 的会话 id，然后运行：
 
    ```bash Command
    nsys stop --session=profile-XXXXX
    ```
 
-   to manually kill the profiler and generate `nsys-rep` files instantly.
+   手动终止 profiler，并立即生成 `nsys-rep` 文件。
 
-4. Use NVTX to annotate code regions, e.g. to see their execution time.
+4. 用 NVTX 注释代码区域，例如查看它们的执行时间。
 
    ```bash Command
    # install nvtx
@@ -422,19 +430,19 @@ Additionally, if you want to locate the SGLang Python source code through the cu
        # some critical code
    ```
 
-### Layer-wise NVTX Profiling with Nsight Systems
+### 用 Nsight Systems 做逐层 NVTX 剖析
 
-SGLang provides built-in layerwise NVTX annotations that can be combined with the CUDA Profiler for detailed per-layer profiling in Nsight Systems. This is particularly useful for identifying performance bottlenecks at the layer level.
+SGLang 内置了逐层（layerwise）NVTX 注释，可以与 CUDA Profiler 结合，在 Nsight Systems 中做详细的逐层剖析。这对定位层级的性能瓶颈尤其有用。
 
-#### Using `--enable-layerwise-nvtx-marker` with Nsight Systems and `/start_profile`
+#### 在 Nsight Systems 和 `/start_profile` 下使用 `--enable-layerwise-nvtx-marker`
 
-The `--enable-layerwise-nvtx-marker` flag automatically adds NVTX markers to every layer in your model. This is particularly powerful when combined with Nsight Systems profiling to see detailed per-layer performance.
+`--enable-layerwise-nvtx-marker` 参数会自动为模型中的每一层添加 NVTX marker。与 Nsight Systems 剖析结合时，可以查看详细的逐层性能，非常强大。
 
-**Method 1: Using `/start_profile` with CUDA_PROFILER (for programmatic control)**
+**方法一：用 `/start_profile` 配合 CUDA_PROFILER（程序化控制）**
 
-This method allows you to control exactly when profiling starts/stops via HTTP API while Nsight Systems is running.
+该方法让你在 Nsight Systems 运行的同时，通过 HTTP API 精确控制剖析的开始/停止时机。
 
-1. Launch the server with layerwise NVTX enabled under Nsight Systems:
+1. 在 Nsight Systems 下启动启用了逐层 NVTX 的服务端：
 
    ```bash Command
    # Terminal 1: Start server with nsys and capture-range option
@@ -449,9 +457,9 @@ This method allows you to control exactly when profiling starts/stops via HTTP A
        --disable-cuda-graph
    ```
 
-   Note: NVTX markers are not emitted for kernel launches captured by CUDA graphs. Use `--disable-cuda-graph` to ensure all layerwise NVTX markers are emitted in the trace.
+   注意：CUDA 图捕获的 kernel 启动不会发出 NVTX marker。请用 `--disable-cuda-graph` 确保所有逐层 NVTX marker 都出现在追踪里。
 
-2. In another terminal, control profiling via `/start_profile` with `CUDA_PROFILER` activity:
+2. 在另一个终端，用 `CUDA_PROFILER` activity 通过 `/start_profile` 控制剖析：
 
    ```bash Command
    # Terminal 2: Wait for server to be ready, then start CUDA profiling
@@ -465,25 +473,25 @@ This method allows you to control exactly when profiling starts/stops via HTTP A
      }'
    ```
 
-3. Send requests to generate load:
+3. 发送请求以产生负载：
 
    ```bash Command
    # Terminal 3: Generate workload
    python -m sglang.bench_serving --backend sglang --num-prompts 100
    ```
 
-4. Profiling will automatically stop after 10 steps (due to `num_steps: 10`). If you hadn't specified `num_steps`, you would need to manually stop it:
+4. 剖析会在 10 步之后自动停止（因为 `num_steps: 10`）。如果你没有指定 `num_steps`，就需要手动停止：
 
    ```bash Command
    # Terminal 2: Only needed if num_steps was not specified
    curl -X POST http://127.0.0.1:30000/stop_profile
    ```
 
-The `--capture-range=cudaProfilerApi` option tells Nsight Systems to only capture data between `cudaProfilerStart()` and `cudaProfilerStop()` calls (triggered by `/start_profile` and `/stop_profile`), reducing overhead and file size. The `start_step` parameter skips the first 3 steps to avoid capturing warmup overhead.
+`--capture-range=cudaProfilerApi` 选项告诉 Nsight Systems 只捕获 `cudaProfilerStart()` 与 `cudaProfilerStop()` 调用之间的数据（由 `/start_profile` 与 `/stop_profile` 触发），从而降低开销和文件大小。`start_step` 参数跳过前 3 步，避免捕获到预热开销。
 
-**Method 2: Simpler approach without `/start_profile` API**
+**方法二：不依赖 `/start_profile` API 的简化方式**
 
-For simpler use cases where you don't need fine-grained control over profiling start/stop, you can profile with Nsight Systems capturing the entire workload:
+对不需要精细控制剖析开始/停止的简单场景，你可以让 Nsight Systems 捕获整个工作负载：
 
 ```bash Command
 # Terminal 1: Start server with layerwise NVTX
@@ -500,38 +508,38 @@ nsys profile --trace-fork-before-exec=true \
   python -m sglang.bench_serving --backend sglang --num-prompts 10
 ```
 
-This approach profiles the entire client execution, including all server interactions. The layerwise NVTX markers will be visible in the Nsight Systems timeline.
+这种方法剖析整个客户端的执行过程，包括所有服务端交互。逐层 NVTX marker 会在 Nsight Systems 时间线中可见。
 
-**Viewing the profiling results:**
+**查看剖析结果：**
 
-Open the generated `.qdrep` file with Nsight Systems:
+用 Nsight Systems 打开生成的 `.qdrep` 文件：
 
 ```bash Command
 nsys-ui layerwise_profile.qdrep
 ```
 
-In the Nsight Systems GUI, you'll see:
-- **NVTX ranges**: Each layer appears as a labeled range in the timeline with detailed information in the marker metadata
-- **CUDA kernels**: All GPU kernels are shown alongside the layer annotations
-- **Layer hierarchy**: The full module path (e.g., `meta-llama/Meta-Llama-3.1-8B-Instruct.model.layers.0.self_attn.qkv_proj`) helps identify specific layers. The prefix uses the full model path from `--model-path`.
-- **Tensor shapes**: Input/output dimensions and parameter shapes are included in the NVTX marker data
+在 Nsight Systems GUI 中，你会看到：
+- **NVTX ranges**：每一层在时间线中显示为带标签的区间，marker 元数据里包含详细信息
+- **CUDA kernels**：所有 GPU kernel 与层注释一起显示
+- **层层级**：完整的模块路径（例如 `meta-llama/Meta-Llama-3.1-8B-Instruct.model.layers.0.self_attn.qkv_proj`）有助于识别具体层。前缀使用 `--model-path` 提供的完整模型路径。
+- **张量形状**：输入/输出维度与参数形状都包含在 NVTX marker 数据中
 
-**Benefits of layerwise NVTX profiling:**
+**逐层 NVTX 剖析的好处：**
 
-- **Granular visibility**: See exactly which layers are taking the most time
-- **Memory tracking**: Identify layers with large memory allocations
-- **Bottleneck identification**: Quickly locate inefficient operations
-- **Communication overhead**: In multi-GPU setups, see per-layer communication costs
-- **Development debugging**: Validate that model architecture changes have the expected performance impact
+- **细粒度可见性**：精确定位哪些层耗时最多
+- **内存追踪**：识别有大内存分配的层
+- **瓶颈定位**：快速找到低效操作
+- **通信开销**：在多 GPU 场景下查看每层的通信成本
+- **开发调试**：验证模型架构改动是否带来了预期的性能影响
 
-## Other tips
+## 其它技巧
 
-1. You can benchmark a model using dummy weights by only providing the config.json file. This allows for quick testing of model variants without training. To do so, add `--load-format dummy` to the above commands and then you only need a correct `config.json` under the checkpoint folder.
-2. You can benchmark a model with modified configs (e.g., less layers) by using `--json-model-override-args`. For example, you can benchmark a model with only 2 layers and 2 kv heads using:
+1. 你可以只用 config.json 文件、通过 dummy 权重来基准测试一个模型。这样无需训练即可快速测试模型变体。做法是在上面的命令中加 `--load-format dummy`，然后只需要 checkpoint 文件夹里有一个正确的 `config.json`。
+2. 你可以用 `--json-model-override-args` 以修改过的配置基准测试模型（例如更少的层）。例如，可以用只有 2 层、2 个 KV 头的模型做基准测试：
 
    ```bash Command
    python -m sglang.bench_one_batch --model-path meta-llama/Meta-Llama-3.1-8B-Instruct --batch 32 --input-len 256 --output-len 32 --load-format dummy --json-model-override-args '{"num_hidden_layers": 1, "num_key_value_heads": 1}'
    ```
 
-3. You can use `--python-backtrace=cuda` to see python call stack for all CUDA kernels, as in PyTorch Profiler. (Caveat: this can cause inaccurately long kernel runtimes for CUDA event based timing)
-4. For more arguments see [Nsight Systems User Guide](https://docs.nvidia.com/nsight-systems/UserGuide/index.html).
+3. 你可以用 `--python-backtrace=cuda` 查看所有 CUDA kernel 的 Python 调用栈，就像 PyTorch Profiler 那样。（注意：这可能会让基于 CUDA event 计时的 kernel 运行时间不准。）
+4. 更多参数见 [Nsight Systems 用户指南](https://docs.nvidia.com/nsight-systems/UserGuide/index.html)。

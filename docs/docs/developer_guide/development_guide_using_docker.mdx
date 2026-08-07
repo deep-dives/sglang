@@ -1,15 +1,15 @@
 ---
-title: "Development Guide Using Docker"
-sidebarTitle: "Using Docker"
+title: "使用 Docker 的开发指南"
+sidebarTitle: "使用 Docker"
 metatags:
-    description: "SGLang Docker development: VSCode dev container, remote tunnels, debugger setup, nsys profiling."
+    description: "SGLang Docker 开发：VSCode dev container、remote tunnels、调试器配置、nsys 性能剖析。"
 ---
-## Setup VSCode on a Remote Host
-(Optional - you can skip this step if you plan to run sglang dev container locally)
+## 在远程主机上配置 VSCode
+（可选——如果你打算在本地运行 sglang dev container，可以跳过这一步）
 
-1. In the remote host, download `code` from [VSCode](https://code.visualstudio.com/download) and run `code tunnel` in a shell.
+1. 在远程主机上，从 [VSCode](https://code.visualstudio.com/download) 下载 `code`，并在 shell 中运行 `code tunnel`。
 
-Example
+示例
 ```bash Command
 wget https://vscode.download.prss.microsoft.com/dbazure/download/stable/fabdb6a30b49f79a7aba0f2ad9df9b399473380f/vscode_cli_alpine_x64_cli.tar.gz
 tar xf vscode_cli_alpine_x64_cli.tar.gz
@@ -18,67 +18,67 @@ tar xf vscode_cli_alpine_x64_cli.tar.gz
 ./code tunnel
 ```
 
-2. In your local machine, press F1 in VSCode and choose "Remote Tunnels: Connect to Tunnel".
+2. 在本地机器上，于 VSCode 中按 F1，选择 "Remote Tunnels: Connect to Tunnel"。
 
-## Setup Docker Container
+## 搭建 Docker 容器 {#setup-docker-container}
 
-### Option 1. Use the default dev container automatically from VSCode
-There is a `.devcontainer` folder in the sglang repository root folder to allow VSCode to automatically start up within dev container. You can read more about this VSCode extension in VSCode official document [Developing inside a Container](https://code.visualstudio.com/docs/devcontainers/containers).
+### 方案一：用 VSCode 自动启动默认 dev container
+sglang 仓库根目录下有一个 `.devcontainer` 文件夹，可以让 VSCode 自动在 dev container 内启动。关于这个 VSCode 扩展的更多信息，请阅读 VSCode 官方文档 [Developing inside a Container](https://code.visualstudio.com/docs/devcontainers/containers)。
 <Frame>
   <img src="https://github.com/user-attachments/assets/6a245da8-2d4d-4ea8-8db1-5a05b3a66f6d" alt="VSCode Dev Container Architecture" />
 </Frame>
 
-*Figure 1: Diagram from VSCode official documentation [Developing inside a Container](https://code.visualstudio.com/docs/devcontainers/containers).*
+*图 1：来自 VSCode 官方文档 [Developing inside a Container](https://code.visualstudio.com/docs/devcontainers/containers) 的示意图。*
 
-To enable this, you only need to:
-1. Start Visual Studio Code and install [VSCode dev container extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers).
-2. Press F1, type and choose "Dev Container: Open Folder in Container.
-3. Input the `sglang` local repo path in your machine and press enter.
+要启用这一功能，你只需要：
+1. 启动 Visual Studio Code 并安装 [VSCode dev container 扩展](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)。
+2. 按 F1，输入并选择 "Dev Container: Open Folder in Container"。
+3. 输入你机器上的 `sglang` 本地仓库路径，然后按回车。
 
-The first time you open it in dev container might take longer due to docker pull and build. Once it's successful, you should set on your status bar at the bottom left displaying that you are in a dev container:
+第一次在 dev container 中打开时，因为要执行 docker pull 和构建，可能会比较慢。成功之后，你左下角的状态栏应该会显示你正处于 dev container 中：
 
 <Frame>
   <img src="https://github.com/user-attachments/assets/650bba0b-c023-455f-91f9-ab357340106b" alt="VSCode Dev Container Status Bar" />
 </Frame>
 
-Now when you run `sglang.launch_server` in the VSCode terminal or start debugging using F5, sglang server will be started in the dev container with all your local changes applied automatically:
+之后，当你在 VSCode 终端里运行 `sglang.launch_server`，或按 F5 开始调试时，sglang 服务端就会在 dev container 中启动，并自动带上你所有的本地改动：
 
 <Frame>
   <img src="https://github.com/user-attachments/assets/748c85ba-7f8c-465e-8599-2bf7a8dde895" alt="SGLang Server Running in Dev Container" />
 </Frame>
 
 
-### Option 2. Start up containers manually (advanced)
+### 方案二：手动启动容器（进阶）
 
-The following startup command is an example for internal development by the SGLang team. You can **modify or add directory mappings as needed**, especially for model weight downloads, to prevent repeated downloads by different Docker containers.
+下面的启动命令是 SGLang 团队内部开发用的示例。你可以**按需修改或添加目录映射**，尤其是模型权重的下载目录，以避免不同 Docker 容器反复下载。
 
-❗️ **Note on RDMA**
+❗️ **关于 RDMA 的说明**
 
-    1. `--network host` and `--privileged` are required by RDMA. If you don't need RDMA, you can remove them but keeping them there does not harm. Thus, we enable these two flags by default in the commands below.
-    2. You may need to set `NCCL_IB_GID_INDEX` if you are using RoCE, for example: `export NCCL_IB_GID_INDEX=3`.
+    1. RDMA 需要 `--network host` 和 `--privileged`。如果你不需要 RDMA，可以把它们去掉，但保留也无害。因此我们在下面的命令中默认启用这两个参数。
+    2. 如果你用的是 RoCE，可能需要设置 `NCCL_IB_GID_INDEX`，例如：`export NCCL_IB_GID_INDEX=3`。
 
 ```bash Command
 # Change the name to yours
 docker run -itd --shm-size 32g --gpus all -v <volumes-to-mount> --ipc=host --network=host --privileged --name sglang_dev lmsysorg/sglang:dev /bin/zsh
 docker exec -it sglang_dev /bin/zsh
 ```
-Some useful volumes to mount are:
-1. **Huggingface model cache**: mounting model cache can avoid re-download every time docker restarts. Default location on Linux is `~/.cache/huggingface/`.
-2. **SGLang repository**: code changes in the SGLang local repository will be automatically synced to the .devcontainer.
+几个常用的挂载目录：
+1. **HuggingFace 模型缓存**：挂载模型缓存可以避免每次 Docker 重启后重新下载。Linux 上的默认位置是 `~/.cache/huggingface/`。
+2. **SGLang 仓库**：SGLang 本地仓库中的代码改动会自动同步到 .devcontainer。
 
-Example 1: Monting local cache folder `/opt/dlami/nvme/.cache` but not the SGLang repo. Use this when you prefer to manually transfer local code changes to the devcontainer.
+示例 1：挂载本地缓存目录 `/opt/dlami/nvme/.cache`，但不挂载 SGLang 仓库。当你更倾向于手动把本地代码改动传到 devcontainer 时使用。
 ```bash Command
 docker run -itd --shm-size 32g --gpus all -v /opt/dlami/nvme/.cache:/root/.cache --ipc=host --network=host --privileged --name sglang_zhyncs lmsysorg/sglang:dev /bin/zsh
 docker exec -it sglang_zhyncs /bin/zsh
 ```
-Example 2: Mounting both HuggingFace cache and local SGLang repo. Local code changes are automatically synced to the devcontainer as the SGLang is installed in editable mode in the dev image.
+示例 2：同时挂载 HuggingFace 缓存和本地 SGLang 仓库。由于 dev 镜像里 SGLang 是以可编辑模式（editable mode）安装的，本地代码改动会自动同步到 devcontainer。
 ```bash Command
 docker run -itd --shm-size 32g --gpus all -v $HOME/.cache/huggingface/:/root/.cache/huggingface -v $HOME/src/sglang:/sgl-workspace/sglang --ipc=host --network=host --privileged --name sglang_zhyncs lmsysorg/sglang:dev /bin/zsh
 docker exec -it sglang_zhyncs /bin/zsh
 ```
-## Debug SGLang with VSCode Debugger
-1. (Create if not exist) open `launch.json` in VSCode.
-2. Add the following config and save. Please note that you can edit the script as needed to apply different parameters or debug a different program (e.g. benchmark script).
+## 用 VSCode 调试器调试 SGLang
+1. （如果不存在则新建）在 VSCode 中打开 `launch.json`。
+2. 添加下面的配置并保存。请注意，你可以按需修改脚本，以应用不同的参数或调试不同的程序（例如基准测试脚本）。
      ```JSON Config
        {
           "version": "0.2.0",
@@ -101,9 +101,13 @@ docker exec -it sglang_zhyncs /bin/zsh
       }
     ```
 
-3. Press "F5" to start. VSCode debugger will ensure that the program will pause at the breakpoints even if the program is running at remote SSH/Tunnel host + dev container.
+3. 按 "F5" 启动。即使程序运行在远程 SSH/Tunnel 主机 + dev container 上，VSCode 调试器也会确保程序在断点处暂停。
 
-## Profile
+<Note>
+💡 AI Infra 学习笔记：为什么推荐用 nsys（Nsight Systems）而不是 torch profiler？——nsys 能看到更底层的 GPU 细节（kernel 的寄存器/共享内存占用、CUDA 事件、kernel 重叠），还能带 `--cuda-graph-trace=node` 追踪 CUDA 图内的 kernel。此处给 `bench_one_batch` 加 `--disable-cuda-graph` 是为了让 kernel 逐个显式出现，便于逐段分析——CUDA 图会把一串 kernel 打包成一次图回放，掩盖单个 kernel 的耗时细节。
+</Note>
+
+## 性能剖析
 
 ```bash Command
 # Change batch size, input, output and add `disable-cuda-graph` (for easier analysis)
@@ -111,7 +115,7 @@ docker exec -it sglang_zhyncs /bin/zsh
 nsys profile -o deepseek_v3 python3 -m sglang.bench_one_batch --batch-size 1 --input 128 --output 256 --model deepseek-ai/DeepSeek-V3 --trust-remote-code --tp 8 --disable-cuda-graph
 ```
 
-## Evaluation
+## 模型评估
 
 ```bash Command
 # e.g. gsm8k 8 shot

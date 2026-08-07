@@ -1,52 +1,50 @@
 ---
-title: "MSProbe Debugging Guide"
+title: "MSProbe 调试指南"
 metatags:
-    description: "Debugging AI model accuracy anomalies and numerical errors during inference using MSProbe in SGLang."
+    description: "在 SGLang 中使用 MSProbe 调试 AI 模型推理过程中的精度异常与数值错误。"
 ---
-MSProbe is a debugging tool for AI models that diagnoses accuracy anomalies and
-numerical errors during model training and inference. It captures and monitors intermediate data (feature maps, weights,
-activations, layer outputs) and contextual metadata (prompts, tensor dtypes, hardware configuration), and supports
-visual analysis to systematically trace the root cause of accuracy degradation or numerical errors (e.g., NaN/Inf,
-output drift, mismatched predictions).
+MSProbe 是一个面向 AI 模型的调试工具，用于诊断模型训练与推理过程中的精度异常和数值错误。它捕获并监控中间数据（特征图、权重、激活值、层输出）与上下文元数据（提示词、张量 dtype、硬件配置），并支持可视化分析，从而系统地追踪精度下降或数值错误（例如 NaN/Inf、输出漂移、预测不一致）的根因。
 
-## Basic Details
+<Note>
+💡 AI Infra 学习笔记：性能剖析（profiling）回答「慢在哪」，而数值调试工具（如 MSProbe）回答「为什么算错了」——两者是 AI Infra 排查的两类主要手段。推理引擎里精度异常往往由量化误差、kernel 实现差异、dtype 混用或算子替换引发，这类问题用「问题侧 vs 基准侧」双份 dump 对比就能快速定位到具体模块或算子。理解这类工具的「捕获中间张量 → 可视化对比 → 定位根因」工作流，是排查精度类线上事故的基本功。
+</Note>
 
-### Background Concepts: MSProbe Dumping Levels
+## 基本说明
 
-MSProbe supports three accuracy levels for data dumping, each for different debugging needs:
+### 背景概念：MSProbe 的 Dump 层级
 
-- **L0**: Dumps tensors/statistics at the **module level** and generates `construct.json` (for network structure
-  reconstruction in visualization). Requires passing a model/submodule handle.
-- **L1**: Dumps tensors/statistics at the **torch API level**, suitable for fine-grained API-level numerical checking.
-- **mix**: Combines L0 + L1, ideal for scenarios that require both **graph reconstruction** and **numerical comparison**.
+MSProbe 支持三个用于数据 dump 的精度层级，分别应对不同的调试需求：
 
-### Prerequisites: Install MSProbe
+- **L0**：在**模块（module）级** dump 张量/统计信息，并生成 `construct.json`（用于可视化时的网络结构重建）。需要传入模型/子模块句柄。
+- **L1**：在**torch API 级** dump 张量/统计信息，适合细粒度的 API 级数值检查。
+- **mix**：结合 L0 + L1，适合既需要**图结构重建**又需要**数值对比**的场景。
 
-Install MSProbe with pip:
+### 前置条件：安装 MSProbe
+
+用 pip 安装 MSProbe：
 
 ```shell
 pip install mindstudio-probe --pre
 ```
 
-### Key Configuration Parameters
+### 关键配置参数
 
-MSProbe uses a JSON configuration file for customized data dumping. All core parameters are listed in the table below,
-with the default JSON configuration provided for reference.
+MSProbe 使用 JSON 配置文件来自定义数据 dump。下表列出了所有核心参数，并提供默认 JSON 配置供参考。
 
-#### Configuration Parameter Table
+#### 配置参数表
 
-|    Field     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Required |
+|    字段     | 说明                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      | 是否必需 |
 |:------------:|:-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------:|
-|    `task`    | Type of dump task. Common PyTorch values include `"statistics"` and `"tensor"`. A statistics task collects tensor statistics (mean, variance, max, min, etc.) while a tensor task captures arbitrary tensors.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |   Yes    |
-| `dump_path`  | Directory where dump results are stored. When omitted, `MSProbe` uses its default path.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |    No    |
-|    `rank`    | Ranks to sample. An empty list collects every rank. For single-card tasks you must set this field to `[]`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |    No    |
-|    `step`    | Token iteration(s) to sample. An empty list means every iteration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |    No    |
-|   `level`    | Dump level string (`"L0"`, `"L1"`, or `"mix"`). `L0` targets `nn.Module`, `L1` targets `torch.api`, and `mix` collects both.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |   Yes    |
-| `async_dump` | Whether to enable asynchronous dump (supported for PyTorch `statistics`/`tensor` tasks). Defaults to `false`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |    No    |
-|   `scope`    | Customize the scope of dump. Provide two module or API names that follow the tool's naming convention to lock a range, only data between the two names will be dumped. An empty list dumps every module or torch API.<br/><br/>Examples:<br/>`"scope": ["Module.conv1.Conv2d.forward.0", "Module.fc2.Linear.forward.0"]`<br/>`"scope": ["Tensor.add.0.forward", "Functional.square.2.forward"]`<br/><br/>The `level` setting determines what can be provided—modules when `level=L0`, APIs when `level=L1`, and either modules or APIs when `level=mix`.                                                                                                                                                                                                                                 |    No    |
-|    `list`    | Customize dump list, only dumps elements from the list. An empty list dumps every module or torch API. Options include:<br/><br/>&#8226;Supply the full names of specific APIs in PyTorch eager mode to only dump those APIs. Example: `"list": ["Tensor.permute.1.forward", "Tensor.transpose.2.forward", "Torch.relu.3.backward"]`.<br/>&#8226;When `level=mix`, you can provide module names so that the dump expands to everything produced while the module is running. Example: `"list": ["Module.module.language_model.encoder.layers.0.mlp.ParallelMlp.forward.0"]`.<br/>&#8226;Provide a substring such as `"list": ["relu"]` to dump every API whose name contains the substring. When `level=mix`, modules whose names contain the substring are also expanded. |    No    |
+|    `task`    | Dump 任务的类型。常见的 PyTorch 取值包括 `"statistics"` 与 `"tensor"`。statistics 任务收集张量统计信息（mean、variance、max、min 等），tensor 任务捕获任意张量。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |   是   |
+| `dump_path`  | 存放 dump 结果的目录。省略时 `MSProbe` 使用其默认路径。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |    否    |
+|    `rank`    | 要采样的 rank。空列表表示收集所有 rank。单卡任务必须把该字段设为 `[]`。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |    否    |
+|    `step`    | 要采样的 token 迭代。空列表表示每个迭代都采样。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |    否    |
+|   `level`    | Dump 层级字符串（`"L0"`、`"L1"` 或 `"mix"`）。`L0` 针对 `nn.Module`，`L1` 针对 `torch.api`，`mix` 同时收集两者。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |   是   |
+| `async_dump` | 是否启用异步 dump（PyTorch 的 `statistics`/`tensor` 任务支持）。默认是 `false`。                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |    否    |
+|   `scope`    | 自定义 dump 的范围。提供两个遵循工具命名约定的模块名或 API 名来锁定区间，只 dump 这两个名字之间的数据。空列表表示 dump 每个模块或 torch API。<br/><br/>示例：<br/>`"scope": ["Module.conv1.Conv2d.forward.0", "Module.fc2.Linear.forward.0"]`<br/>`"scope": ["Tensor.add.0.forward", "Functional.square.2.forward"]`<br/><br/>`level` 设置决定可以传什么——`level=L0` 时传模块，`level=L1` 时传 API，`level=mix` 时模块或 API 均可。                                                                                                                                                                                                                                                                |    否    |
+|    `list`    | 自定义 dump 列表，只 dump 列表中的元素。空列表表示 dump 每个模块或 torch API。选项包括：<br/><br/>&#8226;在 PyTorch eager 模式下提供特定 API 的完整名称，只 dump 这些 API。示例：`"list": ["Tensor.permute.1.forward", "Tensor.transpose.2.forward", "Torch.relu.3.backward"]`。<br/>&#8226;当 `level=mix` 时，可以传模块名，使 dump 扩展到该模块运行期间产生的一切。示例：`"list": ["Module.module.language_model.encoder.layers.0.mlp.ParallelMlp.forward.0"]`。<br/>&#8226;传一个子串，例如 `"list": ["relu"]`，会 dump 名称包含该子串的每个 API。当 `level=mix` 时，名称包含该子串的模块也会被展开。 |    否    |
 
-#### Default configuration
+#### 默认配置
 
 ```json
 {
@@ -80,35 +78,35 @@ with the default JSON configuration provided for reference.
 }
 ```
 
-#### Outputs
+#### 输出
 
-Dump files are written into `dump_path` you defined. They usually contain:
+Dump 文件写入你定义的 `dump_path`。它们通常包含：
 
-- `dump.json`, which records metadata such as dtype, shape, min, max, mean, L2 norm, and `requires_grad`.
-- `construct.json`, hierarchical structure description, when `level` is `L0` or `mix` (required for visualization), its
-  content is not empty.
-- `stack.json`, record the call stack information of API/Module.
-- `dump_tensor_data`, generated when `task` is `tensor` and save the collected tensor data.
+- `dump.json`，记录 dtype、shape、min、max、mean、L2 范数、`requires_grad` 等元数据。
+- `construct.json`，层级结构描述，当 `level` 为 `L0` 或 `mix` 时生成（可视化必需），其内容不为空。
+- `stack.json`，记录 API/Module 的调用栈信息。
+- `dump_tensor_data`，当 `task` 为 `tensor` 时生成，保存收集到的张量数据。
 
-See [dump directory description](#dump-directory-description) for details.
+细节参见 [Dump 目录说明](#dump-directory-description)。
 
-> **Note**: When MSProbe is enabled, cuda graph is disabled (disable_cuda_graph=True) because MSProbe only supports dump
-> in eager mode, warmup is disabled (skip_server_warmup=True) because there is no need to dump data for this stage.
+> **注意**：启用 MSProbe 时，cuda graph 会被禁用（disable_cuda_graph=True），因为 MSProbe 只支持 eager 模式下的 dump；预热也会被禁用（skip_server_warmup=True），因为这个阶段无需 dump 数据。
 
-## End-to-End Examples
+<Note>
+💡 AI Infra 学习笔记：`L0`（模块级）/`L1`（API 级）/`mix` 三种 dump 层级对应不同粒度的排查：模块级适合快速判断「哪一层出问题」，API 级适合精确锁定「哪个算子数值不对」，mix 则兼顾结构重建与数值对比。调试时先粗后细——先用 L0 定位发散层，再用 L1 深挖具体算子，能显著减少 dump 数据量。
+</Note>
 
-MSProbe’s full debugging workflow follows **Enable → Collect Data → Visualize → Analyze Root Cause**. Below is a common
-E2E example for SGLang-based model inference debugging.
+## 端到端示例
 
-### Example : Advanced Debugging with Custom Configuration
+MSProbe 的完整调试工作流遵循 **启用 → 收集数据 → 可视化 → 分析根因**。下面是基于 SGLang 的模型推理调试的常见 E2E 示例。
 
-Suitable for targeted debugging (e.g., only collect statistics data for specific ranks/steps, enable mix level for graph
-reconstruction + numerical comparison) and root cause analysis via **problem vs. benchmark comparison**.
+### 示例：带自定义配置的高级调试
 
-#### Step 1: Enable
-##### Prepare Custom Configuration JSON
+适合针对性调试（例如只收集特定 rank/step 的统计信息数据、启用 mix 层级做图重建 + 数值对比）以及通过**问题侧与基准侧对比**做根因分析。
 
-Create `msprobe-config.json` (dump statistics data for rank0/1, step0/1, mix level):
+#### 第一步：启用
+##### 准备自定义配置 JSON
+
+创建 `msprobe-config.json`（dump rank0/1、step0/1 的统计信息数据，mix 层级）：
 
 ```json
 {
@@ -135,9 +133,9 @@ Create `msprobe-config.json` (dump statistics data for rank0/1, step0/1, mix lev
 }
 ```
 
-##### Enable MSProbe with Custom Configuration in SGLang
+##### 在 SGLang 中用自定义配置启用 MSProbe
 
-Launch the SGLang server and specify the configuration file path with `--msprobe-dump-config`:
+启动 SGLang 服务端，并用 `--msprobe-dump-config` 指定配置文件路径：
 
 ```bash
 python3 -m sglang.launch_server \
@@ -146,10 +144,10 @@ python3 -m sglang.launch_server \
  --port 1027 \
  --msprobe-dump-config /home/msprobe-config.json
 ```
-#### Step 2: Collect Data
-##### Collect Dump Data for Problem & Benchmark Sides
+#### 第二步：收集数据
+##### 为问题侧与基准侧收集 Dump 数据
 
-Send normal inference requests to trigger model running (MSProbe automatically collects data during request processing):
+发送正常的推理请求来触发模型运行（MSProbe 会在请求处理过程中自动收集数据）：
 
 ```bash
 curl -H "Content-type: application/json" \
@@ -167,108 +165,98 @@ curl -H "Content-type: application/json" \
  http://127.0.0.1:1027/v1/chat/completions
 ```
 
-- **Problem side**: Run the above SGLang server (with the accuracy/numerical issue) and send inference request; dump
-  data is saved to `./problem_dump`.
-- **Benchmark side**: Launch a normal SGLang server (without the issue, e.g., stable framework version/operator) with
-  the **same custom configuration** and send the **same inference request**; rename the dump directory
-  to `./bench_dump`.
+- **问题侧**：运行上面的 SGLang 服务端（带有精度/数值问题）并发送推理请求；dump 数据保存在 `./problem_dump`。
+- **基准侧**：用**相同的自定义配置**启动一个正常的 SGLang 服务端（无此问题，例如稳定的框架版本/算子），发送**相同的推理请求**；把 dump 目录改名为 `./bench_dump`。
 
-> **Key Requirement**: Problem and benchmark dumps must use the same inputs and sampling points (rank/step)
-> for valid comparison.
+> **关键要求**：问题侧与基准侧的 dump 必须使用相同的输入和采样点（rank/step），对比才有效。
 
-##### Check Generated Dump Files
+##### 检查生成的 Dump 文件
 
-Dump files are saved to `./problem_dump` and `./bench_dump` you defined and include core files for subsequent analysis:
+Dump 文件保存到你定义的 `./problem_dump` 与 `./bench_dump`，包含后续分析所需的核心文件：
 
-- `dump.json`: Records tensor metadata of APIs and modules (dtype, shape, min/max/mean, L2 norm, `requires_grad`, etc.).
-- `stack.json`: Logs call stack information of APIs and modules.
-- `construct.json`: hierarchical structure description, required for visualization, its content is not empty.
+- `dump.json`：记录 API 与模块的张量元数据（dtype、shape、min/max/mean、L2 范数、`requires_grad` 等）。
+- `stack.json`：记录 API 与模块的调用栈信息。
+- `construct.json`：层级结构描述，可视化必需，其内容不为空。
 
-#### Step 3: Visualize
-##### Visualize Problem vs. Benchmark Comparison (Multi-Rank)
+#### 第三步：可视化
+##### 可视化问题侧与基准侧对比（多 rank）
 
-Generate a multi-rank comparison visualization file (mix level generates `construct.json` for graph reconstruction):
+生成一个多 rank 对比可视化文件（mix 层级会生成 `construct.json` 用于图重建）：
 
 ```shell
 msprobe graph_visualize -tp ./problem_dump/step0 -gp ./bench_dump/step0 -o ./graph_output
 ```
 
-- `-tp`: Path to problem-side dump data
-- `-gp`: Path to benchmark-side dump data
-- `-o`: Output directory for visualization files
+- `-tp`：问题侧 dump 数据的路径
+- `-gp`：基准侧 dump 数据的路径
+- `-o`：可视化文件的输出目录
 
-If you want overflow check (for NaN/Inf detection), please specify the parameter `-oc`
+如果你想做溢出检查（用于 NaN/Inf 检测），请指定 `-oc` 参数
 
 ```shell
 msprobe graph_visualize -tp ./problem_dump/step0 -gp ./bench_dump/step0 -o ./graph_output -oc
 ```
 
-After the comparison or build task finishes, a `compare_{timestamp}.vis.db` file is created under `graph_output`.
+对比或构建任务结束后，`graph_output` 下会生成一个 `compare_{timestamp}.vis.db` 文件。
 
-The dumped data can be used to visualize and analyze differences using tables or charts generated with visualization tools such as Matplotlib and Excel.
+dump 出来的数据可以用 Matplotlib、Excel 等可视化工具生成的表格或图表来可视化并分析差异。
 
-##### Launch TensorBoard
+##### 启动 TensorBoard
 
-Start TensorBoard:
+启动 TensorBoard：
 ```bash
 tensorboard --logdir ./graph_output --bind_all --port 6006
 ```
-#### Step 4: Analyze Root Cause
-##### Locate Root Cause
+#### 第四步：分析根因
+##### 定位根因
 
-Root Cause Analysis in TensorBoard:
-- Divergent nodes (with accuracy/numerical differences) are highlighted in **red** (darker red = larger difference).
-- Click on divergent nodes to view detailed tensor data (inputs/outputs, parameters) and API/module call stacks.
-- Use the **search/filter** function to quickly locate key layers/APIs (e.g., "relu", "conv").
-- Switch between ranks/steps via the UI to check cross-rank/cross-step divergence.
-- Check the **overflow check** tab for NaN/Inf values in specific nodes (the direct cause of numerical instability).
+在 TensorBoard 中做根因分析：
+- 发散节点（存在精度/数值差异）会以**红色**高亮（红色越深表示差异越大）。
+- 点击发散节点可查看详细的张量数据（输入/输出、参数）以及 API/模块调用栈。
+- 用**搜索/过滤**功能快速定位关键层/API（例如 "relu"、"conv"）。
+- 通过 UI 在不同 rank/step 之间切换，检查跨 rank/跨 step 的发散情况。
+- 查看**溢出检查**页签，检查特定节点中的 NaN/Inf 值（数值不稳定的直接原因）。
 
-##### Verify the Root Cause
+##### 验证根因
 
-After locating the divergent node (e.g., a specific Conv layer or torch API with abnormal tensor values), verify by:
+定位到发散节点（例如某个张量值异常的 Conv 层或 torch API）后，通过以下方式验证：
 
-- Narrowing the dump scope to this node (via `scope`/`list` in the configuration file) for fine-grained data collection.
-- Modifying the problematic layer/API (e.g., replacing the operator, adjusting the dtype) and re-running the debugging
-  workflow to confirm the issue is resolved.
+- 把 dump 范围收窄到这个节点（通过配置文件里的 `scope`/`list`），做细粒度的数据收集。
+- 修改有问题的层/API（例如替换算子、调整 dtype），重新运行调试工作流，确认问题是否解决。
 
-## Troubleshooting
+## 故障排查
 
-### No Dump Files Generated
+### 没有生成 Dump 文件
 
-1. To confirm if MSProbe is installed, use `pip show mindstudio_probe` to troubleshoot. If it is installed, the MSProbe
-   version information will be printed. If it is confirmed that it has not been installed, please
-   use `pip install mindstudio-probe --pre` for installation;
-2. Confirm the `--msprobe-dump-config` parameter points to the **correct JSON file path**.
+1. 用 `pip show mindstudio_probe` 确认 MSProbe 是否已安装。如果已安装，会打印出 MSProbe 的版本信息。如果确认没安装，请用 `pip install mindstudio-probe --pre` 安装；
+2. 确认 `--msprobe-dump-config` 参数指向**正确的 JSON 文件路径**。
 
-### Dump Files Are Too Large (Excessive Data)
+### Dump 文件过大（数据过多）
 
-1. Start with `task: "statistics"` instead of `"tensor"` to collect only tensor statistics (avoids raw tensor dump);
-2. Narrow the dump range with the `scope` field (specify start/end module/API);
-3. Filter dump targets with the `list` field (only dump specific modules/APIs or substrings);
-4. Sample specific `rank` and `step` (avoid dumping all ranks/iterations).
+1. 先用 `task: "statistics"` 而不是 `"tensor"`，只收集张量统计信息（避免原始张量 dump）；
+2. 用 `scope` 字段收窄 dump 范围（指定起始/结束模块或 API）；
+3. 用 `list` 字段过滤 dump 目标（只 dump 特定模块/API 或子串）；
+4. 采样特定的 `rank` 与 `step`（避免 dump 所有 rank/迭代）。
 
-### TensorBoard Visualization Fails
+### TensorBoard 可视化失败
 
-1. Confirm `construct.json` is not empty (requires `level: L0` or `mix` – L1 does not generate graph files);
-2. Check that the `-tp` (problem dump) and `-gp` (benchmark dump) paths point to **valid rank/step subdirectories** (
-   e.g., `step0/rank0`);
-3. Ensure the MSProbe version is up-to-date (reinstall with `pip install mindstudio-probe --pre --upgrade`);
-4. Verify TensorBoard is installed and the `--logdir` parameter points to the directory containing `.vis.db` files (not
-   the file itself).
+1. 确认 `construct.json` 不为空（需要 `level: L0` 或 `mix`——L1 不会生成图文件）；
+2. 检查 `-tp`（问题侧 dump）与 `-gp`（基准侧 dump）路径指向**有效的 rank/step 子目录**（例如 `step0/rank0`）；
+3. 确保 MSProbe 版本是最新的（用 `pip install mindstudio-probe --pre --upgrade` 重装）；
+4. 确认 TensorBoard 已安装，且 `--logdir` 指向包含 `.vis.db` 文件的目录（不是文件本身）。
 
-### Numerical Comparison Shows No Divergence But Model Accuracy Is Low
+### 数值对比无发散但模型精度仍然很低
 
-1. Expand the dump `step` range (check more token iterations for late-stage divergence);
-2. Switch to `task: "tensor"` (statistics may mask subtle numerical differences in raw tensor data);
-3. Ensure the problem and benchmark dumps use **the same input data/hardware configuration** (different inputs lead to
-   invalid comparisons);
-4. Use the `manual mapping` feature in TensorBoard (automatic mapping may miss some nodes for custom models).
+1. 扩大 dump 的 `step` 范围（检查更多 token 迭代，看后期发散）；
+2. 切换到 `task: "tensor"`（统计信息可能掩盖原始张量数据中的细微数值差异）；
+3. 确保问题侧与基准侧 dump 使用**相同的输入数据/硬件配置**（输入不同会导致对比无效）；
+4. 使用 TensorBoard 中的 `manual mapping` 功能（自动映射对自定义模型可能漏掉一些节点）。
 
 ---
 
-## Appendix
+## 附录
 
-### Dump directory description
+### Dump 目录说明 {#dump-directory-description}
 
 ```text
 ├── problem_dump or bench_dump
@@ -301,36 +289,29 @@ After locating the divergent node (e.g., a specific Conv layer or torch API with
 │   ├── step2
 ```
 
-- `rank`: Device ID. Each card writes its data to the corresponding `rank{ID}` directory. In non-distributed scenarios
-  the directory is simply named `rank`.
-- `dump_tensor_data`: Save the collected tensor data.
-- `dump.json`: Statistics for the forward data of each API or module, including names, dtype, shape, max, min, mean, L2
-  norm (square root of the L2 variance), and CRC-32 when `summary_mode="md5"`.
-  See [dump.json file description](#dump-json-file-description) for details.
-- `dump_error_info.log`: Present only when the dump tool encountered an error and records the failure log.
-- `stack.json`: Call stacks for APIs/modules.
-- `construct.json`: Hierarchical structure description. Empty when `level=L1`.
+- `rank`：设备 ID。每张卡把数据写到对应的 `rank{ID}` 目录。非分布式场景下目录直接命名为 `rank`。
+- `dump_tensor_data`：保存收集到的张量数据。
+- `dump.json`：每个 API 或模块前向数据的统计信息，包括名称、dtype、shape、max、min、mean、L2 范数（L2 方差的平方根），以及 `summary_mode="md5"` 时的 CRC-32。
+  细节参见 [dump.json 文件说明](#dump-json-file-description)。
+- `dump_error_info.log`：仅当 dump 工具遇到错误时出现，记录失败日志。
+- `stack.json`：API/模块的调用栈。
+- `construct.json`：层级结构描述。`level=L1` 时为空。
 
-### dump.json file description
+### dump.json 文件说明 {#dump-json-file-description}
 
-#### L0 level
+#### L0 层级
 
-An L0 `dump.json` contains forward/backward I/O for modules together with parameters and parameter gradients. Using
-PyTorch's `Conv2d` as an example, the network code looks like:
+一个 L0 的 `dump.json` 包含模块的前向/反向 I/O，以及参数与参数梯度。以 PyTorch 的 `Conv2d` 为例，网络代码如下：
 
 `output = self.conv2(input)  # self.conv2 = torch.nn.Conv2d(64, 128, 5, padding=2, bias=True)`
 
-`dump.json` contains the following entries:
+`dump.json` 包含以下条目：
 
-- `Module.conv2.Conv2d.forward.0`: Forward data of the module. `input_args` represents positional inputs, `input_kwargs`
-  represents keyword inputs, `output` stores forward outputs, and `parameters` stores weights/biases.
-- `Module.conv2.Conv2d.parameters_grad`: Parameter gradients (weight and bias).
-- `Module.conv2.Conv2d.backward.0`: Backward data of the module. `input` represents gradients that flow into the
-  module (gradients of the forward outputs) and `output` represents gradients that flow out (gradients of the module
-  inputs).
+- `Module.conv2.Conv2d.forward.0`：模块的前向数据。`input_args` 表示位置参数输入，`input_kwargs` 表示关键字参数输入，`output` 保存前向输出，`parameters` 保存权重/偏置。
+- `Module.conv2.Conv2d.parameters_grad`：参数梯度（weight 和 bias）。
+- `Module.conv2.Conv2d.backward.0`：模块的反向数据。`input` 表示流入模块的梯度（前向输出的梯度），`output` 表示流出的梯度（模块输入的梯度）。
 
-**Note**: When the `model` parameter passed to the dump API is `List[torch.nn.Module]` or `Tuple[torch.nn.Module]`,
-module-level names include the index inside the list (`{Module}.{index}.*`). Example: `Module.0.conv1.Conv2d.forward.0`.
+**注意**：当传给 dump API 的 `model` 参数是 `List[torch.nn.Module]` 或 `Tuple[torch.nn.Module]` 时，模块级名称会包含列表内的索引（`{Module}.{index}.*`）。示例：`Module.0.conv1.Conv2d.forward.0`。
 
 <details>
 
@@ -492,15 +473,12 @@ module-level names include the index inside the list (`{Module}.{index}.*`). Exa
 
 </details>
 
-#### L1 level
+#### L1 层级
 
-An L1 `dump.json` records forward/backward I/O for APIs. Using PyTorch's `relu` function as an
-example (`output = torch.nn.functional.relu(input)`), the file contains:
+一个 L1 的 `dump.json` 记录 API 的前向/反向 I/O。以 PyTorch 的 `relu` 函数为例（`output = torch.nn.functional.relu(input)`），文件包含：
 
-- `Functional.relu.0.forward`: Forward data of the API. `input_args` are positional inputs, `input_kwargs` are keyword
-  inputs, and `output` stores the forward outputs.
-- `Functional.relu.0.backward`: Backward data of the API. `input` represents the gradients of the forward outputs,
-  and `output` represents the gradients that flow back to the forward inputs.
+- `Functional.relu.0.forward`：API 的前向数据。`input_args` 是位置参数输入，`input_kwargs` 是关键字参数输入，`output` 保存前向输出。
+- `Functional.relu.0.backward`：API 的反向数据。`input` 表示前向输出的梯度，`output` 表示流回前向输入的梯度。
 
 <details>
 
@@ -596,6 +574,6 @@ example (`output = torch.nn.functional.relu(input)`), the file contains:
 
 </details>
 
-#### mix level
+#### mix 层级
 
-A `mix` dump.json contains both L0 and L1 level data; the file format is the same as the examples above.
+一个 `mix` 的 dump.json 同时包含 L0 与 L1 层级的数据；文件格式与上面的示例相同。

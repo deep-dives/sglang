@@ -1,26 +1,30 @@
 ---
-title: "Quantization Contribution Guide"
+title: "量化贡献指南"
 metatags:
-    description: "Guidance for contributing SGLang quantization methods, schemes, backend kernels, tests, and validation results."
+    description: "为 SGLang 贡献量化方法、方案、后端 kernel、测试与验证结果的指南。"
 ---
 
-This guide describes how to add or refactor quantization support in SGLang. It focuses on the common structure used by weight-only and weight-activation quantization methods such as AWQ, GPTQ, compressed-tensors, ModelSlim, Quark, and related backend kernels.
+本指南介绍如何在 SGLang 中添加或重构量化支持。它重点关注仅权重量化和权重-激活量化方法的通用结构，例如 AWQ、GPTQ、compressed-tensors、ModelSlim、Quark 以及相关的后端 kernel。
 
-## Design Goals
+## 设计目标
 
-Quantization code should keep the quantization format semantics separate from hardware-specific execution. This makes it easier to add new formats, reuse kernels across formats, and review platform-specific changes independently.
+量化代码应该把量化格式的语义与硬件相关的执行分开。这样可以更容易地添加新格式、跨格式复用 kernel，并独立审查平台相关的改动。
 
-Follow the architecture proposed in [Quantization Modifications](https://github.com/sgl-project/sglang/issues/15194):
+请遵循 [Quantization Modifications](https://github.com/sgl-project/sglang/issues/15194) 中提出的架构：
 
-- **Config**: parses model and runtime quantization parameters, validates supported options, and selects the proper scheme.
-- **Scheme**: owns quantized weight creation, weight loading, post-processing, and quantized layer wiring for Linear, MoE, embedding, or other module types.
-- **Backend kernel**: wraps hardware-specific execution, layout conversion, kernel selection, and kernel calls for GPU (CUDA/HIP/XPU), NPU, or other backends.
+- **Config（配置）**：解析模型与运行时的量化参数，校验支持的选项，并选择合适的方案。
+- **Scheme（方案）**：负责量化权重的创建、权重加载、后处理，以及 Linear、MoE、embedding 或其他模块类型的量化层接线。
+- **Backend kernel（后端 kernel）**：封装硬件相关的执行、布局转换、kernel 选择与 kernel 调用，面向 GPU（CUDA/HIP/XPU）、NPU 或其他后端。
 
-Avoid putting config parsing, weight loading, and backend kernel calls in a single monolithic file. If a method needs multiple formats or backends, add a package under `python/sglang/srt/layers/quantization/<method>/` and split schemes into `schemes/`.
+<Note>
+💡 AI Infra 学习笔记：把「量化格式语义」与「硬件执行」分离，是推理引擎里典型的抽象分层思路。量化方案（如何存权重、按什么 scale 反量化）相对稳定，而 kernel 要跟着 GPU 代际和算子库演进——两者解耦后，新增一种格式只需写新的 scheme，新增一种硬件只需写新的 kernel，改动面互相隔离。
+</Note>
 
-## Recommended File Layout
+避免把配置解析、权重加载和后端 kernel 调用都塞进一个巨型文件。如果一个方法需要多种格式或多个后端，就在 `python/sglang/srt/layers/quantization/<method>/` 下新增一个包，并把各方案拆分到 `schemes/`。
 
-Use this layout for a quantization method that has multiple schemes or backend-specific execution paths:
+## 推荐的文件布局
+
+对包含多个方案或后端专用执行路径的量化方法，使用如下布局：
 
 ```text
 python/sglang/srt/layers/quantization/<method>/
@@ -34,63 +38,63 @@ python/sglang/srt/layers/quantization/<method>/
     <method>_<variant>.py
 ```
 
-Backend kernels should live under the hardware backend they target:
+后端 kernel 应该放在它们所针对的硬件后端下：
 
 ```text
 python/sglang/srt/hardware_backend/gpu/quantization/<method>_kernels.py
 python/sglang/srt/hardware_backend/npu/quantization/<method>_kernels.py
 ```
 
-Keep shared method selection in the quantization package and keep backend imports narrow. This prevents circular imports and keeps non-target platforms from importing unavailable kernel dependencies.
+把共享的方法选择逻辑留在量化包内，并保持后端导入范围尽量窄。这样可以避免循环导入，也能防止非目标平台导入不可用的 kernel 依赖。
 
-## Adding or Refactoring a Quantization Method
+## 添加或重构量化方法
 
-1. Define the config entry point and register it through `python/sglang/srt/layers/quantization/__init__.py` when needed.
-2. Add explicit scheme selection helpers such as `get_linear_scheme` and `get_moe_scheme`.
-3. Move layer-specific weight creation and weight loading into scheme classes.
-4. Move GPU (CUDA/HIP/XPU), NPU, or other hardware kernel calls into backend kernel modules.
-5. Keep Linear, MoE, embedding, and non-linear module handling explicit. Do not assign a Linear quantization method to a module type that needs different semantics.
-6. Preserve compatibility for existing quantized checkpoints and runtime flags.
-7. Add tests that cover both config parsing and execution paths touched by the change.
+1. 定义配置入口，并在需要时通过 `python/sglang/srt/layers/quantization/__init__.py` 注册。
+2. 添加明确的方案选择辅助函数，例如 `get_linear_scheme` 和 `get_moe_scheme`。
+3. 把层相关的权重创建与权重加载移入 scheme 类。
+4. 把 GPU（CUDA/HIP/XPU）、NPU 或其他硬件的 kernel 调用移入后端 kernel 模块。
+5. 显式区分 Linear、MoE、embedding 以及非线性模块的处理。不要把某个 Linear 量化方法套用到语义不同的模块类型上。
+6. 保持对现有量化检查点和运行时参数的兼容。
+7. 添加同时覆盖配置解析与改动涉及的执行路径的测试。
 
-For examples, see the AWQ and GPTQ refactors:
+示例可参考 AWQ 和 GPTQ 的重构：
 
-- [PR #21126](https://github.com/sgl-project/sglang/pull/21126): splits AWQ schemes, weight initialization, and backend kernel calls.
-- [PR #26402](https://github.com/sgl-project/sglang/pull/26402): applies the same scheme/kernel split to GPTQ.
+- [PR #21126](https://github.com/sgl-project/sglang/pull/21126)：把 AWQ 的 scheme、权重初始化与后端 kernel 调用拆分。
+- [PR #26402](https://github.com/sgl-project/sglang/pull/26402)：把同样的 scheme/kernel 拆分应用到 GPTQ。
 
-## Tests and Validation
+## 测试与验证
 
-Quantization changes can affect both accuracy and performance. Include validation that matches the blast radius of the change.
+量化改动既可能影响精度，也可能影响性能。请提供与改动影响范围相匹配的验证。
 
-For Python-only structure changes:
+对仅涉及 Python 结构的改动：
 
 ```bash
 ruff check <changed-python-files>
 git diff --check
 ```
 
-For quantized model behavior:
+对量化模型行为的验证：
 
-- Launch at least one representative model for each touched quantization method.
-- Send a `/generate` request and confirm the output path succeeds.
-- Run an accuracy sanity test if the change can affect numerics.
-- Include warmup-aware benchmark results when the change affects kernel calls, layout conversion, or dispatch.
+- 为每个被改动的量化方法至少启动一个有代表性的模型。
+- 发送一个 `/generate` 请求，确认输出路径正常走通。
+- 如果改动可能影响数值结果，运行一次精度冒烟测试。
+- 如果改动涉及 kernel 调用、布局转换或分发逻辑，附上带预热的基准测试结果。
 
-For backend-specific changes:
+对后端相关改动：
 
-- Validate GPU changes on a supported GPU environment (NVIDIA, AMD, or Intel).
-- Validate NPU changes on a supported Ascend environment.
-- Include the exact model, quantization flag, backend flag, hardware, and command used in the PR description.
+- 在受支持的 GPU 环境（NVIDIA、AMD 或 Intel）上验证 GPU 改动。
+- 在受支持的 Ascend 环境上验证 NPU 改动。
+- 在 PR 描述中写明用到的确切模型、量化参数、后端参数、硬件和命令。
 
-## PR Checklist
+## PR 检查清单
 
-Before requesting review, make sure the PR description includes:
+在请求评审之前，确保 PR 描述包含以下内容：
 
-- The quantization method and backend paths changed.
-- The issue, design proposal, or roadmap item the PR follows.
-- Any compatibility notes for existing checkpoints or flags.
-- Accuracy results when model outputs can change.
-- Benchmark or profiling results when runtime performance can change.
-- The exact local checks and model launch tests that were run.
+- 被改动的量化方法与后端路径。
+- 该 PR 所依据的 issue、设计提案或路线图条目。
+- 对现有检查点或参数的任何兼容性说明。
+- 当模型输出可能变化时的精度结果。
+- 当运行时性能可能变化时的基准测试或性能剖析结果。
+- 实际运行过的本地检查与模型启动测试。
 
-Use the general [Contribution Guide](./contribution_guide) for source setup, formatting, unit tests, CI triggering, and review process details.
+源码搭建、格式化、单元测试、CI 触发与评审流程的细节，请使用通用的 [贡献指南](./contribution_guide)。
