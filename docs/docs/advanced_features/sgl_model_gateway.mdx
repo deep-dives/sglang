@@ -61,7 +61,7 @@ SGLang Model Gateway 是一个面向大规模 LLM 部署的高性能模型路由
 21. [故障排查](#troubleshooting)
 
 ***
-## 概览
+## 概览 {#overview}
 
 - **统一控制面**：跨异构模型集群注册、监控并编排 regular、prefill 与 decode 三种 worker。
 - **多协议数据面**：借助共享的可靠性原语，在 HTTP、PD（prefill/decode）、gRPC 与 OpenAI 兼容后端之间路由流量。
@@ -76,9 +76,9 @@ SGLang Model Gateway 是一个面向大规模 LLM 部署的高性能模型路由
 </Note>
 
 ***
-## 架构
+## 架构 {#architecture}
 
-### 控制面
+### 控制面 {#control-plane}
 
 - **Worker Manager**：发现 worker 的能力（`/get_server_info`、`/get_model_info`），跟踪负载，并在共享注册表中注册/移除 worker。
 - **Job Queue**：串行化添加/移除请求，并暴露状态（`/workers/{worker_id}`），让客户端可以跟踪接入进度。
@@ -86,19 +86,19 @@ SGLang Model Gateway 是一个面向大规模 LLM 部署的高性能模型路由
 - **Health Checker**：持续探测 worker，并更新就绪状态、熔断器状态与路由器指标。
 - **Tokenizer Registry**：管理动态注册的分词器，支持从 HuggingFace 或本地路径异步加载。
 
-### 数据面
+### 数据面 {#data-plane}
 
 - **HTTP 路由器**（regular 与 PD）：实现 `/generate`、`/v1/chat/completions`、`/v1/completions`、`/v1/responses`、`/v1/embeddings`、`/v1/rerank`、`/v1/classify`、`/v1/tokenize`、`/v1/detokenize` 以及相关的管理端点。
 - **gRPC 路由器**：把已分词的请求直接流式转发给 SRT gRPC worker，整个链路完全用 Rust 实现——分词器、推理解析器与工具解析器都在进程内运行。同时支持单阶段与 PD 路由，包括嵌入与分类。
 - **OpenAI 路由器**：把 OpenAI 兼容端点代理到外部厂商（OpenAI、xAI 等），同时把聊天历史与多轮编排保留在本地。
 
-### 存储与隐私
+### 存储与隐私 {#storage-and-privacy}
 
 - 对话与响应历史存储在路由器层（支持 memory、none、Oracle ATP 或 PostgreSQL）。同一份历史可以为多个模型或 MCP 循环提供上下文，而无需把数据发送给上游厂商。
 - `/v1/responses` agentic 流程、MCP 会话与对话 API 共享同一套存储层，方便满足受监管负载的合规要求。
 
 ***
-## 安装
+## 安装 {#installation}
 
 ### Docker
 
@@ -141,7 +141,7 @@ pip install --force-reinstall dist/*.whl
 ```
 
 ***
-## 快速上手
+## 快速上手 {#quick-start}
 
 ### 常规 HTTP 路由
 
@@ -169,9 +169,9 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## 部署模式
+## 部署模式 {#deployment-modes}
 
-### 路由与 Worker 同进程启动
+### 路由与 Worker 同进程启动 {#co-launch-router-and-workers}
 
 在一个进程内同时启动路由器与一批 SGLang worker：
 
@@ -201,7 +201,7 @@ python -m sglang_router.launch_server \
   --router-log-level debug
 ```
 
-### 分离启动（HTTP）
+### 分离启动（HTTP） {#separate-launch-http}
 
 独立运行 worker，并让路由器指向它们的 HTTP 端点：
 
@@ -217,7 +217,7 @@ python -m sglang_router.launch_router \
   --host 0.0.0.0 --port 30000
 ```
 
-### gRPC 启动
+### gRPC 启动 {#grpc-launch}
 
 使用 SRT gRPC worker 可获得最高吞吐量，并接入原生的推理/工具流水线：
 
@@ -239,7 +239,7 @@ python -m sglang_router.launch_router \
 
 gRPC 路由器同时支持与常规 HTTP 等价的推理服务，以及 PD（prefill/decode）推理服务。只要连接模式解析为 gRPC，就请提供 `--tokenizer-path` 或 `--model-path`（HuggingFace ID 或本地目录）。
 
-### Prefill-Decode 分离
+### Prefill-Decode 分离 {#prefill-decode-disaggregation}
 
 拆分 prefill 与 decode worker，实现 PD 感知的缓存与负载均衡：
 
@@ -257,7 +257,7 @@ prefill 条目支持可选的 bootstrap 端口。PD 模式会把 prefill 的元�
 💡 AI Infra 学习笔记：Prefill-Decode 分离（PD 分离）是把一次生成拆成两段独立服务——prefill 阶段计算整个输入前缀的 KV 缓存（计算密集、并发低），decode 阶段逐 token 生成（访存密集、并发高）。两者负载特征差异很大，混跑会互相拖累；分离后可以各自扩缩容并独立做缓存，是长上下文与高吞吐场景的主流优化。网关在这里的作用，就是同时管理 prefill/decode 两类 worker 集群，并正确合并两阶段的输出。
 </Note>
 
-### OpenAI 后端代理
+### OpenAI 后端代理 {#openai-backend-proxy}
 
 代理 OpenAI 兼容端点，同时把历史与 MCP 会话保留在本地：
 
@@ -270,7 +270,7 @@ python -m sglang_router.launch_router \
 
 OpenAI 后端模式下，每个路由器实例恰好需要一个 `--worker-urls` 条目。
 
-### 多模型推理网关
+### 多模型推理网关 {#multi-model-inference-gateway}
 
 启用 IGW 模式，让单个路由器路由多个模型：
 
@@ -292,9 +292,9 @@ curl -X POST http://localhost:30000/workers \
 ```
 
 ***
-## API 参考
+## API 参考 {#api-reference}
 
-### 推理端点
+### 推理端点 {#inference-endpoints}
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -343,7 +343,7 @@ curl -X POST http://localhost:30000/workers \
   </tbody>
 </table>
 
-### 分词端点
+### 分词端点 {#tokenization-endpoints}
 
 网关提供支持批处理的 HTTP 文本分词端点，设计与 SGLang Python 分词 API 保持一致。
 
@@ -467,7 +467,7 @@ curl -X POST http://localhost:30000/v1/tokenizers \
 curl http://localhost:30000/v1/tokenizers/550e8400-e29b-41d4-a716-446655440000/status
 ```
 
-### 解析器端点
+### 解析器端点 {#parser-endpoints}
 
 网关提供了从 LLM 输出中解析推理内容与函数调用的管理端点。
 
@@ -525,7 +525,7 @@ curl http://localhost:30000/v1/tokenizers/550e8400-e29b-41d4-a716-446655440000/s
 }
 ```
 
-### 分类 API
+### 分类 API {#classification-api}
 
 `/v1/classify` 端点使用序列分类模型（例如 `Qwen2ForSequenceClassification`、`BertForSequenceClassification`）提供文本分类能力。
 
@@ -599,7 +599,7 @@ curl http://localhost:30000/v1/classify \
 - 标签来自模型的 HuggingFace 配置（`id2label` 字段）；没有该映射的模型使用通用标签（`LABEL_0`、`LABEL_1` 等）
 - HTTP 与 gRPC 路由器都支持分类
 
-### 对话与响应 API
+### 对话与响应 API {#conversation-and-response-apis}
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -683,7 +683,7 @@ curl http://localhost:30000/v1/classify \
   </tbody>
 </table>
 
-### Worker 管理 API
+### Worker 管理 API {#worker-management-apis}
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -766,7 +766,7 @@ curl http://localhost:30000/workers
 }
 ```
 
-### 管理与健康端点
+### 管理与健康端点 {#admin-and-health-endpoints}
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -851,7 +851,7 @@ curl http://localhost:30000/workers
 </table>
 
 ***
-## 负载均衡策略
+## 负载均衡策略 {#load-balancing-policies}
 <Note>
 💡 AI Infra 学习笔记：cache-aware 路由是网关层最能体现「缓存即性能」的策略——RadixAttention 的 KV 缓存命中率取决于同一前缀是否落在同一 worker 上。若请求被随机分发到不同 worker，缓存全部不命中，TTFT 会明显变差；cache-aware 策略会把前缀相似的请求尽量导向已缓存该前缀的 worker，用路由的「局部性」换取更低的 TTFT。这也是为什么网关不仅要懂负载均衡，还要感知每个 worker 的缓存状态。
 </Note>
@@ -951,7 +951,7 @@ curl http://localhost:30000/workers
 </table>
 
 ***
-## 可靠性与流量控制
+## 可靠性与流量控制 {#reliability-and-flow-control}
 
 ### HTTP 客户端
 
@@ -994,7 +994,7 @@ curl http://localhost:30000/workers
   </tbody>
 </table>
 
-### 重试
+### 重试 {#retries}
 
 配置指数退避重试：
 
@@ -1057,7 +1057,7 @@ python -m sglang_router.launch_router \
 
 **可重试状态码：** 408、429、500、502、503、504
 
-### 熔断器
+### 熔断器 {#circuit-breaker}
 
 按 worker 粒度配置熔断器，防止故障级联扩散：
 
@@ -1117,7 +1117,7 @@ python -m sglang_router.launch_router \
 - **Open（打开）**：正在故障中，请求被立即拒绝
 - **Half-Open（半开）**：探测恢复，只允许少量请求
 
-### 限流与排队
+### 限流与排队 {#rate-limiting-and-queuing}
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -1132,7 +1132,7 @@ python -m sglang_router.launch_router \
 - 队列已满时返回 `429 Too Many Requests`
 - 队列等待超时时返回 `408 Request Timeout`
 
-### 健康检查
+### 健康检查 {#health-checks}
 
 ```bash Command
 --health-check-interval-secs 30 \
@@ -1143,7 +1143,7 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## 推理解析器集成
+## 推理解析器集成 {#reasoning-parser-integration}
 
 网关内置了推理解析器，用于处理使用显式思考块的思维链（CoT）推理模型。
 
@@ -1217,7 +1217,7 @@ gRPC 路由器会自动：
 4. 处理不完整 token 的检测，保证流式行为正确
 
 ***
-## 工具调用解析
+## 工具调用解析 {#tool-call-parsing}
 
 网关支持从 LLM 输出中以多种格式解析函数/工具调用。
 
@@ -1265,7 +1265,7 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## 分词器管理
+## 分词器管理 {#tokenizer-management}
 
 ### 分词器来源
 
@@ -1326,7 +1326,7 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## MCP 集成
+## MCP 集成 {#mcp-integration}
 
 网关原生集成了模型上下文协议（MCP）客户端，用于工具执行。
 
@@ -1404,7 +1404,7 @@ inventory:
 ```
 
 ***
-## 服务发现（Kubernetes）
+## 服务发现（Kubernetes） {#service-discovery-kubernetes}
 
 通过 Kubernetes pod 选择器启用 worker 自动发现：
 
@@ -1428,7 +1428,7 @@ python -m sglang_router.launch_router \
 prefill pod 可以通过 `sglang.ai/bootstrap-port` 注解暴露 bootstrap 端口。RBAC 需要允许对 pod 执行 `get`、`list` 和 `watch`。
 
 ***
-## 历史与数据连接器
+## 历史与数据连接器 {#history-and-data-connectors}
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -1522,7 +1522,7 @@ python -m sglang_router.launch_router \
 使用 `--redis-retention-days -1` 可永久存储（默认 30 天）。
 
 ***
-## WASM 中间件
+## WASM 中间件 {#wasm-middleware}
 
 网关支持 WebAssembly（WASM）中间件模块，用于自定义请求/响应处理。这样可以实现组织特定的认证、限流、计费、日志等逻辑，而无需修改或重新编译网关。
 
@@ -1702,7 +1702,7 @@ curl -X DELETE http://localhost:30000/wasm/{module_uuid}
 **注意：** 限流状态按 worker 线程维护，不会在网关副本之间共享。生产环境建议在共享层（例如 Redis）实现限流。
 
 ***
-## 语言绑定
+## 语言绑定 {#language-bindings}
 
 SGLang Model Gateway 为 Python 与 Go 提供了官方语言绑定，方便接入不同的技术栈并满足不同组织的要求。
 
@@ -1867,7 +1867,7 @@ go test -tags=integration -v ./...
 **何时用 Go：** 构建自定义客户端应用、与 Go 微服务集成、OpenAI 兼容代理服务器
 
 ***
-## 安全与认证
+## 安全与认证 {#security-and-authentication}
 
 ### 路由器 API 密钥
 
@@ -1896,7 +1896,7 @@ curl -H "Authorization: Bearer router-key" \
 3. **仅 Worker 认证**：路由器开放，worker 需要密钥
 4. **完整认证**：路由器与 worker 都受保护
 
-### 网关服务的 TLS（HTTPS）
+### 网关服务的 TLS（HTTPS） {#tls-https-for-gateway-server}
 
 启用 TLS，让网关通过 HTTPS 提供服务：
 
@@ -1932,7 +1932,7 @@ python -m sglang_router.launch_router \
 
 这两个参数必须同时提供。网关使用 rustls（ring 加密提供方）做 TLS 终止。如果没有配置 TLS，网关会回退为明文 HTTP。
 
-### Worker 通信的 mTLS
+### Worker 通信的 mTLS {#mtls-for-worker-communication}
 
 在 HTTP 模式下启用双向 TLS（mTLS），与 worker 安全通信：
 
@@ -1995,9 +1995,9 @@ python -m sglang_router.launch_router \
 ```
 
 ***
-## 可观测性
+## 可观测性 {#observability}
 
-### Prometheus 指标
+### Prometheus 指标 {#prometheus-metrics}
 
 通过 `--prometheus-host`/`--prometheus-port` 启用（默认 `0.0.0.0:29000`）。
 
@@ -2108,7 +2108,7 @@ python -m sglang_router.launch_router \
 
 1ms, 5ms, 10ms, 25ms, 50ms, 100ms, 250ms, 500ms, 1s, 2.5s, 5s, 10s, 15s, 30s, 45s, 60s, 90s, 120s, 180s, 240s
 
-### OpenTelemetry 追踪
+### OpenTelemetry 追踪 {#opentelemetry-tracing}
 
 启用分布式追踪，并通过 OTLP 导出：
 
@@ -2128,7 +2128,7 @@ python -m sglang_router.launch_router \
 - 向上游 worker 请求注入 trace 上下文
 - 服务名：`sgl-router`
 
-### 日志
+### 日志 {#logging}
 
 ```bash Command
 python -m sglang_router.launch_router \
@@ -2148,11 +2148,11 @@ python -m sglang_router.launch_router \
 响应中会包含 `x-request-id` 头，用于关联追踪。
 
 ***
-## 生产环境建议
+## 生产环境建议 {#production-recommendations}
 
 本节给出在生产环境中部署 SGLang Model Gateway 的指导。
 
-### 安全最佳实践
+### 安全最佳实践 {#security-best-practices}
 
 **生产环境务必启用 TLS：**
 
@@ -2175,7 +2175,7 @@ python -m sglang_router.launch_router \
 - 定期轮换证书与 API 密钥
 - 用防火墙或网络策略限制网络访问
 
-### 高可用
+### 高可用 {#high-availability}
 
 **扩缩容策略：**
 
@@ -2267,7 +2267,7 @@ python -m sglang_router.launch_router \
     +-----------+       +-----------+       +-----------+
 ```
 
-### 性能
+### 性能 {#performance}
 
 **高吞吐请使用 gRPC 模式：**
 
@@ -2333,7 +2333,7 @@ python -m sglang_router.launch_router \
   </tbody>
 </table>
 
-### Kubernetes 部署
+### Kubernetes 部署 {#kubernetes-deployment}
 
 **为服务发现给 Pod 打标签：**
 
@@ -2436,7 +2436,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-### 用 PromQL 监控
+### 用 PromQL 监控 {#monitoring-with-promql}
 
 配置 Prometheus 抓取网关的指标端点（默认 `:29000/metrics`）。
 
@@ -2566,7 +2566,7 @@ groups:
 ```
 
 ***
-## 配置参考
+## 配置参考 {#configuration-reference}
 
 ### 核心设置
 
@@ -2782,7 +2782,7 @@ groups:
 </table>
 
 ***
-## 故障排查
+## 故障排查 {#troubleshooting}
 
 ### Worker 永远不就绪
 

@@ -148,7 +148,7 @@ SGLang 提供多种投机解码方案，包括 EAGLE-2/EAGLE-3、MTP、DFLASH、
 
 ---
 
-## EAGLE 解码
+## EAGLE 解码 {#eagle-decoding}
 
 启用 EAGLE 投机解码时，以下参数与之相关：
 
@@ -236,7 +236,7 @@ SGLang 提供多种投机解码方案，包括 EAGLE-2/EAGLE-3、MTP、DFLASH、
 你可以用 [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py) 找到这些参数的最佳组合。
 
 
-### EAGLE-2 解码
+### EAGLE-2 解码 {#eagle-2-decoding}
 
 你可以通过设置 `--speculative-algorithm EAGLE` 并选择合适的模型来启用 EAGLE-2 解码。
 
@@ -276,7 +276,7 @@ print(response.choices[0].message.content)
 
 ---
 
-### 结合 `torch.compile` 的 EAGLE-2 解码
+### 结合 `torch.compile` 的 EAGLE-2 解码 {#eagle-2-decoding-with-torch-compile}
 
 你可以选择启用 `torch.compile`，为草稿模型应用 kernel 级优化（算子融合、自动调优）。实际加速效果取决于你的硬件、模型架构和批大小。在某些配置下（例如 H100 上 cuBLAS 已经最优、且已启用 CUDA 图的小型草稿模型），收益可能微乎其微。我们建议在你自己的环境里分别用带/不带该参数做基准测试，验证它是否有效。
 
@@ -317,7 +317,7 @@ print(response.choices[0].message.content)
 
 ---
 
-### 基于频率排序投机采样的 EAGLE-2 解码
+### 基于频率排序投机采样的 EAGLE-2 解码 {#eagle-2-decoding-via-frequency-ranked-speculative-sampling}
 
 通过在草稿模型中使用截断的高频 token 词表，EAGLE 投机解码在加速整体流水线的同时降低了 `lm_head` 的计算开销，且不损失质量。更多细节参见[论文](https://arxiv.org/pdf/2502.14856)。
 
@@ -361,7 +361,7 @@ print(response.choices[0].message.content)
 
 ---
 
-### EAGLE-3 解码
+### EAGLE-3 解码 {#eagle-3-decoding}
 
 你可以通过设置 `--speculative-algorithm EAGLE3` 并选择合适的模型来启用 EAGLE-3 解码。
 
@@ -400,7 +400,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## 多 token 预测（MTP）
+## 多 token 预测（MTP） {#multi-token-prediction}
 
 SGLang 通过投机解码支持 [MTP（多 token 预测）](https://arxiv.org/pdf/2404.19737)。这里以 `XiaomiMiMo/MiMo-7B-RL` 为例（DeepSeek 的 MTP 用法参见 [DeepSeek-V3.2 cookbook §4.2.3](/cookbook/autoregressive/DeepSeek/DeepSeek-V3_2#4-2-3-multi-token-prediction-eagle-speculative-decoding)）。
 
@@ -436,7 +436,7 @@ print(response.json())
 
 ---
 
-## DFlash 解码
+## DFlash 解码 {#dflash-decoding}
 
 SGLang 还支持使用专用草稿模型检查点的 **DFLASH** 投机解码。与 EAGLE 风格的树形验证相比，DFLASH 验证的是线性的草稿块，并围绕块大小/草稿窗口进行配置。当目标模型有配套的 DFlash 草稿检查点时（例如 `meta-llama/Llama-3.1-8B-Instruct` 搭配 `z-lab/LLaMA3.1-8B-Instruct-DFlash-UltraChat`），这条路径很实用。
 
@@ -507,7 +507,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## 独立投机解码（小型草稿模型）
+## 独立投机解码（小型草稿模型） {#standalone-speculative-decoding-small-draft-model}
 
 除了 EAGLE/MTP，SGLang 还支持使用更小的**草稿模型**进行 **token 级投机解码**。用 `--speculative-algorithm STANDALONE` 启用，并通过 `--speculative-draft-model-path` 提供草稿模型。
 
@@ -591,7 +591,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## 投机解码 V2（重叠调度器）
+## 投机解码 V2（重叠调度器） {#speculative-decoding-v2-overlap-scheduler}
 
 投机解码默认以启用重叠调度器的方式运行 V2 投机工作进程（例如 `StandaloneWorkerV2`、`EAGLEWorkerV2`）。传入 `--disable-overlap-schedule` 可回退到同步（非重叠）路径。
 
@@ -639,7 +639,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## Ngram 投机解码
+## Ngram 投机解码 {#ngram-speculative-decoding}
 
 SGLang 还支持**基于 ngram 的投机解码**（无需单独的草稿模型）。它从基于先前生成 token 构建的 ngram 缓存中检索草稿 token，再用目标模型验证。
 
@@ -734,7 +734,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## 完整参数参考
+## 完整参数参考 {#full-parameter-reference}
 
 下面是 SGLang 中所有投机解码参数的完整列表：
 
@@ -967,7 +967,7 @@ print(response.choices[0].message.content)
 
 ---
 
-## OOM 故障排查
+## OOM 故障排查 {#oom-troubleshooting}
 
 > [!WARNING]
 > **遇到显存不足（OOM）？** 投机解码可能增加 GPU 显存占用，因为草稿树、CUDA 图以及与验证相关的缓冲区会消耗额外显存。如果遇到 OOM 错误，请尝试以下调整。
@@ -1032,7 +1032,7 @@ python3 -m sglang.launch_server \
 
 ---
 
-## 参考资料
+## 参考资料 {#references}
 
 EAGLE 的流程如下：
 

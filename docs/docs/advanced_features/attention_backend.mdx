@@ -413,7 +413,7 @@ GDN 模型是混合模型：全注意力层仍然需要标准的 `--attention-ba
 - **其他 CUDA（Hopper、Ampere 等）**：自动选择即可，无特殊约束。
 </Warning>
 
-### DSA Attention 后端
+### DSA Attention 后端 {#dsa-attention-backend}
 
 DSA（DeepSeek Sparse Attention，DeepSeek 稀疏注意力）是 [DeepSeek V3.2](https://lmsys.org/blog/2025-09-29-deepseek-V32/) 使用的原生稀疏注意力机制。当模型架构需要时它会自动激活，并通过 `--attention-backend dsa` 选择（已弃用的别名：`nsa`）。
 

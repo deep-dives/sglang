@@ -57,7 +57,7 @@ uv pip install --prerelease=allow --index-strategy unsafe-best-match --extra-ind
   1. 使用 `export CUDA_HOME=/usr/local/cuda-<your-cuda-version>` 设置 `CUDA_HOME` 环境变量。
   2. 先按 [FlashInfer 安装文档](https://docs.flashinfer.ai/installation.html) 安装 FlashInfer，再按上述方式安装 SGLang。
 
-## 方法二：从源码安装
+## 方法二：从源码安装 {#method-2-from-source}
 
 ```bash Command
 # 使用最新的发布分支
@@ -73,7 +73,7 @@ pip install -e "python"
 
 - 如果你想开发 SGLang，可以试试开发用 docker 镜像。请参考 [搭建 docker 容器](../developer_guide/development_guide_using_docker#setup-docker-container)。镜像名为 `lmsysorg/sglang:dev`。
 
-## 方法三：使用 docker
+## 方法三：使用 docker {#method-3-using-docker}
 
 Docker 镜像发布在 Docker Hub 的 [lmsysorg/sglang](https://hub.docker.com/r/lmsysorg/sglang/tags)，由 [Dockerfile](https://github.com/sgl-project/sglang/tree/main/docker) 构建。
 把下面的 `<secret>` 替换成你的 huggingface hub [token](https://huggingface.co/docs/hub/en/security-tokens)。
@@ -182,7 +182,7 @@ sky status --endpoint 30000 sglang
 
 </Accordion>
 
-## 方法七：在 AWS SageMaker 上运行
+## 方法七：在 AWS SageMaker 上运行 {#aws-sagemaker}
 
 <Accordion title="更多">
 
