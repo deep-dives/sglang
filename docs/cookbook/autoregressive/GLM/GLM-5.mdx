@@ -1,61 +1,65 @@
 ---
 title: GLM-5
 metatags:
-    description: "Deploy GLM-5 with SGLang on NVIDIA H100/H200/B200 and AMD MI300X/MI325X/MI355X — state-of-the-art reasoning, enhanced coding, and robust tool calling capabilities."
+    description: "在 NVIDIA H100/H200/B200 和 AMD MI300X/MI325X/MI355X 上使用 SGLang 部署 GLM-5——先进推理、增强编码与稳健的工具调用能力。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[GLM-5](https://huggingface.co/zai-org/GLM-5) is the most powerful language model in the GLM series developed by Zhipu AI, targeting complex systems engineering and long-horizon agentic tasks. Scaling from GLM-4.5's 355B parameters (32B active) to 744B parameters (40B active), GLM-5 integrates DeepSeek Sparse Attention (DSA) to largely reduce deployment cost while preserving long-context capacity.
+[GLM-5](https://huggingface.co/zai-org/GLM-5) 是智谱 AI 开发的 GLM 系列中最强大的语言模型，面向复杂系统工程和长期 Agent 任务。它从 GLM-4.5 的 355B 参数（32B 激活）扩展到 744B 参数（40B 激活），并集成了 DeepSeek 稀疏注意力（DSA），在保留长上下文能力的同时大幅降低了部署成本。
 
-With advances in both pre-training (28.5T tokens) and post-training via [slime](https://github.com/THUDM/slime) (a novel asynchronous RL infrastructure), GLM-5 delivers significant improvements over GLM-4.7 and achieves best-in-class performance among open-source models on reasoning, coding, and agentic tasks.
+在预训练（28.5T token）和基于 [slime](https://github.com/THUDM/slime)（一种新型异步强化学习基础设施）的后训练两方面都有进展，GLM-5 相比 GLM-4.7 带来了显著提升，在推理、编码和 Agent 任务上达到开源模型中的顶尖水平。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：DeepSeek Sparse Attention（DSA）是一种稀疏注意力方案——先用一个轻量 indexer 为每个 token 选出最重要的 top-k 位置，再做稀疏注意力计算，从而把长上下文下 O(n²) 的注意力计算与 KV 读取显著降低。对 744B 这样的超大模型，DSA 是「既要长上下文、又要控制部署成本」的关键技术，也是推理引擎里稀疏 kernel 优化的前沿方向。
+</Note>
 
-- **Systems Engineering & Agentic Tasks**: Purpose-built for complex systems engineering and long-horizon agentic tasks
-- **State-of-the-Art Performance**: Best-in-class among open-source models on reasoning (HLE, AIME, GPQA), coding (SWE-bench, Terminal-Bench), and agentic tasks (BrowseComp, Vending Bench 2)
-- **DeepSeek Sparse Attention (DSA)**: Reduces deployment cost while preserving long-context capacity
-- **Multiple Quantizations**: BF16 and FP8 variants for different performance/memory trade-offs
-- **Speculative Decoding**: EAGLE-based speculative decoding support for lower latency
+**主要特性：**
 
-**Available Models:**
+- **系统工程与 Agent 任务**：专为复杂系统工程师和长期 Agent 任务打造
+- **SOTA 性能**：在推理（HLE、AIME、GPQA）、编码（SWE-bench、Terminal-Bench）和 Agent 任务（BrowseComp、Vending Bench 2）上达到开源模型顶尖水平
+- **DeepSeek 稀疏注意力（DSA）**：在保留长上下文能力的同时降低部署成本
+- **多种量化方式**：提供 BF16 和 FP8 版本，用于在性能与显存占用之间取舍
+- **投机解码**：支持基于 EAGLE 的投机解码，降低延迟
 
-- **BF16 (Full precision)**: [zai-org/GLM-5](https://huggingface.co/zai-org/GLM-5)
-- **FP8 (8-bit quantized)**: [zai-org/GLM-5-FP8](https://huggingface.co/zai-org/GLM-5-FP8)
+**可用模型：**
 
-**License:** MIT
+- **BF16（全精度）**：[zai-org/GLM-5](https://huggingface.co/zai-org/GLM-5)
+- **FP8（8 位量化）**：[zai-org/GLM-5-FP8](https://huggingface.co/zai-org/GLM-5-FP8)
 
-## 2. SGLang Installation
+**许可证：** MIT
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. SGLang 安装
 
-## 3. Model Deployment
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节针对不同硬件平台和使用场景给出部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, and capabilities. SGLang supports serving GLM-5 on NVIDIA H100, H200, B200, and AMD MI300X/MI325X/MI355X GPUs.
+### 3.1 基础配置
+
+**交互式命令生成器**：使用下面的配置选择器，可自动生成适配你硬件平台、量化方式和各项能力的部署命令。SGLang 支持在 NVIDIA H100、H200、B200 和 AMD MI300X/MI325X/MI355X GPU 上服务 GLM-5。
 
 import { GLM5Deployment } from '/src/snippets/autoregressive/glm-5-deployment.jsx'
 
 <GLM5Deployment />
 
 <Warning>
-  All recipes here run the DSA indexer top-k on the default `--dsa-topk-backend sgl-kernel`. Other top-k backend choices have not been fully validated on GLM-5.
+  本文所有方案都用默认的 `--dsa-topk-backend sgl-kernel` 运行 DSA indexer top-k。其它 top-k 后端选择尚未在 GLM-5 上充分验证。
 </Warning>
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- Speculative decoding (MTP) can significantly reduce latency for interactive use cases.
-- **DP Attention**: Enables data parallel attention for higher throughput under high concurrency. Note that DP attention trades off low-concurrency latency for high-concurrency throughput — disable it if your workload is latency-sensitive with few concurrent requests.
-- The `--mem-fraction-static` flag is recommended for optimal memory utilization, adjust it based on your hardware and workload.
-- BF16 model always requires **2x GPUs** compared to FP8 on NVIDIA hardware.
+- 投机解码（MTP）能显著降低交互场景的延迟。
+- **DP Attention**：启用数据并行注意力，可在高并发下获得更高吞吐。注意 DP attention 是用低并发延迟换取高并发吞吐——如果你的负载对延迟敏感且并发请求很少，请禁用。
+- 推荐使用 `--mem-fraction-static` 参数以获得最优显存利用率，请根据硬件和负载调整。
+- 在 NVIDIA 硬件上，BF16 模型需要的 GPU 数量**始终是 FP8 的 2 倍**。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Hardware</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>硬件</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>FP8</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>BF16</th>
     </tr>
@@ -89,19 +93,23 @@ import { GLM5Deployment } from '/src/snippets/autoregressive/glm-5-deployment.js
   </tbody>
 </table>
 
-- **B200 (FP8)**: Use `--ep 1 --attention-backend dsa --dsa-decode-backend trtllm --dsa-prefill-backend trtllm --moe-runner-backend flashinfer_trtllm --enable-flashinfer-allreduce-fusion` for optimized DSA and MoE backends on Blackwell. Also add `--quantization fp8` for FP8 weight quantization.
+<Note>
+💡 AI Infra 学习笔记：DP Attention（数据并行注意力）是并发推理里的经典优化——把同一批请求的注意力部分分散到多个 GPU 上计算，从而在高并发时提升吞吐。但它以牺牲低并发延迟为代价：并发低时跨卡同步反而拖慢响应。选型时要在「低延迟」和「高吞吐」之间按负载特征取舍，这也是评估推理引擎时常见的调优权衡。
+</Note>
 
-- **AMD GPUs**: Use `--dsa-prefill-backend tilelang --dsa-decode-backend tilelang` for the DSA attention backend. Add `--chunked-prefill-size 131072` and `--watchdog-timeout 1200` (20 minutes for weight loading). EAGLE speculative decoding is not currently supported on AMD for GLM-5.
-- For other configuration tips (MTP, DSA kernel, Context Parallel, HiSparse, NVFP4, Index Cache), see the [DeepSeek-V3.2 cookbook page](../DeepSeek/DeepSeek-V3_2). GLM-5 and DeepSeek-V3.2 share the same model structure, so the optimization techniques are common.
-- Use `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'` for GLM-5-FP8 if you want to enable the [IndexCache](https://github.com/THUDM/IndexCache) method. This feature is supported through [this PR](https://github.com/sgl-project/sglang/pull/21405) and introduces only a small accuracy loss. However, if you are running rigorous accuracy evaluations, it is not recommended to enable this feature.
+- **B200（FP8）**：在 Blackwell 上使用 `--ep 1 --attention-backend dsa --dsa-decode-backend trtllm --dsa-prefill-backend trtllm --moe-runner-backend flashinfer_trtllm --enable-flashinfer-allreduce-fusion` 以启用优化的 DSA 和 MoE 后端。同时添加 `--quantization fp8` 启用 FP8 权重量化。
+
+- **AMD GPU**：使用 `--dsa-prefill-backend tilelang --dsa-decode-backend tilelang` 作为 DSA 注意力后端。添加 `--chunked-prefill-size 131072` 和 `--watchdog-timeout 1200`（为权重加载预留 20 分钟）。GLM-5 在 AMD 上暂不支持 EAGLE 投机解码。
+- 其它配置技巧（MTP、DSA kernel、上下文并行、HiSparse、NVFP4、Index Cache）请参考 [DeepSeek-V3.2 cookbook 页面](../DeepSeek/DeepSeek-V3_2)。GLM-5 与 DeepSeek-V3.2 共享相同的模型结构，优化技巧通用。
+- 如果你想为 GLM-5-FP8 启用 [IndexCache](https://github.com/THUDM/IndexCache) 方法，请使用 `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'`。该特性通过[这个 PR](https://github.com/sgl-project/sglang/pull/21405) 支持，只会带来很小的精度损失。但如果你正在做严格的精度评估，不建议启用该特性。
 
 <Warning>
-**FP8 KV Cache**: `--kv-cache-dtype fp8_e4m3` quantizes the KV cache to FP8 at runtime. Since these FP8 model checkpoints do not include pre-calibrated KV cache scaling factors, SGLang defaults to a scale of 1.0, which may cause noticeable accuracy degradation on reasoning-heavy tasks. It is not included in the generated commands above; add it manually only if memory constraints require the trade-off.
+**FP8 KV 缓存**：`--kv-cache-dtype fp8_e4m3` 会在运行时把 KV 缓存量化为 FP8。由于这些 FP8 模型检查点并不包含预先校准好的 KV 缓存缩放因子，SGLang 默认使用 1.0 缩放，这可能会在推理密集型任务上造成明显的精度下降。该参数没有包含在上面生成的命令中；只有在显存受限、需要做这种取舍时才手动添加。
 </Warning>
 
-## 4. Model Invocation
+## 4. 模型调用
 
-Deploy GLM-5 with the following command (FP8 on H200, all features enabled):
+用下面的命令部署 GLM-5（H200 上的 FP8，启用全部特性）：
 
 ```shell Command
 sglang serve \
@@ -119,9 +127,9 @@ sglang serve \
   --port 30000
 ```
 
-### 4.1 MI300X/MI325X/MI355X (ROCm) Server Command
+### 4.1 MI300X/MI325X/MI355X（ROCm）服务端命令
 
-The following ROCm command is an additional option for AMD GPUs and does not replace the NVIDIA instructions above.
+下面这条 ROCm 命令是 AMD GPU 的额外选项，不能替代上面的 NVIDIA 说明。
 
 ```shell Command
 sglang serve \
@@ -137,26 +145,26 @@ sglang serve \
   --port 30000
 ```
 
-### 4.2 Basic Usage
+### 4.2 基础用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
 
-### 4.3 Advanced Usage
+### 4.3 高级用法
 
-#### 4.3.1 Reasoning Parser
+#### 4.3.1 推理解析器
 
-GLM-5 supports Thinking mode **by default**. Enable the reasoning parser during deployment to separate the thinking and content sections. The thinking process is returned via `reasoning_content` in the streaming response.
+GLM-5 **默认**支持思考模式。部署时启用推理解析器，即可把思考过程与正文内容分开。思考过程会通过流式响应中的 `reasoning_content` 返回。
 
-To disable thinking and use Instruct mode, pass `chat_template_kwargs` at request time:
+如需关闭思考、使用 Instruct 模式，请在请求时传入 `chat_template_kwargs`：
 
-- **Thinking mode** (default): The model performs step-by-step reasoning before answering. No extra parameters needed.
-- **Instruct mode** (`{"enable_thinking": false}`): The model responds directly without a thinking process.
+- **思考模式**（默认）：模型在回答前会逐步推理。无需额外参数。
+- **Instruct 模式**（`{"enable_thinking": false}`）：模型直接响应，不做思考。
 
-**Example 1: Thinking Mode (Default)**
+**示例 1：思考模式（默认）**
 
-Thinking mode is enabled by default. The model will reason step-by-step before answering, and the thinking process is returned via `reasoning_content`:
+思考模式默认开启。模型回答前会逐步推理，思考过程通过 `reasoning_content` 返回：
 
 ```python Example
 from openai import OpenAI
@@ -204,7 +212,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -272,9 +280,9 @@ $$0.15 = 0.10 + 0.05$$
 15% of 240 is **36**.
 ```
 
-**Example 2: Instruct Mode (Thinking Off)**
+**示例 2：Instruct 模式（关闭思考）**
 
-To disable thinking and get a direct response, pass `{"enable_thinking": false}` via `chat_template_kwargs`:
+要关闭思考、获得直接响应，请通过 `chat_template_kwargs` 传入 `{"enable_thinking": false}`：
 
 ```python Example
 from openai import OpenAI
@@ -305,7 +313,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 To find **15% of 240**, follow these steps:
@@ -337,11 +345,11 @@ Calculate the multiplication:
 \]
 ```
 
-#### 4.3.2 Tool Calling
+#### 4.3.2 工具调用
 
-GLM-5 supports tool calling capabilities. Enable the tool call parser during deployment. Thinking mode is on by default; to disable it for tool calling requests, pass `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`.
+GLM-5 支持工具调用。部署时启用工具调用解析器。思考模式默认开启；要针对工具调用请求关闭它，请传入 `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`。
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -422,7 +430,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -445,18 +453,18 @@ Tool Call: None
    Arguments: }
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: H200 (8x)
-- Model: GLM-5-FP8
-- Tensor Parallelism: 8
-- SGLang Version: commit 947927bdb
+- 硬件：H200 (8x)
+- 模型：GLM-5-FP8
+- 张量并行度：8
+- SGLang 版本：commit 947927bdb
 
-#### 5.1.1 Latency Benchmark
+#### 5.1.1 延迟基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -511,7 +519,7 @@ Max ITL (ms):                            29.50
 ==================================================
 ```
 
-#### 5.1.2 Throughput Benchmark
+#### 5.1.2 吞吐量基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -566,20 +574,20 @@ Max ITL (ms):                            1307.02
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 准确率基准测试
 
 <Note>
-The accuracy benchmark results below are shared with GLM-5.1, as GLM-5.1 was not independently benchmarked at the time of this writing. A separate GLM-5.1 benchmark run is planned.
+下面的准确率基准测试结果与 GLM-5.1 共享，因为撰写本文时 GLM-5.1 尚未单独跑过基准测试。计划会单独做一次 GLM-5.1 的基准测试。
 </Note>
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/gsm8k/bench_sglang.py --port 30000
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 Accuracy: 0.955
 Invalid: 0.000
@@ -587,14 +595,14 @@ Latency: 32.470 s
 Output throughput: 642.044 token/s
 ```
 
-#### 5.2.2 MMLU Benchmark
+#### 5.2.2 MMLU 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/mmlu/bench_sglang.py --port 30000
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 subject: abstract_algebra, #q:100, acc: 0.860
 subject: anatomy, #q:135, acc: 0.874
@@ -657,11 +665,11 @@ Total latency: 165.275
 Average accuracy: 0.877
 ```
 
-### 5.3 AMD GPU Benchmarks
+### 5.3 AMD GPU 基准测试
 
-#### 5.3.1 GSM8K Benchmark (MI325/MI35x)
+#### 5.3.1 GSM8K 基准测试（MI325/MI35x）
 
-- MI325/MI35x Test (GLM-5 BF16, `tp=8`, TileLang DSA backends)
+- MI325/MI35x 测试（GLM-5 BF16，`tp=8`，TileLang DSA 后端）
 
 ```bash Command
 python3 benchmark/gsm8k/bench_sglang.py --num-questions 200
@@ -672,4 +680,4 @@ Accuracy: 0.970
 Invalid: 0.000
 ```
 
-Results from [AMD nightly CI](https://github.com/sgl-project/sglang/actions/runs/22556197510/attempts/2#summary-65346783629). See also [sglang#18911](https://github.com/sgl-project/sglang/pull/18911).
+结果来自 [AMD 每日构建 CI](https://github.com/sgl-project/sglang/actions/runs/22556197510/attempts/2#summary-65346783629)。另见 [sglang#18911](https://github.com/sgl-project/sglang/pull/18911)。

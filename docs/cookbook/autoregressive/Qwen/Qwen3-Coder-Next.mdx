@@ -1,58 +1,68 @@
 ---
 title: Qwen3-Coder-Next
 metatags:
-    description: "Deploy Qwen3-Coder-Next code-focused models with SGLang on AMD MI300X - available in 3B to 80B sizes with enhanced code understanding."
+    description: "使用 SGLang 在 AMD MI300X 上部署 Qwen3-Coder-Next 代码模型——提供 3B 到 80B 尺寸，具备更强的代码理解能力。"
 ---
 
 import { Qwen3CoderNextDeployment } from '/src/snippets/autoregressive/qwen3-coder-next-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Qwen3-Coder-Next](https://huggingface.co/Qwen/Qwen3-Coder-Next) is a cost-efficient code-focused language model from the Qwen team (Alibaba). With 80B total parameters but only 3B activated parameters, it achieves performance comparable to models with 10–20x more active parameters through its innovative hybrid architecture.
+[Qwen3-Coder-Next](https://huggingface.co/Qwen/Qwen3-Coder-Next) 是 Qwen 团队（阿里巴巴）推出的一款高性价比代码大语言模型。它总参数 80B，但每次只激活 3B 参数，通过创新的混合架构达到与 10–20 倍激活参数模型相当的性能。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：Qwen3-Coder-Next 与 Qwen3-Next 一脉相承：总参数 80B、每 token 仅激活 3B（512 个专家中激活 10 个加 1 个共享专家），单 token 的 FLOPs 与小模型相当，却能给出大模型级别的代码质量。对部署方来说，这类「高稀疏 MoE 编码模型」最大的价值是成本：权重体积仍按 80B 计（需要足够的显存驻留全部专家），但实际算力与功耗接近 3B 稠密模型，非常适合本地开发与大规模低成本推理。
+</Note>
 
-- **Hybrid Architecture**: Uses a 48-layer hybrid layout combining Gated DeltaNet and Gated Attention with Mixture-of-Experts (512 total experts, 10 activated, 1 shared), enabling exceptional efficiency.
-- **Tool Calling Support**: Advanced agentic capabilities with native support for function calling and tool use via the `qwen3_coder` parser.
-- **Extended Context Length**: Supports up to 256K tokens for processing large codebases and long documents.
-- **Cost-Efficient Inference**: Only 3B parameters activated per token, making it ideal for local development and cost-effective deployment at scale.
-- **IDE Integration**: Compatible with Claude Code, Qwen Code, Cline, and other IDE platforms.
 
-For more details, please refer to the [Qwen3-Coder-Next model card](https://huggingface.co/Qwen/Qwen3-Coder-Next).
+**主要特性：**
 
-## 2. SGLang Installation
+- **混合架构**：采用 48 层混合布局，结合 Gated DeltaNet 与 Gated Attention，并搭配混合专家（共 512 个专家，激活 10 个，共享 1 个），实现卓越效率。
+- **工具调用支持**：通过 `qwen3_coder` 解析器原生支持函数调用和工具使用，具备先进的智能体能力。
+- **更长的上下文**：支持最长 256K token，可处理大型代码库和长文档。
+- **高性价比推理**：每个 token 只激活 3B 参数，非常适合本地开发和大规模低成本部署。
+- **IDE 集成**：兼容 Claude Code、Qwen Code、Cline 等 IDE 平台。
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+更多细节请参考 [Qwen3-Coder-Next 模型卡](https://huggingface.co/Qwen/Qwen3-Coder-Next)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. 安装 SGLang
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+SGLang 提供多种安装方式，你可以根据自己的硬件平台和需求选择最合适的一种。
 
-**Note:** Qwen3-Coder-Next requires SGLang v0.5.8 or later.
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides a progressive guide from quick deployment to performance optimization, suitable for users at different levels.
+**注意：** Qwen3-Coder-Next 需要 SGLang v0.5.8 或更高版本。
 
-### 3.1 Basic Configuration
+## 3. 模型部署
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform and deployment options.
+本节提供从快速部署到性能优化的渐进式指南，适合不同水平的用户。
+
+### 3.1 基础配置
+
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台和部署选项自动生成对应的部署命令。
 
 <Qwen3CoderNextDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-- **Context Length**: The model supports up to 256K tokens natively. If you encounter OOM issues, try `--context-length 32768`.
-- **Tool Use**: To enable tool calling capabilities, use the `--tool-call-parser qwen3_coder` flag.
-- **Sampling Parameters**: SGLang automatically applies the recommended sampling parameters from the model's `generation_config.json`. No manual configuration is needed.
-- **Mamba Radix Cache**: Qwen3-Coder-Next's hybrid Gated Delta Networks architecture supports two mamba scheduling strategies via `--mamba-radix-cache-strategy`:
-  - **V1 (`no_buffer`)**: Default. No overlap scheduler, lower memory usage.
-  - **V2 (`extra_buffer`)**: Enables overlap scheduling and branching point caching with `--mamba-radix-cache-strategy extra_buffer --page-size 64`. Requires FLA kernel backend. Trades higher mamba state memory for better throughput. Strictly superior in non-KV-cache-bound scenarios; in KV-cache-bound cases, weigh the overlap scheduling benefit against reduced max concurrency. `--page-size` must satisfy `FLA_CHUNK_SIZE % page_size == 0` or `page_size % FLA_CHUNK_SIZE == 0` (`FLA_CHUNK_SIZE` is currently 64).
-- **Xeon CPU service configuration**: Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+- **上下文长度**：模型原生支持最长 256K token。如果遇到 OOM 问题，可以尝试 `--context-length 32768`。
+- **工具使用**：要启用工具调用，使用 `--tool-call-parser qwen3_coder` 参数。
+- **采样参数**：SGLang 会自动套用模型 `generation_config.json` 中推荐的采样参数，无需手动配置。
+- **Mamba Radix 缓存**：Qwen3-Coder-Next 的混合 Gated Delta Network 架构通过 `--mamba-radix-cache-strategy` 支持两种 mamba 调度策略：
+  - **V1（`no_buffer`）**：默认。无重叠调度器，显存占用更低。
+  - **V2（`extra_buffer`）**：使用 `--mamba-radix-cache-strategy extra_buffer --page-size 64` 启用重叠调度与分支点缓存。需要 FLA kernel 后端。以更高的 mamba 状态显存换取更高吞吐。在非 KV 缓存受限场景下严格更优；在 KV 缓存受限场景下，需要在重叠调度带来的收益与并发度下降之间权衡。`--page-size` 必须满足 `FLA_CHUNK_SIZE % page_size == 0` 或 `page_size % FLA_CHUNK_SIZE == 0`（目前 `FLA_CHUNK_SIZE` 为 64）。
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：混合架构中，线性注意力（Gated DeltaNet）的「状态」也需要显存，与 KV 缓存是两套独立开销：`--max-mamba-cache-size` 和 `--mamba-full-memory-ratio` 控制的是 mamba 状态这块，`--page-size 64` 配合 `extra_buffer` 开启「重叠调度」——让上一个请求的 mamba 状态计算与下一个请求的注意力计算在 GPU 上重叠执行，从而提升吞吐，代价是并发上限下降。显存如何在这两套缓存间切分，是这类模型部署时最核心的调优点。
+</Note>
 
-**Deployment Command:**
+
+## 4. 模型调用
+
+**部署命令：**
 
 ```shell Command
 python -m sglang.launch_server \
@@ -63,15 +73,15 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基本的 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Code Generation Example
+#### 4.2.1 代码生成示例
 
 ```python Example
 from openai import OpenAI
@@ -92,7 +102,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-**Example Output:**
+**示例输出：**
 
 ````text Output
 Here's a Python function implementing binary search on a sorted list, with comprehensive type hints:
@@ -163,7 +173,7 @@ print(binary_search([1], 2))  # Output: None
 - Implements standard iterative binary search for O(1) space complexity
 ````
 
-#### 4.2.2 Streaming Example
+#### 4.2.2 流式输出示例
 
 ```python Example
 from openai import OpenAI
@@ -188,17 +198,17 @@ for chunk in response:
 print()
 ```
 
-**Example Output:**
+**示例输出：**
 
 ```text Output
 A **stack** follows the **Last In, First Out (LIFO)** principle, meaning the last element added is the first one removed—operations like `push` (add) and `pop` (remove) occur at the same end, called the *top*. In contrast, a **queue** follows the **First In, First Out (FIFO)** principle, where elements are added at the *back* (enqueue) and removed from the *front* (dequeue), preserving the order of insertion. This structural difference makes stacks ideal for tasks like function call management and expression evaluation, while queues suit scheduling, buffering, and breadth-first traversal.
 ```
 
-#### 4.2.3 Tool Calling Example
+#### 4.2.3 工具调用示例
 
-Qwen3-Coder-Next supports tool calling capabilities. Make sure `--tool-call-parser qwen3_coder` is included in the deployment command above.
+Qwen3-Coder-Next 支持工具调用。请确保上面的部署命令中包含 `--tool-call-parser qwen3_coder`。
 
-**Python Example:**
+**Python 示例：**
 
 ```python Example
 from openai import OpenAI
@@ -246,27 +256,27 @@ else:
     print(response.choices[0].message.content)
 ```
 
-**Example Output:**
+**示例输出：**
 
 ```text Output
 Tool: execute_code
 Arguments: {"code": "import math\nmath.factorial(10)"}
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (2x)
-- Model: Qwen/Qwen3-Coder-Next
-- Tensor Parallelism: 2
-- sglang version: 0.5.8+
+- 硬件：NVIDIA B200 GPU（2 块）
+- 模型：Qwen/Qwen3-Coder-Next
+- 张量并行：2
+- SGLang 版本：0.5.8+
 
-#### 5.1.1 Standard Scenario Benchmark
+#### 5.1.1 标准场景基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -276,9 +286,9 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-##### 5.1.1.1 Low Concurrency
+##### 5.1.1.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -292,7 +302,7 @@ python3 -m sglang.bench_serving \
   --num-prompts 10 \
   --max-concurrency 1
 ```
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -333,9 +343,9 @@ Max ITL (ms):                            13.45
 ==================================================
 ```
 
-##### 5.1.1.2 Medium Concurrency
+##### 5.1.1.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -349,7 +359,7 @@ python3 -m sglang.bench_serving \
   --num-prompts 80 \
   --max-concurrency 16
 ```
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -390,9 +400,9 @@ Max ITL (ms):                            394.39
 ==================================================
 ```
 
-##### 5.1.1.3 High Concurrency
+##### 5.1.1.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -406,7 +416,7 @@ python3 -m sglang.bench_serving \
   --num-prompts 500 \
   --max-concurrency 100
 ```
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -447,9 +457,9 @@ Max ITL (ms):                            993.20
 ==================================================
 ```
 
-#### 5.1.2 Reasoning Scenario Benchmark
+#### 5.1.2 推理场景基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -459,9 +469,9 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-##### 5.1.2.1 Low Concurrency
+##### 5.1.2.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -476,7 +486,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Result:
+- 结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -518,9 +528,9 @@ Max ITL (ms):                            12.48
 ==================================================
 ```
 
-##### 5.1.2.2 Medium Concurrency
+##### 5.1.2.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -535,7 +545,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-- Result:
+- 结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -577,9 +587,9 @@ Max ITL (ms):                            206.79
 ==================================================
 ```
 
-##### 5.1.2.3 High Concurrency
+##### 5.1.2.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -594,7 +604,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 64
 ```
 
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -635,11 +645,11 @@ Max ITL (ms):                            576.60
 ==================================================
 ```
 
-#### 5.1.3 Summarization Scenario Benchmark
+#### 5.1.3 摘要场景基准测试
 
-##### 5.1.3.1 Low Concurrency
+##### 5.1.3.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -654,7 +664,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -695,9 +705,9 @@ Max ITL (ms):                            16.34
 ==================================================
 ```
 
-##### 5.1.3.2 Medium Concurrency
+##### 5.1.3.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -712,7 +722,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -753,9 +763,9 @@ Max ITL (ms):                            823.32
 ==================================================
 ```
 
-##### 5.1.3.3 High Concurrency
+##### 5.1.3.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -770,7 +780,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 64
 ```
 
-- Result:
+- 结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -811,17 +821,17 @@ Max ITL (ms):                            2783.23
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python benchmark/gsm8k/bench_sglang.py --port 30000
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 Accuracy: 0.965
@@ -830,9 +840,9 @@ Latency: 26.407 s
 Output throughput: 929.132 token/s
 ```
 
-#### 5.2.2 MMLU Benchmark
+#### 5.2.2 MMLU 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 cd benchmark/mmlu
@@ -840,7 +850,7 @@ bash download_data.sh
 python3 bench_sglang.py --port 30000
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 subject: abstract_algebra, #q:100, acc: 0.780

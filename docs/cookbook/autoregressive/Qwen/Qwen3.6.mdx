@@ -1,39 +1,44 @@
 ---
 title: Qwen3.6
 metatags:
-    description: "Deploy Qwen3.6 with SGLang - open-weight multimodal series with a 35B MoE (3B active) variant and a 27B dense variant, hybrid reasoning, tool calling, MTP, and long-context support."
+    description: "使用 SGLang 部署 Qwen3.6——开源多模态系列，提供 35B MoE（3B 激活）和 27B 稠密两种变体，支持混合推理、工具调用、MTP 与长上下文。"
 tag: NEW
 ---
 
 import { Qwen36Deployment } from '/src/snippets/autoregressive/qwen36-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-The Qwen3.6 series is developed by Alibaba. Built on direct feedback from the community, Qwen3.6 prioritizes stability and real-world utility, delivering substantial upgrades in agentic coding and thinking preservation. Two size/sparsity variants are released:
+Qwen3.6 系列由阿里巴巴开发。基于社区的直接反馈，Qwen3.6 优先考虑稳定性与实际可用性，在智能体编码和思考保留方面带来了大幅升级。该系列发布两种尺寸/稀疏度变体：
 
-- [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B) — **Sparse MoE** (35B total, 3B active) on a Gated Delta Networks backbone.
-- [Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B) — **Dense** hybrid GDN; smaller weights footprint, single-GPU friendly.
+- [Qwen3.6-35B-A3B](https://huggingface.co/Qwen/Qwen3.6-35B-A3B)——基于 Gated Delta Network 骨干的**稀疏 MoE**（总参数 35B，激活 3B）。
+- [Qwen3.6-27B](https://huggingface.co/Qwen/Qwen3.6-27B)——**稠密**混合 GDN 架构；权重体积更小，适合单 GPU。
 
-Both variants share the same hybrid reasoning, tool-calling, and multimodal interface and natively handle context lengths of up to 262,144 tokens, extensible to over 1M tokens.
+两个变体共享相同的混合推理、工具调用和多模态接口，原生支持最长 262,144 token 的上下文，并可通过扩展支持超过 1M token。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：同一个系列同时推出「稀疏 MoE（35B 总参 / 3B 激活）」与「稠密 27B」两个变体，是很有代表性的部署权衡：MoE 用更多总参数换取更强的模型容量，但单 token 的计算量只相当于 3B 稠密模型，推理成本更低、吞吐更高；稠密模型则权重更小、内存访问更规整，实现和维护都更简单。对推理引擎来说，MoE 需要额外的专家路由与显存驻留（全部专家权重都在显存里），这正是"总参数 35B、激活仅 3B 却能单 GPU 部署"的原因。
+</Note>
 
-- **Agentic Coding**: Handles frontend workflows and repository-level reasoning with greater fluency and precision
-- **Thinking Preservation**: New option to retain reasoning context from historical messages, streamlining iterative development
-- **Efficient Hybrid Architecture**: Gated Delta Networks backbone; sparse MoE (35B / 3B active) or dense 27B variant
-- **Hybrid Reasoning**: Thinking mode enabled by default with step-by-step reasoning, can be disabled for direct responses
-- **Tool Calling**: Built-in tool calling support with `qwen3_coder` parser
-- **Multi-Token Prediction (MTP)**: Speculative decoding support for lower latency; both MoE and Dense variants ship `mtp.safetensors`
-- **Multimodal**: Unified vision-language model supporting text, image, and video inputs
 
-**Available Models:**
+**主要特性：**
+
+- **智能体编码**：以前端工作流和仓库级推理为主的场景下更加流畅、精确
+- **思考保留**：新增可保留历史消息中推理上下文的选项，让迭代开发更顺畅
+- **高效混合架构**：Gated Delta Network 骨干；稀疏 MoE（35B / 激活 3B）或稠密 27B 变体
+- **混合推理**：默认开启思考模式，逐步推理，也可关闭以直接作答
+- **工具调用**：内置工具调用支持，使用 `qwen3_coder` 解析器
+- **多 token 预测（MTP）**：支持投机解码，降低延迟；MoE 和稠密两个变体都附带 `mtp.safetensors`
+- **多模态**：统一的视觉语言模型，支持文本、图像和视频输入
+
+**可用模型：**
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr>
-      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>Model</th>
-      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>Architecture</th>
-      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>Weights</th>
+      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>模型</th>
+      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>架构</th>
+      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>权重</th>
     </tr>
   </thead>
   <tbody>
@@ -70,11 +75,11 @@ Both variants share the same hybrid reasoning, tool-calling, and multimodal inte
   </tbody>
 </table>
 
-**License:** Apache 2.0
+**许可证：** Apache 2.0
 
-## 2. SGLang Installation
+## 2. 安装 SGLang
 
-SGLang `>=0.5.10` is required for Qwen3.6. You can install from PyPI, from source, or use a Docker image:
+Qwen3.6 需要 SGLang `>=0.5.10`。你可以通过 PyPI、源码或 Docker 镜像安装：
 
 ```bash Command
 # Install from PyPI
@@ -87,47 +92,47 @@ uv pip install 'git+https://github.com/sgl-project/sglang.git#subdirectory=pytho
 docker pull lmsysorg/sglang:latest
 ```
 
-For the full Docker setup and other installation methods, please refer to the [official SGLang installation guide](../../../docs/get-started/install).
+完整的 Docker 配置和其它安装方式请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform and capabilities.
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台和模型能力自动生成对应的部署命令。
 
 
 <Qwen36Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-- Speculative decoding (MTP) can significantly reduce latency for interactive use cases.
-- **Mamba Radix Cache**: Qwen3.6's hybrid Gated Delta Networks architecture supports two mamba scheduling strategies via `--mamba-radix-cache-strategy`:
-  - **V1 (`no_buffer`)**: Default. No overlap scheduler, lower memory usage.
-  - **V2 (`extra_buffer`)**: Enables overlap scheduling and branching point caching with `--mamba-radix-cache-strategy extra_buffer --page-size 64`. Requires FLA kernel backend (NVIDIA GPUs only). Trades higher mamba state memory for better throughput.
-- The `--mem-fraction-static` flag is recommended for optimal memory utilization, adjust it based on your hardware and workload.
-- Context length defaults to 262,144 tokens. If you encounter OOM errors, consider reducing it, but maintain at least 128K to preserve thinking capabilities.
-- **CUDA IPC Transport**: Add `SGLANG_USE_CUDA_IPC_TRANSPORT=1` as an environment variable to use CUDA IPC for transferring multimodal features, significantly improving TTFT (Time To First Token). Note: this consumes additional memory proportional to image size, so you may need to lower `--mem-fraction-static` or `--max-running-requests`.
-- **Multimodal Attention Backend**: Use `--mm-attention-backend fa3` on H100/H200 for better vision performance, or `--mm-attention-backend fa4` on B200/B300.
-- For processing large images or videos, you may need to lower `--mem-fraction-static` to leave room for image feature tensors.
-- Hardware requirements:
-    - **35B-A3B BF16**: ~70GB for weights. TP=1 fits on all supported hardware.
-    - **35B-A3B FP8**: ~35GB for weights. TP=1 fits on all supported hardware.
-    - **35B-A3B NVFP4**: ~23GB for weights. TP=1 fits on B200/B300.
-    - **27B BF16**: ~54GB for weights. TP=1 fits on all supported hardware.
-    - **27B FP8**: ~27GB for weights. TP=1 fits on all supported hardware.
-    - **27B NVFP4**: ~22GB for weights. TP=1 fits on B200/B300.
+- 投机解码（MTP）可以显著降低交互式场景的延迟。
+- **Mamba Radix 缓存**：Qwen3.6 的混合 Gated Delta Network 架构通过 `--mamba-radix-cache-strategy` 支持两种 mamba 调度策略：
+  - **V1（`no_buffer`）**：默认。无重叠调度器，显存占用更低。
+  - **V2（`extra_buffer`）**：使用 `--mamba-radix-cache-strategy extra_buffer --page-size 64` 启用重叠调度与分支点缓存。需要 FLA kernel 后端（仅 NVIDIA GPU）。以更高的 mamba 状态显存换取更高吞吐。
+- 建议用 `--mem-fraction-static` 参数获得最优的显存利用率，请根据你的硬件和工作负载调整。
+- 上下文长度默认为 262,144 token。如果遇到 OOM 错误，可以考虑调小，但建议至少保留 128K 以保持思考能力。
+- **CUDA IPC 传输**：添加环境变量 `SGLANG_USE_CUDA_IPC_TRANSPORT=1`，用 CUDA IPC 传输多模态特征，可显著改善 TTFT（首 token 延迟）。注意：这会按图像大小消耗额外显存，你可能需要调低 `--mem-fraction-static` 或 `--max-running-requests`。
+- **多模态注意力后端**：在 H100/H200 上用 `--mm-attention-backend fa3` 获得更好的视觉性能，在 B200/B300 上用 `--mm-attention-backend fa4`。
+- 处理大图或视频时，你可能需要调低 `--mem-fraction-static`，为图像特征张量留出空间。
+- 硬件要求：
+    - **35B-A3B BF16**：权重约 70GB。所有受支持硬件上 TP=1 即可。
+    - **35B-A3B FP8**：权重约 35GB。所有受支持硬件上 TP=1 即可。
+    - **35B-A3B NVFP4**：权重约 23GB。B200/B300 上 TP=1 即可。
+    - **27B BF16**：权重约 54GB。所有受支持硬件上 TP=1 即可。
+    - **27B FP8**：权重约 27GB。所有受支持硬件上 TP=1 即可。
+    - **27B NVFP4**：权重约 22GB。B200/B300 上 TP=1 即可。
 
-All Qwen3.6 variants (MoE 35B-A3B and Dense 27B) fit on a single supported GPU. NVFP4 is available on B200/B300:
+Qwen3.6 的所有变体（MoE 35B-A3B 和稠密 27B）都能装进单块受支持的 GPU。NVFP4 在 B200/B300 上可用：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr>
-      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>Hardware</th>
-      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>Memory</th>
+      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>硬件</th>
+      <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>显存</th>
       <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>BF16 TP</th>
       <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>FP8 TP</th>
       <th style={{padding: "9px 12px", textAlign: "left", borderBottom: "1px solid rgba(148,163,184,0.3)"}}>NVFP4 TP</th>
@@ -166,11 +171,11 @@ All Qwen3.6 variants (MoE 35B-A3B and Dense 27B) fit on a single supported GPU. 
 </table>
 
 
-- **Xeon CPU service configuration:** Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-## 4. Model Invocation
+## 4. 模型调用
 
-Deploy Qwen3.6 with the following command (H200, all features enabled). Swap `--model-path` to `Qwen/Qwen3.6-27B-FP8` for the dense 27B variant — all other flags carry over:
+用以下命令部署 Qwen3.6（H200，全部特性开启）。部署稠密 27B 变体时把 `--model-path` 换成 `Qwen/Qwen3.6-27B-FP8`——其余参数全部沿用：
 
 ```shell Command
 sglang serve \
@@ -186,17 +191,17 @@ sglang serve \
   --port 30000
 ```
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基本的 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Vision Input
+### 4.2 视觉输入
 
-Qwen3.6 supports image and video inputs as a unified vision-language model.
+Qwen3.6 是统一的视觉语言模型，支持图像和视频输入。
 
-**Image Input Example:**
+**图像输入示例：**
 
 ```python Example
 from openai import OpenAI
@@ -253,7 +258,7 @@ for chunk in response:
 print()
 ```
 
-**Video Input Example:**
+**视频输入示例：**
 
 ```python Example
 from openai import OpenAI
@@ -310,18 +315,18 @@ for chunk in response:
 print()
 ```
 
-### 4.3 Advanced Usage
+### 4.3 高级用法
 
-#### 4.3.1 Reasoning Parser
+#### 4.3.1 推理解析器
 
-Qwen3.6 supports Thinking mode **by default**. Enable the reasoning parser during deployment to separate the thinking and content sections. The thinking process is returned via `reasoning_content` in the streaming response.
+Qwen3.6 **默认**支持思考模式。部署时启用推理解析器，可以把思考过程和回答内容分开。思考过程会通过流式响应中的 `reasoning_content` 返回。
 
-To disable thinking and use Instruct mode, pass `chat_template_kwargs` at request time:
+要关闭思考、使用指令模式，请在请求时传入 `chat_template_kwargs`：
 
-- **Thinking mode** (default): The model performs step-by-step reasoning before answering. No extra parameters needed.
-- **Instruct mode** (`{"enable_thinking": false}`): The model responds directly without a thinking process.
+- **思考模式**（默认）：模型在回答前先逐步推理。无需额外参数。
+- **指令模式**（`{"enable_thinking": false}`）：模型直接作答，不进行思考。
 
-**Example 1: Thinking Mode (Default)**
+**示例 1：思考模式（默认）**
 
 ```python Example
 from openai import OpenAI
@@ -364,9 +369,9 @@ for chunk in response:
 print()
 ```
 
-**Example 2: Instruct Mode (Thinking Off)**
+**示例 2：指令模式（关闭思考）**
 
-To disable thinking and get a direct response, pass `{"enable_thinking": false}` via `chat_template_kwargs`:
+要关闭思考、直接作答，请通过 `chat_template_kwargs` 传入 `{"enable_thinking": false}`：
 
 ```python Example
 from openai import OpenAI
@@ -395,9 +400,14 @@ for chunk in response:
 print()
 ```
 
-#### 4.3.2 Thinking Preservation
+#### 4.3.2 思考保留
 
-Qwen3.6 has been trained to preserve and leverage thinking traces from historical messages. Enable this for agent scenarios where maintaining full reasoning context improves decision consistency:
+Qwen3.6 经过训练，可以保留并利用历史消息中的思考痕迹。在智能体场景下启用该功能，保持完整的推理上下文有助于提高决策一致性：
+
+<Note>
+💡 AI Infra 学习笔记：「思考保留」是智能体场景下的一项新特性：把历史轮次中的推理痕迹（reasoning trace）也传给模型，让它在长对话中保持一致的决策逻辑。代价是每轮都要把更长的上下文写进 KV 缓存，显存与预填充开销随之上升——是否开启，本质是在"决策一致性"与"吞吐/显存"之间做权衡。
+</Note>
+
 
 ```python Example
 from openai import OpenAI
@@ -441,9 +451,9 @@ for chunk in response:
 print()
 ```
 
-#### 4.3.3 Tool Calling
+#### 4.3.3 工具调用
 
-Qwen3.6 supports tool calling capabilities. Enable the tool call parser during deployment.
+Qwen3.6 支持工具调用。部署时启用工具调用解析器。
 
 ```python Example
 from openai import OpenAI

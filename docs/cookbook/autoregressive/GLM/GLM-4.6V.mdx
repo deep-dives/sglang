@@ -1,39 +1,43 @@
 ---
 title: GLM-4.6V
 metatags:
-    description: "Deploy GLM-4.6V vision-language model with SGLang - native function calling, 128K context, multimodal document understanding and frontend replication."
+    description: "使用 SGLang 部署 GLM-4.6V 视觉语言模型——原生函数调用、128K 上下文、多模态文档理解与前端复刻。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-GLM-4.6V series model includes two versions: GLM-4.6V (106B), a foundation model designed for cloud and high-performance cluster scenarios, and GLM-4.6V-Flash (9B), a lightweight model optimized for local deployment and low-latency applications. GLM-4.6V scales its context window to 128k tokens in training, and achieves SoTA performance in visual understanding among models of similar parameter scales. Crucially, GLM team integrated native Function Calling capabilities for the first time. This effectively bridges the gap between "visual perception" and "executable action" providing a unified technical foundation for multimodal agents in real-world business scenarios.
+GLM-4.6V 系列包含两个版本：GLM-4.6V（106B）是面向云端和高性能集群场景的基座模型；GLM-4.6V-Flash（9B）则是为本地部署和低延迟应用优化的轻量模型。GLM-4.6V 在训练阶段把上下文窗口扩展到 128K token，在相似参数规模的模型中取得了视觉理解的 SOTA 性能。更重要的是，GLM 团队首次集成了原生函数调用（Function Calling）能力，有效弥合了「视觉感知」与「可执行动作」之间的鸿沟，为真实业务场景中的多模态 Agent 提供了统一的技术基础。
 
-Beyond achieves SoTA performance across major multimodal benchmarks at comparable model scales. GLM-4.6V introduces several key features:
+除了在可比规模的模型上于各大多模态基准测试中取得 SOTA 性能外，GLM-4.6V 还引入了以下关键特性：
 
-- **Native Multimodal Function Calling** Enables native vision-driven tool use. Images, screenshots, and document pages can be passed directly as tool inputs without text conversion, while visual outputs (charts, search images, rendered pages) are interpreted and integrated into the reasoning chain. This closes the loop from perception to understanding to execution. Please refer to this [example](#4-2-3-tool-calling).
-- **Interleaved Image-Text Content Generation** Supports high-quality mixed media creation from complex multimodal inputs. GLM-4.6V takes a multimodal context—spanning documents, user inputs, and tool-retrieved images—and synthesizes coherent, interleaved image-text content tailored to the task. During generation it can actively call search and retrieval tools to gather and curate additional text and visuals, producing rich, visually grounded content.
-- **Multimodal Document Understanding** GLM-4.6V can process up to 128K tokens of multi-document or long-document input, directly interpreting richly formatted pages as images. It understands text, layout, charts, tables, and figures jointly, enabling accurate comprehension of complex, image-heavy documents without requiring prior conversion to plain text.
-- **Frontend Replication & Visual Editing** Reconstructs pixel-accurate HTML/CSS from UI screenshots and supports natural-language-driven edits. It detects layout, components, and styles visually, generates clean code, and applies iterative visual modifications through simple user instructions.
+- **原生多模态函数调用**：支持原生的视觉驱动工具使用。图像、截图和文档页面可以直接作为工具输入，无需先转成文本；图表、搜索图片、渲染页面等视觉输出也能被解读并融入推理链。这打通了从感知、理解到执行的完整闭环。请参考此[示例](#4-2-3-tool-calling)。
+- **图文交错内容生成**：能从复杂的多模态输入生成高质量混合内容。GLM-4.6V 会基于横跨文档、用户输入和工具检索图片的多模态上下文，综合生成与任务相符的连贯图文交错内容。生成过程中它还能主动调用搜索和检索工具来收集整理更多文本与图像，产出内容丰富、有视觉依据的内容。
+- **多模态文档理解**：GLM-4.6V 最多可处理 128K token 的多文档或长文档输入，能把排版丰富的页面直接当图像解读。它联合理解文本、布局、图表、表格和插图，即使是不事先转换为纯文本的复杂、多图文档也能准确理解。
+- **前端复刻与视觉编辑**：能从 UI 截图重建像素级精确的 HTML/CSS，并支持自然语言驱动的修改。它通过视觉方式识别布局、组件和样式，生成整洁的代码，还能根据简单的用户指令进行迭代式的视觉修改。
 
-## 2. SGLang Installation
+<Note>
+💡 AI Infra 学习笔记：原生多模态函数调用意味着「看懂图 → 决定调用哪个工具 → 执行动作」整条链路都能在一个模型内完成，这是多模态 Agent 的关键能力。对推理引擎而言，这类负载往往同时包含图像输入（视觉 token 的 prefill）和工具调用（多轮短请求），对多模态特征的处理管线与调度器都提出了额外要求。
+</Note>
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-### 2.1 Docker Installation (Recommended)
+SGLang 提供多种安装方式。你可以根据自己的硬件平台和需求选择最合适的方式。
+
+### 2.1 Docker 安装（推荐）
 
 ```shell Command
 docker pull lmsysorg/sglang:latest
 ```
 
-**Advantages:**
+**优势：**
 
-- Ready to use out of the box, no manual environment configuration needed
-- Avoids dependency conflict issues
-- Easy to migrate between different environments
+- 开箱即用，无需手动配置环境
+- 避免依赖冲突问题
+- 在不同环境之间迁移方便
 
-### 2.2 Build from Source
+### 2.2 从源码构建
 
-If you need to use the latest development version or require custom modifications, you can build from source:
+如果你需要使用最新的开发版本，或需要自定义修改，可以从源码构建：
 
 ```bash Command
 # Install SGLang using UV (recommended)
@@ -48,38 +52,38 @@ sudo apt update
 sudo apt install ffmpeg
 ```
 
-**Use Cases:**
+**适用场景：**
 
-- Need to customize and modify SGLang source code
-- Want to use the latest development features
-- Participate in SGLang project development
+- 需要定制和修改 SGLang 源码
+- 想使用最新的开发特性
+- 参与 SGLang 项目开发
 
-For general installation instructions, you can also refer to the [official SGLang installation guide](../../../docs/get-started/install).
+一般安装说明还可以参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the interactive configuration generator below to customize your deployment settings. Select your hardware platform, model size, quantization method, and other options to generate the appropriate launch command.
+**交互式命令生成器**：使用下面的交互式配置生成器定制你的部署设置。选择硬件平台、模型大小、量化方式等选项，即可生成合适的启动命令。
 
 import { GLM46VDeployment } from "/src/snippets/autoregressive/glm-46v-deployment.jsx";
 
 <GLM46VDeployment />
 
-### 3.2 Configuration Tips
-- **TTFT Optimization** : Set `SGLANG_USE_CUDA_IPC_TRANSPORT=1` to use CUDA IPC for transferring multimodal features, which significantly improves TTFT. This consumes additional memory and may require adjusting `--mem-fraction-static` and/or `--max-running-requests`. (additional memory is proportional to image size * number of images in current running requests.)
-- **TP=8 Configuration**: When using Tensor Parallelism (TP) of 8, the vision attention's 12 heads cannot be evenly divided. You can resolve this by adding `--mm-enable-dp-encoder` (which the generator above handles automatically).
-- **Fast Model Loading**: For large models (like the 106B version), you can speed up model loading by using `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'`.
-- **Hardware Notes:**
-  - **H100 (FP8):** Use the FP8 checkpoint for best memory efficiency.
-  - **A100 / H100 (BF16):** Use standard multimodal parameters to manage throughput and GPU memory usage.
-  - **H200 / B200:** Runs out of the box, supporting full context length plus concurrent image + video processing.
-- **Additional Multimodal Parameters:**
-  - `--mm-attention-backend fa3`: Specify multimodal attention backend (Flash Attention 3).
-  - `--keep-mm-feature-on-device`: Retain multimodal feature tensors on GPU after processing to avoid D2H memory copies.
-  - `SGLANG_USE_CUDA_IPC_TRANSPORT=1`: Use CUDA IPC shared memory for multimodal data transport to significantly improve E2E latency.
+### 3.2 配置技巧
+- **TTFT 优化**：设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1`，用 CUDA IPC 传输多模态特征，可显著改善 TTFT。这会额外消耗显存，可能需要调整 `--mem-fraction-static` 和/或 `--max-running-requests`。（额外显存与「图像大小 × 当前运行请求中的图像数量」成正比。）
+- **TP=8 配置**：使用张量并行（TP）度为 8 时，视觉注意力的 12 个头无法被整除。可以通过添加 `--mm-enable-dp-encoder` 解决（上面的生成器会自动处理）。
+- **快速加载模型**：对大型模型（如 106B 版本），可以用 `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'` 加快模型加载。
+- **硬件注意事项：**
+  - **H100（FP8）**：使用 FP8 检查点可获得最佳显存效率。
+  - **A100 / H100（BF16）**：使用标准多模态参数，在吞吐量与显存占用之间取得平衡。
+  - **H200 / B200**：开箱即用，支持完整上下文长度以及图像 + 视频并发处理。
+- **其它多模态参数：**
+  - `--mm-attention-backend fa3`：指定多模态注意力后端（Flash Attention 3）。
+  - `--keep-mm-feature-on-device`：处理完成后把多模态特征张量保留在 GPU 上，避免 D2H 内存拷贝。
+  - `SGLANG_USE_CUDA_IPC_TRANSPORT=1`：用 CUDA IPC 共享内存传输多模态数据，可显著改善端到端延迟。
 
-**Example with full multimodal optimizations:**
+**完整多模态优化示例：**
 ```bash Command
 SGLANG_USE_CUDA_IPC_TRANSPORT=1 \
 SGLANG_VLM_CACHE_SIZE_MB=0 \
@@ -100,22 +104,22 @@ python -m sglang.launch_server \
   --enable-metrics
 ```
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基础用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Multi-Modal Inputs
+#### 4.2.1 多模态输入
 
-GLM-4.6V supports image and video inputs via the OpenAI-compatible API.
+GLM-4.6V 通过 OpenAI 兼容 API 支持图像和视频输入。
 
-**Image Input:**
+**图像输入：**
 
 ```python Example
 import subprocess
@@ -156,7 +160,7 @@ print(response)
 {"id":"b61596ca71394dd699fd8abd4f650c44","object":"chat.completion","created":1765259019,"model":"default","choices":[{"index":0,"message":{"role":"assistant","content":"The image is a logo featuring the text \"SGL\" (in a bold, orange-brown font) alongside a stylized icon. The icon includes a network-like structure with circular nodes (suggesting connectivity or a tree/graph structure) and a tag with \"</>\" (a common symbol for coding, web development, or software). The color scheme uses warm orange-brown tones with a black background, giving it a tech-focused, modern aesthetic (likely representing a company, project, or tool related to software, web development, or digital technology).<|begin_of_box|>SGL logo (stylized text + network/coding icon)<|end_of_box|>","reasoning_content":"Okay, let's see. The image has a logo with the text \"SGL\" and a little icon on the left. The icon looks like a network or a tree structure with circles, and there's a tag with \"</>\" which is a common symbol for coding or web development. The colors are orange and brown tones, with a black background. So probably a logo for a company or project named SGL, maybe related to software, web development, or a tech company.","tool_calls":null},"logprobs":null,"finish_reason":"stop","matched_stop":151336}],"usage":{"prompt_tokens":2222,"total_tokens":2448,"completion_tokens":226,"prompt_tokens_details":null,"reasoning_tokens":0},"metadata":{"weight_version":"default"}}
 ```
 
-**Video Input:**
+**视频输入：**
 
 ```python Example
 import subprocess
@@ -197,9 +201,9 @@ print(response)
 {"id":"520e0a079e5d4b17b82a6af619315a97","object":"chat.completion","created":1765259029,"model":"default","choices":[{"index":0,"message":{"role":"assistant","content":"The image is a still from a presentation by a man on a stage. He is pointing to a small pocket on his jeans and asking the audience what the pocket is for. The video is being shared by Evan Carmichael. The man then reveals that the pocket is for an iPod Nano.","reasoning_content":"Based on the visual evidence in the video, here is a breakdown of what is being shown:\n\n*   **Subject:** The video features a man on a stage, giving a presentation. He is wearing a black t-shirt and dark jeans.\n*   **Action:** The man is pointing to a pocket on his jeans. He is asking the audience a question about the purpose of this pocket.\n*   **Context:** The presentation is being filmed, and the video is being shared by \"Evan Carmichael,\" a well-known motivational speaker and content creator. The source of the clip is credited to \"JoshuaG.\"\n*   **Reveal:** The man then reveals the answer to his question. He pulls a small, white, rectangular device out of the pocket. He identifies this device as an \"iPod Nano.\"\n\nIn summary, the image is a still from a presentation where a speaker is explaining the purpose of the small pocket found on many pairs of jeans.","tool_calls":null},"logprobs":null,"finish_reason":"stop","matched_stop":151336}],"usage":{"prompt_tokens":30276,"total_tokens":30532,"completion_tokens":256,"prompt_tokens_details":null,"reasoning_tokens":0},"metadata":{"weight_version":"default"}}
 ```
 
-#### 4.2.2 Thinking Mode
+#### 4.2.2 思考模式
 
-GLM-4.6V supports Thinking mode. Enable the reasoning parser during deployment:
+GLM-4.6V 支持思考模式。部署时启用推理解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -210,7 +214,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -259,7 +263,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -272,11 +276,11 @@ Step 3: 240 × 0.15 = 36
 The answer is 36. To find 15% of 240, we multiply 240 by 0.15, which equals 36.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步的思考过程，让你看到模型是如何得出结论的。
 
-#### 4.2.3 Tool Calling
+#### 4.2.3 工具调用 {#4-2-3-tool-calling}
 
-GLM-4.6V supports tool calling with vision capabilities. Pass tools in your API request:
+GLM-4.6V 支持带视觉能力的工具调用。在 API 请求中传入 tools：
 
 ```python Example
 from openai import OpenAI
@@ -354,7 +358,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content.strip())
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 The weather in Beijing today (November 7, 2025) is sunny with a temperature of 2°C.
@@ -362,9 +366,9 @@ The weather in Beijing today (November 7, 2025) is sunny with a temperature of 2
 Yes, the tool returned an image (the SGL logo).
 ```
 
-#### 4.2.4 Thinking Budget
+#### 4.2.4 思考预算
 
-Beyond the reasoning parser, you can cap the number of thinking tokens using `CustomLogitProcessor`. Launch with `--enable-custom-logit-processor` and pass `Glm4MoeThinkingBudgetLogitProcessor` in the request — same as the [GLM-4.6 text model approach](./GLM-4.6#4-2-3-thinking-budget):
+除了推理解析器，你还可以用 `CustomLogitProcessor` 限制思考 token 的数量。启动时加上 `--enable-custom-logit-processor`，并在请求中传入 `Glm4MoeThinkingBudgetLogitProcessor`——与 [GLM-4.6 文本模型的做法](./GLM-4.6#4-2-3-thinking-budget) 相同：
 
 ```python Example
 import openai
@@ -383,15 +387,15 @@ response = client.chat.completions.create(
 print(response)
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1. Text Benchmark: Latency, Throughput and Accuracy
+### 5.1. 文本基准测试：延迟、吞吐量与准确率
 
-#### Command
+#### 命令
 ```shell Command
 python3 ./benchmark/gsm8k/bench_sglang.py
 ```
-#### Result Output
+#### 结果输出
 ```text Output
 Accuracy: 0.925
 Invalid: 0.000
@@ -399,9 +403,9 @@ Latency: 15.327 s
 Output throughput: 1788.375 token/s
 ```
 
-### 5.2. Multimodal Benchmark - Latency and Throughput
+### 5.2. 多模态基准测试——延迟与吞吐量
 
-#### Command
+#### 命令
 ```shell Command
 python3 -m sglang.bench_serving \
   --backend sglang-oai-chat \
@@ -416,7 +420,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 8
 ```
 
-#### Result Output
+#### 结果输出
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang-oai-chat
@@ -457,14 +461,14 @@ Max ITL (ms):                            173.48
 ```
 
 
-### 5.3. Multimodal Accuracy Benchmark - MMMU
+### 5.3. 多模态准确率基准测试——MMMU
 
-#### Command
+#### 命令
 ```shell Command
 python3 benchmark/mmmu/bench_sglang.py --response-answer-regex "<\|begin_of_box\|>(.*)<\|end_of_box\|>" --port 30000 --concurrency 64 --extra-request-body '{"max_tokens": 4096}'
 ```
 
-#### Result Output
+#### 结果输出
 ```text Output
 Benchmark time: 487.2229107860476
 answers saved to: ./answer_sglang.json

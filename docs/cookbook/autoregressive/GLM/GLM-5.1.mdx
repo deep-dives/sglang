@@ -1,49 +1,49 @@
 ---
 title: GLM-5.1
 metatags:
-    description: "Deploy GLM-5.1 with SGLang on NVIDIA H100/H200/B300/GB300 and AMD MI300X/MI325X/MI355X."
+    description: "在 NVIDIA H100/H200/B300/GB300 和 AMD MI300X/MI325X/MI355X 上使用 SGLang 部署 GLM-5.1。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-**Available Models:**
+**可用模型：**
 
-- **BF16 (Full precision)**: [zai-org/GLM-5.1](https://huggingface.co/zai-org/GLM-5.1)
-- **FP8 (8-bit quantized)**: [zai-org/GLM-5.1-FP8](https://huggingface.co/zai-org/GLM-5.1-FP8)
-- **NVFP4 (4-bit quantized)**: [nvidia/GLM-5.1-NVFP4](https://huggingface.co/nvidia/GLM-5.1-NVFP4)
+- **BF16（全精度）**：[zai-org/GLM-5.1](https://huggingface.co/zai-org/GLM-5.1)
+- **FP8（8 位量化）**：[zai-org/GLM-5.1-FP8](https://huggingface.co/zai-org/GLM-5.1-FP8)
+- **NVFP4（4 位量化）**：[nvidia/GLM-5.1-NVFP4](https://huggingface.co/nvidia/GLM-5.1-NVFP4)
 
-**License:** MIT
+**许可证：** MIT
 
-## 2. SGLang Installation
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节针对不同硬件平台和使用场景给出部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, and capabilities. SGLang supports serving GLM-5.1 on NVIDIA H100, H200, B300, GB300, and AMD MI300X/MI325X/MI355X GPUs.
+**交互式命令生成器**：使用下面的配置选择器，可自动生成适配你硬件平台、量化方式和各项能力的部署命令。SGLang 支持在 NVIDIA H100、H200、B300、GB300 和 AMD MI300X/MI325X/MI355X GPU 上服务 GLM-5.1。
 
 import { GLM51Deployment } from '/src/snippets/autoregressive/glm-51-deployment.jsx'
 
 <GLM51Deployment />
 
 <Warning>
-  All recipes here run the DSA indexer top-k on the default `--dsa-topk-backend sgl-kernel`. Other top-k backend choices have not been fully validated on GLM-5.1.
+  本文所有方案都用默认的 `--dsa-topk-backend sgl-kernel` 运行 DSA indexer top-k。其它 top-k 后端选择尚未在 GLM-5.1 上充分验证。
 </Warning>
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- Speculative decoding (MTP) can significantly reduce latency for interactive use cases.
-- **DP Attention**: Enables data parallel attention for higher throughput under high concurrency. Note that DP attention trades off low-concurrency latency for high-concurrency throughput — disable it if your workload is latency-sensitive with few concurrent requests.
-- The `--mem-fraction-static` flag is recommended for optimal memory utilization, adjust it based on your hardware and workload.
+- 投机解码（MTP）能显著降低交互场景的延迟。
+- **DP Attention**：启用数据并行注意力，可在高并发下获得更高吞吐。注意 DP attention 是用低并发延迟换取高并发吞吐——如果你的负载对延迟敏感且并发请求很少，请禁用。
+- 推荐使用 `--mem-fraction-static` 参数以获得最优显存利用率，请根据硬件和负载调整。
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Hardware</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>硬件</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>NVFP4</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>FP8</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>BF16</th>
@@ -96,15 +96,19 @@ import { GLM51Deployment } from '/src/snippets/autoregressive/glm-51-deployment.
   </tbody>
 </table>
 
-- **H100 and H200**: FP8 is the recommended deployment path.
-- **B300 and GB300**: NVFP4 is the recommended deployment path. Use `nvidia/GLM-5.1-NVFP4` with `--quantization modelopt_fp4`. Use `tp=8` on B300 and `tp=4` on GB300. The CUDA 13 image variant is required for B300 and GB300.
-- **AMD GPUs**: BF16 and FP8 checkpoints run on MI300X/MI325X/MI355X at tp=8. On MI355X (gfx950), the MXFP4 checkpoint `amd/GLM-5.1-MXFP4` is also supported at tp=4 with `--kv-cache-dtype fp8_e4m3`. All AMD paths pass `--dsa-prefill-backend tilelang --dsa-decode-backend tilelang`, `--chunked-prefill-size 131072`, and `--watchdog-timeout 1200` (20 minutes for weight loading). FP8 uses approximately half the memory of BF16 (~89 GB/GPU vs ~175 GB/GPU). EAGLE speculative decoding is supported on AMD GPUs: MI300X/MI325X (gfx942) and MI355X (gfx950), but it **requires `--disable-custom-all-reduce`** — the aiter custom all-reduce kernel deadlocks during EAGLE verify at high concurrency, so without this flag the server will hang.
-- For other configuration tips (MTP, DSA kernel, Context Parallel, HiSparse, NVFP4, Index Cache), see the [DeepSeek-V3.2 cookbook page](../DeepSeek/DeepSeek-V3_2). GLM-5.1 and DeepSeek-V3.2 share the same model structure, so the optimization techniques are common.
-- Use `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'` to enable the [IndexCache](https://github.com/THUDM/IndexCache) method for GLM-5.1. This can improve serving efficiency with only a small accuracy loss. If you are running rigorous accuracy evaluations, do not enable this feature.
+<Note>
+💡 AI Infra 学习笔记：量化格式与硬件平台强绑定——NVFP4 只有 NVIDIA Blackwell（B300/GB300）能跑，MXFP4 主要面向 AMD gfx950（MI355X），FP8/BF16 则是两家的通用选项。部署时「选量化」几乎是第一决策：它同时决定了可用的张量并行度、KV 缓存策略（如配合 `--kv-cache-dtype fp8_e4m3`）和最终能塞进几块卡，比后续任何 kernel 微调都更影响总体成本。
+</Note>
 
-## 4. Model Invocation
+- **H100 和 H200**：推荐用 FP8 部署。
+- **B300 和 GB300**：推荐用 NVFP4 部署。使用 `nvidia/GLM-5.1-NVFP4` 配合 `--quantization modelopt_fp4`。B300 上用 `tp=8`，GB300 上用 `tp=4`。B300 和 GB300 必须使用 CUDA 13 镜像变体。
+- **AMD GPU**：BF16 和 FP8 检查点以 tp=8 运行在 MI300X/MI325X/MI355X 上。在 MI355X（gfx950）上，MXFP4 检查点 `amd/GLM-5.1-MXFP4` 也支持以 tp=4 配合 `--kv-cache-dtype fp8_e4m3` 运行。所有 AMD 路径都要传 `--dsa-prefill-backend tilelang --dsa-decode-backend tilelang`、`--chunked-prefill-size 131072` 和 `--watchdog-timeout 1200`（为权重加载预留 20 分钟）。FP8 大约只用 BF16 一半的显存（约 89 GB/卡 vs 约 175 GB/卡）。AMD GPU 上支持 EAGLE 投机解码：MI300X/MI325X（gfx942）和 MI355X（gfx950），但它**必须加 `--disable-custom-all-reduce`**——aiter 自定义 all-reduce kernel 在高并发 EAGLE 验证阶段会死锁，不加这个参数服务端会挂住。
+- 其它配置技巧（MTP、DSA kernel、上下文并行、HiSparse、NVFP4、Index Cache）请参考 [DeepSeek-V3.2 cookbook 页面](../DeepSeek/DeepSeek-V3_2)。GLM-5.1 与 DeepSeek-V3.2 共享相同的模型结构，优化技巧通用。
+- 用 `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'` 为 GLM-5.1 启用 [IndexCache](https://github.com/THUDM/IndexCache) 方法。这能在只损失很小精度的情况下提升服务效率。如果你在做严格的精度评估，不要启用该特性。
 
-Deploy GLM-5.1 with the following command (FP8 on H200, all features enabled):
+## 4. 模型调用
+
+用下面的命令部署 GLM-5.1（H200 上的 FP8，启用全部特性）：
 
 ```shell Command
 sglang serve \
@@ -121,7 +125,7 @@ sglang serve \
   --port 30000
 ```
 
-### 4.1 B300/GB300 (NVFP4) Server Command
+### 4.1 B300/GB300（NVFP4）服务端命令
 
 #### B300
 
@@ -161,13 +165,13 @@ sglang serve \
   --port 30000
 ```
 
-### 4.2 MI300X/MI325X/MI355X (ROCm) Server Command
+### 4.2 MI300X/MI325X/MI355X（ROCm）服务端命令
 
-The following ROCm commands are additional options for AMD GPUs and do not replace the NVIDIA instructions above.
+下面这些 ROCm 命令是 AMD GPU 的额外选项，不能替代上面的 NVIDIA 说明。
 
-#### MXFP4 (MI355X / gfx950)
+#### MXFP4（MI355X / gfx950）
 
-On MI355X (gfx950), set `SGLANG_DSA_TRITON_PREFILL=1` to enable a faster Triton attention kernel for the prefill phase (opt-in, off by default). Keep `--dsa-prefill-backend tilelang` as shown. The EAGLE speculative-decoding flags below are optional but recommended on gfx950.
+在 MI355X（gfx950）上，设置 `SGLANG_DSA_TRITON_PREFILL=1` 可为 prefill 阶段启用更快的 Triton 注意力 kernel（自愿开启，默认关闭）。请按所示保留 `--dsa-prefill-backend tilelang`。下面的 EAGLE 投机解码参数是可选的，但在 gfx950 上推荐使用。
 
 ```shell Command
 # SGLANG_DSA_TRITON_PREFILL=1 is optional; it enables a faster Triton prefill kernel on gfx950
@@ -192,7 +196,7 @@ SGLANG_DSA_TRITON_PREFILL=1 sglang serve \
   --port 30000
 ```
 
-#### FP8 (Recommended)
+#### FP8（推荐）
 
 ```shell Command
 sglang serve \
@@ -236,26 +240,30 @@ sglang serve \
   --port 30000
 ```
 
-### 4.3 Basic Usage
+<Note>
+💡 AI Infra 学习笔记：AMD 上跑这类 DSA 模型通常要走 TileLang 后端（`--dsa-prefill-backend tilelang`），因为 TileLang 能针对不同 ROCm GPU 生成适配 kernel。这里还有个典型坑：EAGLE 投机解码在 AMD 上要求禁用自定义 all-reduce，否则高并发验证阶段 kernel 死锁导致服务挂起——说明「投机解码 + 特定硬件 + 通信原语」之间存在联动，排查时需要全局看待。
+</Note>
 
-For basic API usage and request examples, please refer to:
+### 4.3 基础用法
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+基础 API 用法和请求示例请参考：
 
-### 4.4 Advanced Usage
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
 
-#### 4.4.1 Reasoning Parser
+### 4.4 高级用法
 
-GLM-5.1 supports Thinking mode **by default**. Enable the reasoning parser during deployment to separate the thinking and content sections. The thinking process is returned via `reasoning_content` in the streaming response.
+#### 4.4.1 推理解析器
 
-To disable thinking and use Instruct mode, pass `chat_template_kwargs` at request time:
+GLM-5.1 **默认**支持思考模式。部署时启用推理解析器，即可把思考过程与正文内容分开。思考过程会通过流式响应中的 `reasoning_content` 返回。
 
-- **Thinking mode** (default): The model performs step-by-step reasoning before answering. No extra parameters needed.
-- **Instruct mode** (`{"enable_thinking": false}`): The model responds directly without a thinking process.
+如需关闭思考、使用 Instruct 模式，请在请求时传入 `chat_template_kwargs`：
 
-**Example 1: Thinking Mode (Default)**
+- **思考模式**（默认）：模型在回答前会逐步推理。无需额外参数。
+- **Instruct 模式**（`{"enable_thinking": false}`）：模型直接响应，不做思考。
 
-Thinking mode is enabled by default. The model will reason step-by-step before answering, and the thinking process is returned via `reasoning_content`:
+**示例 1：思考模式（默认）**
+
+思考模式默认开启。模型回答前会逐步推理，思考过程通过 `reasoning_content` 返回：
 
 ```python Example
 from openai import OpenAI
@@ -303,7 +311,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -364,9 +372,9 @@ If you don't want to multiply by 0.15 directly, you can break 15% down into 10% 
 15% of 240 is **36**.
 ```
 
-**Example 2: Instruct Mode (Thinking Off)**
+**示例 2：Instruct 模式（关闭思考）**
 
-To disable thinking and get a direct response, pass `{"enable_thinking": false}` via `chat_template_kwargs`:
+要关闭思考、获得直接响应，请通过 `chat_template_kwargs` 传入 `{"enable_thinking": false}`：
 
 ```python Example
 from openai import OpenAI
@@ -397,7 +405,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 15% of 240 is 36.
@@ -407,11 +415,11 @@ Here is how to calculate it:
 2. Multiply the decimal by the number: 0.15 × 240 = 36
 ```
 
-#### 4.4.2 Tool Calling
+#### 4.4.2 工具调用
 
-GLM-5.1 supports tool calling capabilities. Enable the tool call parser during deployment. Thinking mode is on by default; to disable it for tool calling requests, pass `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`.
+GLM-5.1 支持工具调用。部署时启用工具调用解析器。思考模式默认开启；要针对工具调用请求关闭它，请传入 `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`。
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -492,7 +500,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -510,18 +518,18 @@ Tool Call: None
    Arguments: }
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: H200 (8x)
-- Model: GLM-5.1-FP8
-- Tensor Parallelism: 8
-- SGLang Version: commit 947927bdb
+- 硬件：H200 (8x)
+- 模型：GLM-5.1-FP8
+- 张量并行度：8
+- SGLang 版本：commit 947927bdb
 
-#### 5.1.1 Latency Benchmark
+#### 5.1.1 延迟基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -576,7 +584,7 @@ Max ITL (ms):                            29.50
 ==================================================
 ```
 
-#### 5.1.2 Throughput Benchmark
+#### 5.1.2 吞吐量基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -631,20 +639,20 @@ Max ITL (ms):                            1307.02
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 准确率基准测试
 
 <Note>
-The accuracy benchmark results below are shared with GLM-5, as GLM-5.1 was not independently benchmarked at the time of this writing. A separate benchmark run is planned.
+下面的准确率基准测试结果与 GLM-5 共享，因为撰写本文时 GLM-5.1 尚未单独跑过基准测试。计划会单独做一次基准测试。
 </Note>
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/gsm8k/bench_sglang.py --port 30000
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 Accuracy: 0.955
 Invalid: 0.000
@@ -652,14 +660,14 @@ Latency: 32.470 s
 Output throughput: 642.044 token/s
 ```
 
-#### 5.2.2 MMLU Benchmark
+#### 5.2.2 MMLU 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/mmlu/bench_sglang.py --port 30000
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 subject: abstract_algebra, #q:100, acc: 0.860
 subject: anatomy, #q:135, acc: 0.874
@@ -722,11 +730,11 @@ Total latency: 165.275
 Average accuracy: 0.877
 ```
 
-### 5.3 AMD GPU Benchmarks
+### 5.3 AMD GPU 基准测试
 
-#### 5.3.1 GSM8K Benchmark (MI325/MI35x)
+#### 5.3.1 GSM8K 基准测试（MI325/MI35x）
 
-- MI325/MI35x Test (GLM-5.1 BF16, `tp=8`, TileLang DSA backends)
+- MI325/MI35x 测试（GLM-5.1 BF16，`tp=8`，TileLang DSA 后端）
 
 ```bash Command
 python3 benchmark/gsm8k/bench_sglang.py --num-questions 200
@@ -737,4 +745,4 @@ Accuracy: 0.970
 Invalid: 0.000
 ```
 
-Results from [AMD nightly CI](https://github.com/sgl-project/sglang/actions/runs/22556197510/attempts/2#summary-65346783629). See also [sglang#18911](https://github.com/sgl-project/sglang/pull/18911).
+结果来自 [AMD 每日构建 CI](https://github.com/sgl-project/sglang/actions/runs/22556197510/attempts/2#summary-65346783629)。另见 [sglang#18911](https://github.com/sgl-project/sglang/pull/18911)。

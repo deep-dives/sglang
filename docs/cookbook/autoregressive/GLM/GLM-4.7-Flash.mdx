@@ -1,73 +1,81 @@
 ---
 title: GLM-4.7-Flash
 metatags:
-    description: "Deploy GLM-4.7-Flash 30B-A3B MoE model with SGLang - lightweight, efficient inference optimized for single-GPU deployment."
+    description: "使用 SGLang 部署 GLM-4.7-Flash 30B-A3B 混合专家模型——面向单卡部署优化的轻量、高效推理。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[GLM-4.7-Flash](https://huggingface.co/zai-org/GLM-4.7-Flash) is a lightweight and high-speed model in the GLM-4.7 series developed by Zhipu AI, featuring state-of-the-art capabilities in reasoning, function calling, and efficient local deployment.
+[GLM-4.7-Flash](https://huggingface.co/zai-org/GLM-4.7-Flash) 是智谱 AI 开发的 GLM-4.7 系列中的轻量高速模型，具备推理、函数调用等先进能力，且特别适合高效的本地部署。
 
-As a compact variant in the GLM-4.7 family, GLM-4.7-Flash is a **30B-A3B MoE** model designed to balance performance and efficiency:
+作为 GLM-4.7 家族中的紧凑变体，GLM-4.7-Flash 是一个 **30B-A3B 混合专家（MoE）** 模型，在性能与效率之间取得平衡：
 
-- **Lightweight Architecture**: 30B total parameters with only 3B active parameters, enabling efficient inference
-- **Enhanced Reasoning**: Inherits the reasoning capabilities from GLM-4.7 with optimized performance
-- **Superior Coding**: Strong code generation and understanding capabilities
-- **Advanced Tool Use**: Robust tool calling and agent capabilities for complex workflows
-- **Optimized for Local Deployment**: Designed for single-GPU deployment scenarios
+- **轻量架构**：总参数 30B，但每次推理只激活 3B 参数，推理高效
+- **增强的推理**：继承了 GLM-4.7 的推理能力，性能经过优化
+- **出色的编码**：具备强大的代码生成与理解能力
+- **先进的工具使用**：工具调用和 Agent 能力稳健，可应对复杂工作流
+- **面向本地部署优化**：专为单卡部署场景设计
 
-For more details, please refer to the [official GLM-4.7 documentation](https://docs.z.ai/guides/llm/glm-4.7).
+更多细节请参考[官方 GLM-4.7 文档](https://docs.z.ai/guides/llm/glm-4.7)。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：30B-A3B 中的「30B 总参数 / 3B 激活参数」是 MoE（混合专家）模型的典型标记。MoE 把 FFN 层拆成多个专家，每个 token 只激活其中一小部分——这大幅降低了 decode 阶段的计算量，但全部专家权重仍要常驻显存。所以 MoE 是「计算省、显存大」，非常依赖 KV 缓存压缩、专家权重量化等手段，也是推理引擎里专家并行（EP）与负载均衡设计的核心场景。
+</Note>
 
-- **Efficient MoE Architecture**: 30B-A3B sparse activation for optimal performance/efficiency trade-off
-- **Multiple Quantizations**: BF16 and FP8 variants for different performance/memory trade-offs
-- **Hardware Optimization**: Specifically tuned for NVIDIA H100/H200/B200 GPUs
-- **High Performance**: Optimized for both throughput and latency scenarios
+**主要特性：**
 
-**Available Models:**
+- **高效的 MoE 架构**：30B-A3B 稀疏激活，实现性能与效率的最优平衡
+- **多种量化方式**：提供 BF16 和 FP8 版本，用于在性能与显存占用之间取舍
+- **硬件优化**：专门针对 NVIDIA H100/H200/B200 GPU 调优
+- **高性能**：对吞吐量和延迟两类场景都做了优化
 
-- **BF16 (Full precision)**: [zai-org/GLM-4.7-Flash](https://huggingface.co/zai-org/GLM-4.7-Flash)
+**可用模型：**
 
-**License:**
+- **BF16（全精度）**：[zai-org/GLM-4.7-Flash](https://huggingface.co/zai-org/GLM-4.7-Flash)
 
-Please refer to the [official GLM-4.7-Flash model card](https://huggingface.co/zai-org/GLM-4.7-Flash) for license details.
+**许可证：**
 
-## 2. SGLang Installation
+许可详情请参考[官方 GLM-4.7-Flash 模型卡片](https://huggingface.co/zai-org/GLM-4.7-Flash)。
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据自己的硬件平台和需求选择最合适的方式。
 
-## 3. Model Deployment
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节针对不同硬件平台和使用场景给出部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, deployment strategy, and thinking capabilities.
+### 3.1 基础配置
+
+**交互式命令生成器**：使用下面的配置选择器，可自动生成适配你硬件平台、量化方式、部署策略和思考能力的部署命令。
 
 import { GLM47FlashDeployment } from "/src/snippets/autoregressive/glm-47-flash-deployment.jsx";
 
 <GLM47FlashDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- **EAGLE Speculative Decoding:** Supported for GLM-4.7-Flash. Add `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`. The spec-v2 overlap scheduler is enabled by default; pass `--disable-overlap-schedule` to disable. Enable via the interactive command generator above.
+- **EAGLE 投机解码**：GLM-4.7-Flash 支持。添加 `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`。spec-v2 重叠调度器默认开启；传入 `--disable-overlap-schedule` 可关闭。可通过上面的交互式命令生成器启用。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：这个模型主打单卡部署（下文基准测试用 TP=1）。单卡省去了跨 GPU 通信，延迟更低、部署更简单；但显存预算只有一个 GPU，权重、KV 缓存和激活值都要精打细算，因此「轻量模型 + 量化 + 投机解码」的组合常被用来在单卡上榨出更高吞吐。
+</Note>
 
-### 4.1 Basic Usage
+## 4. 模型调用
 
-For basic API usage and request examples, please refer to:
+### 4.1 基础用法
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+基础 API 用法和请求示例请参考：
 
-### 4.2 Advanced Usage
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
 
-#### 4.2.1 Reasoning Parser
+### 4.2 高级用法
 
-GLM-4.7-Flash supports Thinking mode by default. Enable the reasoning parser during deployment to separate the thinking and the content sections:
+#### 4.2.1 推理解析器（Reasoning Parser）
+
+GLM-4.7-Flash 默认支持思考模式。部署时启用推理解析器，即可把思考过程与正文内容分开：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -79,7 +87,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -128,7 +136,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -141,15 +149,15 @@ Step 3: 240 × 0.15 = 36
 The answer is 36. To find 15% of 240, we multiply 240 by 0.15, which equals 36.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步的思考过程，让你看到模型是如何得出结论的。
 
-#### 4.2.2 Tool Calling
+#### 4.2.2 工具调用
 
 <Note>
-**Parser names by model:** GLM-4.5 and GLM-4.6 use `--tool-call-parser glm45`. GLM-4.7 and GLM-4.7-Flash use `--tool-call-parser glm47`. All GLM models use `--reasoning-parser glm45` regardless of generation.
+**不同模型使用的解析器名称：** GLM-4.5 和 GLM-4.6 使用 `--tool-call-parser glm45`。GLM-4.7 和 GLM-4.7-Flash 使用 `--tool-call-parser glm47`。所有 GLM 模型无论哪一代都使用 `--reasoning-parser glm45`。
 </Note>
 
-GLM-4.7-Flash supports tool calling capabilities. Enable the tool call parser:
+GLM-4.7-Flash 支持工具调用。启用工具调用解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -162,7 +170,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -256,7 +264,7 @@ if tool_calls_accumulator:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -268,13 +276,13 @@ Tool Call: get_weather
 
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器会展示模型是如何决定使用某个工具的
+- 工具调用会用函数名和参数清晰地标注出来
+- 之后你可以执行该函数，把结果发回给模型以继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -314,26 +322,26 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-This section uses **industry-standard configurations** for comparable benchmark results.
+本节采用**行业标准配置**，保证基准测试结果具有可比性。
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 (1x)
-- Model: GLM-4.7-Flash
-- Tensor Parallelism: 1
-- SGLang Version: 0.5.7
+- 硬件：NVIDIA B200 (1x)
+- 模型：GLM-4.7-Flash
+- 张量并行度：1
+- SGLang 版本：0.5.7
 
-**Benchmark Methodology:**
+**基准测试方法：**
 
-We use industry-standard benchmark configurations to ensure results are comparable across frameworks and hardware platforms.
+我们采用行业标准基准测试配置，确保结果在不同框架和硬件平台之间具有可比性。
 
-#### 5.1.1 Standard Test Scenarios
+#### 5.1.1 标准测试场景
 
-Three core scenarios reflect real-world usage patterns:
+以下三个核心场景反映了真实使用模式：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -344,57 +352,57 @@ Three core scenarios reflect real-world usage patterns:
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Scenario</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Input Length</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Output Length</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Use Case</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>场景</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>输入长度</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>输出长度</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>用途</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Chat**</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**对话**</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1K</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>1K</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Most common conversational AI workload</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>最常见的对话式 AI 负载</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Reasoning**</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**推理**</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>1K</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>8K</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Long-form generation, complex reasoning tasks</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>长文本生成、复杂推理任务</td>
     </tr>
     <tr>
-      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**Summarization**</td>
+      <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}>**摘要**</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>8K</td>
       <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.02)"}}>1K</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Document summarization, RAG retrieval</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>文档摘要、RAG 检索</td>
     </tr>
   </tbody>
 </table>
 
-#### 5.1.2 Concurrency Levels
+#### 5.1.2 并发级别
 
-Test each scenario at three concurrency levels to capture the throughput vs. latency tradeoff (Pareto frontier):
+在三个并发级别下分别测试每个场景，以刻画吞吐量与延迟之间的权衡曲线（帕累托前沿）：
 
-- **Low Concurrency**: `--max-concurrency 1` (Latency-optimized)
-- **Medium Concurrency**: `--max-concurrency 16` (Balanced)
-- **High Concurrency**: `--max-concurrency 100` (Throughput-optimized)
+- **低并发**：`--max-concurrency 1`（面向低延迟优化）
+- **中并发**：`--max-concurrency 16`（均衡）
+- **高并发**：`--max-concurrency 100`（面向高吞吐量优化）
 
-#### 5.1.3 Number of Prompts
+#### 5.1.3 提示词数量
 
-For each concurrency level, configure `num_prompts` to simulate realistic user loads:
+对每个并发级别，配置 `num_prompts` 以模拟真实的用户负载：
 
-- **Quick Test**: `num_prompts = concurrency × 1` (minimal test)
-- **Recommended**: `num_prompts = concurrency × 5` (standard benchmark)
-- **Stable Measurements**: `num_prompts = concurrency × 10` (production-grade)
+- **快速测试**：`num_prompts = concurrency × 1`（最小化测试）
+- **推荐**：`num_prompts = concurrency × 5`（标准基准测试）
+- **稳定测量**：`num_prompts = concurrency × 10`（生产级）
 
 ---
 
-#### 5.1.4 Benchmark Commands
+#### 5.1.4 基准测试命令
 
-**Scenario 1: Chat (1K/1K) - Most Important**
+**场景 1：对话（1K/1K）——最重要**
 
-- **Model Deployment**
+- **模型部署**
 
 ```bash Command
 python -m sglang.launch_server \
@@ -403,7 +411,7 @@ python -m sglang.launch_server \
   --tp 1
 ```
 
-- Low Concurrency (Latency-Optimized)
+- 低并发（面向低延迟）
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -457,7 +465,7 @@ Max ITL (ms):                            18.50
 ==================================================
 ```
 
-- Medium Concurrency (Balanced)
+- 中并发（均衡）
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -511,7 +519,7 @@ Max ITL (ms):                            763.13
 ==================================================
 ```
 
-- High Concurrency (Throughput-Optimized)
+- 高并发（面向高吞吐量）
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -565,9 +573,9 @@ Max ITL (ms):                            1369.20
 ```
 
 
-**Scenario 2: Reasoning (1K/8K)**
+**场景 2：推理（1K/8K）**
 
-- Low Concurrency
+- 低并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -620,7 +628,7 @@ Max ITL (ms):                            19.96
 ==================================================
 ```
 
-- Medium Concurrency
+- 中并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -673,7 +681,7 @@ Max ITL (ms):                            90.48
 ==================================================
 ```
 
-- High Concurrency
+- 高并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -726,9 +734,9 @@ Max ITL (ms):                            117.72
 ==================================================
 ```
 
-**Scenario 3: Summarization (8K/1K)**
+**场景 3：摘要（8K/1K）**
 
-- Low Concurrency
+- 低并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -781,7 +789,7 @@ Max ITL (ms):                            19.84
 ==================================================
 ```
 
-- Medium Concurrency
+- 中并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -834,7 +842,7 @@ Max ITL (ms):                            4282.01
 ==================================================
 ```
 
-- High Concurrency
+- 高并发
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -887,37 +895,37 @@ Max ITL (ms):                            1421.21
 ==================================================
 ```
 
-#### 5.1.5 Understanding the Results
+#### 5.1.5 结果解读
 
-**Key Metrics:**
+**关键指标：**
 
-- **Request Throughput (req/s)**: Number of requests processed per second
-- **Output Token Throughput (tok/s)**: Total tokens generated per second
-- **Mean TTFT (ms)**: Time to First Token - measures responsiveness
-- **Mean TPOT (ms)**: Time Per Output Token - measures generation speed
-- **Mean ITL (ms)**: Inter-Token Latency - measures streaming consistency
+- **请求吞吐量（req/s）**：每秒处理的请求数
+- **输出 token 吞吐量（tok/s）**：每秒生成的 token 总数
+- **平均 TTFT（ms）**：首 token 时间——衡量响应速度
+- **平均 TPOT（ms）**：每输出一个 token 的时间——衡量生成速度
+- **平均 ITL（ms）**：token 间延迟——衡量流式输出的连贯性
 
-**Why These Configurations Matter:**
+**为什么这些配置很重要：**
 
-- **1K/1K (Chat)**: Represents the most common conversational AI workload. This is the highest priority scenario for most deployments.
-- **1K/8K (Reasoning)**: Tests long-form generation capabilities crucial for complex reasoning, code generation, and detailed explanations.
-- **8K/1K (Summarization)**: Evaluates performance with large context inputs, essential for RAG systems, document Q&A, and summarization tasks.
-- **Variable Concurrency**: Captures the Pareto frontier - the optimal tradeoff between throughput and latency at different load levels. Low concurrency shows best-case latency, high concurrency shows maximum throughput.
+- **1K/1K（对话）**：代表最常见的对话式 AI 负载，也是大多数部署中优先级最高的场景。
+- **1K/8K（推理）**：测试长文本生成能力，对复杂推理、代码生成和详细解释至关重要。
+- **8K/1K（摘要）**：评估大上下文输入下的性能，对 RAG 系统、文档问答和摘要任务必不可少。
+- **可变并发**：刻画帕累托前沿——不同负载水平下吞吐量与延迟的最优权衡。低并发展示最佳延迟，高并发展示最大吞吐量。
 
-**Interpreting Results:**
+**结果解读方法：**
 
-- Compare your results against baseline numbers for your hardware
-- Higher throughput at same latency = better performance
-- Lower TTFT = more responsive user experience
-- Lower TPOT = faster generation speed
+- 把你的结果与对应硬件的基线数值对比
+- 相同延迟下吞吐量更高 = 性能更好
+- TTFT 更低 = 用户响应体验更流畅
+- TPOT 更低 = 生成速度更快
 
-### 5.2 Accuracy Benchmark
+### 5.2 准确率基准测试
 
-Document model accuracy on standard benchmarks:
+记录模型在标准基准测试上的准确率：
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- Benchmark Command
+- 基准测试命令
 
 ```bash Command
 python -m sglang.test.few_shot_gsm8k \
@@ -925,7 +933,7 @@ python -m sglang.test.few_shot_gsm8k \
   --port 30000
 ```
 
-- Result
+- 结果
 
 ```text Output
 Accuracy: 0.845

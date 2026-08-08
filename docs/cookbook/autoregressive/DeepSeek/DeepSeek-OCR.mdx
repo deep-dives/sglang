@@ -1,56 +1,60 @@
 ---
 title: DeepSeek-OCR
 metatags:
-    description: "Deploy DeepSeek-OCR with SGLang - high-accuracy text extraction from images and documents for OCR tasks."
+    description: "使用 SGLang 部署 DeepSeek-OCR——面向 OCR 任务、从图像和文档中高精度提取文字的模型。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[DeepSeek-OCR](https://github.com/deepseek-ai/DeepSeek-OCR) is DeepSeek's advanced OCR (Optical Character Recognition) model designed for high-accuracy text extraction from images. The model is optimized for various document processing and image-to-text conversion tasks.
+[DeepSeek-OCR](https://github.com/deepseek-ai/DeepSeek-OCR) 是 DeepSeek 推出的高级 OCR（光学字符识别）模型，专为从图像中高精度提取文字而设计。该模型针对各种文档处理与图像转文字任务做了优化。
 
-**Key Features:**
+**核心特性：**
 
-- **Advanced OCR**: High-accuracy text recognition from images and documents
-- **Multi-Modality**: Supports various image formats and document types
+- **高级 OCR**：从图像和文档中高精度识别文字
+- **多模态**：支持多种图像格式与文档类型
 
-**Available Models:**
+<Note>
+💡 AI Infra 学习笔记：OCR 模型属于多模态（VLM）推理——图像会先被视觉编码器切分成若干图像 token（vision tokens），再与文本 token 一起进入语言模型，因此图像的分辨率会直接决定 token 数量和显存占用。这也是为什么 bench 结果里单独统计 `Total input vision tokens`：长图、高分辨率图在推理成本上的差异可能比文本还大。
+</Note>
 
-- **Base Model**: [deepseek-ai/DeepSeek-OCR](https://huggingface.co/deepseek-ai/DeepSeek-OCR) - Recommended for OCR tasks
+**可用模型：**
 
-**License:**
-To use DeepSeek-OCR, you must agree to DeepSeek's Community License. See [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-OCR/blob/main/LICENSE) for details.
+- **基础模型**：[deepseek-ai/DeepSeek-OCR](https://huggingface.co/deepseek-ai/DeepSeek-OCR) - 推荐用于 OCR 任务
 
-For more details, please refer to the [official DeepSeek-OCR repository](https://github.com/deepseek-ai/DeepSeek-OCR).
+**许可协议：**
+使用 DeepSeek-OCR 需要同意 DeepSeek 社区许可协议。详见 [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-OCR/blob/main/LICENSE)。
 
-## 2. SGLang Installation
+更多细节请参考[官方 DeepSeek-OCR 仓库](https://github.com/deepseek-ai/DeepSeek-OCR)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. SGLang 安装
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+SGLang CPU 版安装请参考 [CPU 版本安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供针对不同硬件平台与使用场景优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, and deployment strategy.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下面的配置选择器，可根据你的硬件平台、量化方式与部署策略自动生成对应的部署命令。
 
 import { DeepSeekOCRDeployment } from "/src/snippets/autoregressive/deepseek-ocr-deployment.jsx";
 
 <DeepSeekOCRDeployment />
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法与请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 OCR-Specific Prompts
+### 4.2 OCR 专用提示词
 
-DeepSeek-OCR accepts recommended prompts from the model card:
+DeepSeek-OCR 接受模型卡推荐的提示词：
 
 ```text
 <image>
@@ -62,7 +66,7 @@ DeepSeek-OCR accepts recommended prompts from the model card:
 Free OCR.
 ```
 
-**OpenAI-compatible image request example:**
+**兼容 OpenAI 的图像请求示例：**
 
 ```python Example
 import requests
@@ -93,22 +97,22 @@ response = requests.post(url, json=data)
 print(response.text)
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: AMD MI300X GPU (1x)
-- Model: DeepSeek-OCR
-- Tensor Parallelism: 1
-- sglang version: 0.5.7
+- 硬件：AMD MI300X GPU（1 卡）
+- 模型：DeepSeek-OCR
+- 张量并行度：1
+- SGLang 版本：0.5.7
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios. To simulate real-world usage patterns, we configure each request with 1024 input tokens and 1024 output tokens, representing typical medium-length conversations with detailed responses.
+我们用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上做性能评估。该数据集包含真实对话数据，能更好地反映实际使用场景的性能。为模拟真实使用模式，我们把每个请求配置为 1024 个输入 token 与 1024 个输出 token，代表带详细回答的典型中等长度对话。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -120,7 +124,7 @@ python3 -m sglang.launch_server \
   --port 8000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -134,7 +138,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -175,9 +179,9 @@ Max ITL (ms):                            8.28
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐量敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -191,7 +195,7 @@ python3 -m sglang.launch_server \
   --port 8000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -205,7 +209,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============

@@ -1,58 +1,67 @@
 ---
 title: Kimi-K2
 metatags:
-    description: "Deploy Kimi-K2 MoE model with SGLang - 1T total parameters, 32B active, step-by-step reasoning and tool calling capabilities."
+    description: "用 SGLang 部署 Kimi-K2 MoE 模型——总参数 1T、激活参数 32B，支持逐步推理和工具调用。"
 ---
 
 import { KimiK2Deployment } from '/src/snippets/autoregressive/kimi-k2-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Kimi-K2](https://moonshotai.github.io/Kimi-K2/) is a state-of-the-art MoE language model by Moonshot AI with 32B activated parameters and 1T total parameters.
+[Kimi-K2](https://moonshotai.github.io/Kimi-K2/) 是 Moonshot AI 推出的 SOTA 级 MoE 大语言模型，总参数 1T，激活参数仅 32B。
 
-**Model Variants:**
+<Note>
+💡 AI Infra 学习笔记：MoE（混合专家）架构的核心是「总参数很大、但每次推理只激活一部分专家」。Kimi-K2 总参数 1T、激活 32B，意味着权重占用的显存大，但单 token 的计算量只相当于 32B 稠密模型。推理引擎为此引入专家并行（EP）把不同专家分布到多卡上，配合路由器（router）动态选择专家——这也是 MoE 模型部署时的核心调优点。
+</Note>
 
-- **[Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)**: Post-trained model optimized for general-purpose chat and agentic tasks. Compatible with vLLM, SGLang, KTransformers, and TensorRT-LLM.
-- **[Kimi-K2-Thinking](https://huggingface.co/moonshotai/Kimi-K2-Thinking)**: Advanced thinking model with step-by-step reasoning and tool calling. Native INT4 quantization with 256k context window. Ideal for complex reasoning and multi-step tool use.
-- **ROCm Support**: Compatible with AMD MI300X GPUs via SGLang (verified).
+**模型版本：**
 
-For details, see [official documentation](https://github.com/MoonshotAI/Kimi-K2) and [technical report](https://www.arxiv.org/abs/2507.20534).
+- **[Kimi-K2-Instruct](https://huggingface.co/moonshotai/Kimi-K2-Instruct)**：面向通用对话和智能体任务优化的后训练模型，兼容 vLLM、SGLang、KTransformers 和 TensorRT-LLM。
+- **[Kimi-K2-Thinking](https://huggingface.co/moonshotai/Kimi-K2-Thinking)**：进阶思考模型，具备逐步推理和工具调用能力。原生 INT4 量化，支持 256k 上下文窗口，非常适合复杂推理和多步工具调用场景。
+- **ROCm 支持**：可通过 SGLang 在 AMD MI300X GPU 上运行（已验证）。
 
-## 2. SGLang Installation
+更多细节见[官方文档](https://github.com/MoonshotAI/Kimi-K2)和[技术报告](https://www.arxiv.org/abs/2507.20534)。
 
-Refer to the [official SGLang installation guide](../../../docs/get-started/install).
+## 2. SGLang 安装
 
-## 3. Model Deployment
+请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-This section provides a progressive guide from quick deployment to performance optimization, suitable for users at different levels.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供从快速部署到性能优化的渐进式指南，适合不同水平的用户。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model variant, deployment strategy, and capabilities.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下方的配置选择器，根据你的硬件平台、模型版本、部署策略和功能选项自动生成对应的部署命令。
 
 <KimiK2Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置要点
 
-- **Memory**: Requires 8 GPUs with ≥140GB each (H200/B200). Use `--context-length 128000` to conserve memory.
-- **Expert Parallelism (EP)**: Use `--ep` for better MoE throughput. See [EP docs](../../../docs/advanced_features/expert_parallelism).
-- **Data Parallel (DP)**: Enable with `--dp 4 --enable-dp-attention` for production throughput.
-- **KV Cache**: Use `--kv-cache-dtype fp8_e4m3` to reduce memory by 50% (CUDA 11.8+).
-- **Reasoning Parser**: Add `--reasoning-parser kimi_k2` for Kimi-K2-Thinking to separate thinking and content.
-- **Tool Call Parser**: Add `--tool-call-parser kimi_k2` for structured tool calls.
-- **AMD GPU**: Set `SGLANG_ROCM_FUSED_DECODE_MLA=0` before launching AMD GPU.
+- **显存**：需要 8 张单卡显存 ≥140GB 的 GPU（H200/B200）。用 `--context-length 128000` 节省显存。
+- **专家并行（EP）**：用 `--ep` 提升 MoE 吞吐，见 [EP 文档](../../../docs/advanced_features/expert_parallelism)。
+- **数据并行（DP）**：生产环境可用 `--dp 4 --enable-dp-attention` 提升吞吐。
+- **KV 缓存**：用 `--kv-cache-dtype fp8_e4m3` 可减少 50% 显存占用（CUDA 11.8+）。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：KV 缓存是自回归解码阶段为每个请求缓存的键值张量，随上下文变长而线性增长，通常是部署时最大的显存开销之一。把它量化为 FP8（如 `--kv-cache-dtype fp8_e4m3`）能在几乎不影响精度的前提下把缓存显存减半；如果显存仍不够，还可以配合前缀缓存（prefix caching）和上下文长度上限来管理。KV 缓存也是推理引擎面试中的高频考点。
+</Note>
 
-### 4.1 Basic Usage
+- **推理解析器**：为 Kimi-K2-Thinking 加上 `--reasoning-parser kimi_k2`，把思考过程与回答内容分开。
+- **工具调用解析器**：加上 `--tool-call-parser kimi_k2` 以支持结构化工具调用。
+- **AMD GPU**：在 AMD GPU 上启动前，先设置环境变量 `SGLANG_ROCM_FUSED_DECODE_MLA=0`。
 
-See [Basic API Usage](../../../docs/get-started/quickstart).
+## 4. 模型调用
 
-### 4.2 Advanced Usage
+### 4.1 基础用法
 
-#### 4.2.1 Reasoning Parser
+见 [基础 API 用法](../../../docs/get-started/quickstart)。
 
-Enable reasoning parser for Kimi-K2-Thinking:
+### 4.2 进阶用法
+
+#### 4.2.1 推理解析器
+
+为 Kimi-K2-Thinking 启用推理解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -63,7 +72,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Example:**
+**示例：**
 
 ```python Example
 from openai import OpenAI
@@ -112,7 +121,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -167,13 +176,13 @@ This is simple and easy to follow.
 **Answer:** 15% of 240 is **36**.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型的逐步思考过程，让你看到模型是如何得出结论的。
 
-#### 4.2.2 Tool Calling
+#### 4.2.2 工具调用
 
-Kimi-K2-Instruct and Kimi-K2-Thinking support tool calling capabilities. Enable the tool call parser during deployment:
+Kimi-K2-Instruct 和 Kimi-K2-Thinking 都支持工具调用。部署时启用工具调用解析器：
 
-**Deployment Command:**
+**部署命令：**
 
 ```shell Command
 python -m sglang.launch_server \
@@ -185,7 +194,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（含思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -282,7 +291,7 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -293,13 +302,13 @@ print()
    Arguments: {"location":"Beijing"}
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器会展示模型如何决定使用某个工具
+- 工具调用会用函数名和参数明确标注
+- 然后你可以执行该函数，把结果回传给模型继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -339,21 +348,21 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x)
-- Model: Kimi-K2-Instruct
-- sglang version: 0.5.6.post1
+- 硬件：NVIDIA B200 GPU ×8
+- 模型：Kimi-K2-Instruct
+- SGLang 版本：0.5.6.post1
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios.
+我们用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上评估性能。该数据集包含真实对话数据，能更好地反映实际使用场景下的表现。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感型基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -366,7 +375,7 @@ python3 -m sglang.launch_server \
     --port 8000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -378,7 +387,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results**:
+- **测试结果**：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -419,9 +428,9 @@ Max ITL (ms):                            19.94
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐敏感型基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -435,7 +444,7 @@ python3 -m sglang.launch_server \
     --port 8000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -447,7 +456,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- **Test Results**:
+- **测试结果**：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -488,11 +497,11 @@ Max ITL (ms):                            1703.21
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- Server Command
+- 服务端命令
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -504,13 +513,13 @@ python3 -m sglang.launch_server \
     --port 8000
 ```
 
-- Benchmark Command
+- 基准测试命令
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200 --port 8000
 ```
 
-- **Result**:
+- **结果**：
 
 ```text Output
 Accuracy: 0.960

@@ -1,80 +1,85 @@
 ---
 title: Qwen3-Next
 metatags:
-    description: "Deploy Qwen3-Next with SGLang - hybrid attention architecture supporting 262K context, 80B MoE with 3B active parameters, and multi-token prediction."
+    description: "使用 SGLang 部署 Qwen3-Next——混合注意力架构，支持 262K 上下文、80B MoE（3B 激活参数）与多 token 预测。"
 ---
 
 import { Qwen3NextDeployment } from '/src/snippets/autoregressive/qwen3-next-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Qwen3-Next](https://huggingface.co/collections/Qwen/qwen3-next) is an advanced large language model architecture developed by Alibaba's Qwen team, designed to enhance efficiency and performance in handling extensive contexts and large-scale parameters. It features advanced capabilities in reasoning, function calling, and multilingual understanding.
+[Qwen3-Next](https://huggingface.co/collections/Qwen/qwen3-next) 是阿里巴巴 Qwen 团队开发的一种先进大语言模型架构，旨在提升处理超长上下文和大规模参数时的效率与性能。它具备先进的推理、函数调用和多语言理解能力。
 
-Qwen3-Next introduces several groundbreaking innovations:
+<Note>
+💡 AI Infra 学习笔记：Qwen3-Next 把两条省算力的思路合在了一起：一是「混合注意力」，用线性注意力（Gated DeltaNet，复杂度 O(n)）处理大部分长序列，只在部分层用全注意力；二是「高稀疏 MoE」，80B 总参数每 token 只激活 3B，FLOPs 大幅下降。两者叠加，让超大模型在保持容量（记忆能力、知识面）的同时，把单 token 的推理成本压到接近小模型，这正是它能处理 262K 长上下文并实现高吞吐的根本原因。
+</Note>
 
-- **Hybrid Attention Mechanism**: Replaces standard attention with a combination of **Gated DeltaNet** (linear attention) and **Full Attention**, enabling efficient processing of context lengths up to 262,144 tokens. This hybrid approach makes it ideal for analyzing lengthy documents such as entire books or contracts.
 
-- **Highly Sparse Mixture-of-Experts (MoE)**: Features an 80-billion parameter architecture where only 3 billion parameters are active during inference. This design reduces computational costs by up to 90% while maintaining high performance, drastically reducing FLOPs per token without compromising model capacity.
+Qwen3-Next 引入了几项开创性创新：
 
-- **Multi-Token Prediction (MTP)**: Enables generation of multiple tokens per inference step, significantly reducing latency and enhancing user experience in real-time applications. This innovation boosts both pretraining performance and inference speed.
+- **混合注意力机制**：用 **Gated DeltaNet**（线性注意力）与 **全注意力** 的组合取代标准注意力，能够高效处理长达 262,144 token 的上下文。这种混合方案非常适合分析整本书、整份合同这类超长文档。
 
-- **Multilingual Support**: Natively supports 119 languages, facilitating seamless cross-lingual tasks and making it versatile for global applications.
+- **高度稀疏的混合专家（MoE）**：采用 800 亿参数架构，推理时仅激活 30 亿参数。这种设计最多可降低 90% 的计算成本，同时保持高性能，在不牺牲模型容量的前提下大幅减少每 token 的 FLOPs。
 
-- **Enterprise-Ready Deployment**: Released under the Apache 2.0 license, offering flexible deployment options including on-premises, virtual private cloud (VPC), and private cloud environments, ensuring security and compliance for enterprise use.
+- **多 token 预测（MTP）**：每个推理步骤可一次生成多个 token，显著降低延迟，改善实时应用的用户体验。这一创新同时提升了预训练表现和推理速度。
 
-- **Advanced Reasoning & Stability**: Demonstrates clear improvement in reasoning performance with support for tool use during inference. Includes stability optimizations such as **zero-centered** and **weight-decayed layernorm** for robust pre-training and post-training.
+- **多语言支持**：原生支持 119 种语言，方便跨语言任务，适合全球应用。
 
-For more details, please refer to the [official Qwen3-Next blog](https://qwen.ai/blog?id=4074cca80393150c248e508aa62983f9cb7d27cd&from=research.latest-advancements-list).
+- **企业级部署**：采用 Apache 2.0 许可证发布，提供本地、虚拟私有云（VPC）和私有云等灵活的部署选项，满足企业的安全与合规要求。
 
-## 2. SGLang Installation
+- **高级推理与稳定性**：推理性能明显提升，并支持推理过程中的工具使用。包含稳定性优化，如 **零中心化** 与 **权重衰减 layernorm**，让预训练和后训练更加稳健。
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+更多细节请参考 [Qwen3-Next 官方博客](https://qwen.ai/blog?id=4074cca80393150c248e508aa62983f9cb7d27cd&from=research.latest-advancements-list)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. 安装 SGLang
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+SGLang 提供多种安装方式，你可以根据自己的硬件平台和需求选择最合适的一种。
 
-## 3. Model Deployment
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-### 3.1 Basic Configuration
+## 3. 模型部署
 
-The Qwen3-Next series comes in only one size but offers different thinking modes. Recommended starting configurations vary depending on hardware.
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model size, quantization method, and thinking capabilities.
+### 3.1 基础配置
+
+Qwen3-Next 系列只有一个尺寸，但提供不同的思考模式。推荐的起始配置因硬件而异。
+
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台、模型尺寸、量化方法和思考能力自动生成对应的部署命令。
 
 <Qwen3NextDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-- `--max-mamba-cache-size`: Adjust `--max-mamba-cache-size` to increase mamba cache space and max running requests capability. It will decrease KV cache space as a trade-off. You can adjust it according to workload.
+- `--max-mamba-cache-size`：调整 `--max-mamba-cache-size` 可以增大 mamba 缓存空间和最大运行请求数。代价是 KV 缓存空间相应减少。你可以根据负载调整。
 
-- `--mamba-ssm-dtype`: `bfloat16` or `float32`, use `bfloat16` to save mamba cache size and `float32` to get more accurate results. The default setting is `float32`.
+- `--mamba-ssm-dtype`：`bfloat16` 或 `float32`。用 `bfloat16` 可节省 mamba 缓存大小，用 `float32` 结果更精确。默认为 `float32`。
 
-- `--mamba-full-memory-ratio`: Adjust `--mamba-full-memory-ratio` to set the ratio of mamba state memory to full kv cache memory. The default setting is `0.9`.
+- `--mamba-full-memory-ratio`：调整 `--mamba-full-memory-ratio` 设置 mamba 状态显存占完整 KV 缓存显存的比例。默认为 `0.9`。
 
-- **Mamba Radix Cache**: Qwen3-Next's hybrid Gated Delta Networks architecture supports two mamba scheduling strategies via `--mamba-radix-cache-strategy`:
-  - **V1 (`no_buffer`)**: Default. No overlap scheduler, lower memory usage.
-  - **V2 (`extra_buffer`)**: Enables overlap scheduling and branching point caching with `--mamba-radix-cache-strategy extra_buffer --page-size 64`. Requires FLA kernel backend. Trades higher mamba state memory for better throughput. Strictly superior in non-KV-cache-bound scenarios; in KV-cache-bound cases, weigh the overlap scheduling benefit against reduced max concurrency. `--page-size` must satisfy `FLA_CHUNK_SIZE % page_size == 0` or `page_size % FLA_CHUNK_SIZE == 0` (`FLA_CHUNK_SIZE` is currently 64).
+- **Mamba Radix 缓存**：Qwen3-Next 的混合 Gated Delta Network 架构通过 `--mamba-radix-cache-strategy` 支持两种 mamba 调度策略：
+  - **V1（`no_buffer`）**：默认。无重叠调度器，显存占用更低。
+  - **V2（`extra_buffer`）**：使用 `--mamba-radix-cache-strategy extra_buffer --page-size 64` 启用重叠调度与分支点缓存。需要 FLA kernel 后端。以更高的 mamba 状态显存换取更高吞吐。在非 KV 缓存受限场景下严格更优；在 KV 缓存受限场景下，需要在重叠调度带来的收益与并发度下降之间权衡。`--page-size` 必须满足 `FLA_CHUNK_SIZE % page_size == 0` 或 `page_size % FLA_CHUNK_SIZE == 0`（目前 `FLA_CHUNK_SIZE` 为 64）。
 
-- **Xeon CPU service configuration**: Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基本的 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Reasoning Parser
+#### 4.2.1 推理解析器
 
-1. **Streaming with Thinking Process:**
+1. **带思考过程的流式输出：**
 
-   Qwen3-Next-80B-A3B-Thinking only supports thinking mode. Enable the reasoning parser during deployment to separate the thinking and the content sections.
+   Qwen3-Next-80B-A3B-Thinking 只支持思考模式。部署时启用推理解析器，可以把思考过程和回答内容分开。
 
 ```shell Command
 python -m sglang.launch_server \
@@ -132,7 +137,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -178,11 +183,11 @@ $$
 $$
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步思考的过程，让你能看到模型是如何得出结论的。
 
-2. **Turn off Thinking:**
+2. **关闭思考：**
 
-   Qwen3-Next-80B-A3B-Instruct only supports instruct (non-thinking) mode.
+   Qwen3-Next-80B-A3B-Instruct 只支持指令（非思考）模式。
 
 ```shell Command
 python -m sglang.launch_server \
@@ -240,7 +245,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 To find **15% of 240**, follow these steps:
@@ -296,13 +301,13 @@ $$
 So, **15% of 240 is 36**.
 ```
 
-#### 4.2.2 Tool Calling
+#### 4.2.2 工具调用
 
-Qwen/Qwen3-Next-80B-A3B-Instruct | Qwen/Qwen3-Next-80B-A3B-Thinking both support tool calling capabilities. Enable the tool call parser:
+Qwen/Qwen3-Next-80B-A3B-Instruct 与 Qwen/Qwen3-Next-80B-A3B-Thinking 都支持工具调用。启用工具调用解析器：
 
-**Python Example (without Thinking Process):**
+**Python 示例（不带思考过程）：**
 
-Start sglang server:
+启动 sglang 服务端：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -393,7 +398,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 <tool_call>
@@ -401,9 +406,9 @@ print()
 </tool_call>
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
-Start sglang server:
+启动 sglang 服务端：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -495,7 +500,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -506,13 +511,13 @@ Okay, the user is asking for the weather in Beijing. Let me check the available 
 </tool_call>
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器展示了模型如何决定使用某个工具
+- 工具调用会清楚标出函数名和参数
+- 之后你可以执行该函数并把结果传回，继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -552,9 +557,9 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-#### 4.2.3 Processing Ultra-Long Texts
+#### 4.2.3 处理超长文本
 
-Qwen3-Next natively supports context lengths of up to 262,144 tokens. For conversations where the total length (including both input and output) significantly exceeds this limit, we recommend using RoPE scaling techniques to handle long texts effectively. We have validated the model's performance on context lengths of up to 1 million tokens using the YaRN method.
+Qwen3-Next 原生支持最长 262,144 token 的上下文。当对话总长度（输入与输出之和）明显超过该上限时，我们建议使用 RoPE 缩放技术来有效处理长文本。我们用 YaRN 方法验证了模型在最长 100 万 token 上下文上的表现。
 
 **Qwen3-Next-80B-A3B-Instruct**
 
@@ -570,9 +575,14 @@ SGLANG_ALLOW_OVERWRITE_LONGER_CONTEXT_LEN=1 python -m sglang.launch_server --mod
 
 ```
 
-#### 4.2.4 Multi-Token Prediction (NEXTN Speculative Decoding)
+#### 4.2.4 多 token 预测（NEXTN 投机解码）
 
-Qwen3-Next ships built-in Multi-Token Prediction (MTP) layers and supports [EAGLE-style speculative decoding](../../../docs/advanced_features/speculative_decoding#eagle-decoding) through the `NEXTN` algorithm. The MTP weights are bundled in the main checkpoint, so no separate draft model is required.
+Qwen3-Next 内置了多 token 预测（MTP）层，并通过 `NEXTN` 算法支持 [EAGLE 风格的投机解码](../../../docs/advanced_features/speculative_decoding#eagle-decoding)。MTP 权重已打包在主检查点中，因此无需单独的草稿模型。
+
+<Note>
+💡 AI Infra 学习笔记：常规投机解码需要额外加载一个草稿模型（占用显存），而 Qwen3-Next 把 MTP 预测层直接内嵌进主检查点，省去了草稿模型的显存和加载成本。`--speculative-num-steps`、`--speculative-eagle-topk`、`--speculative-num-draft-tokens` 这几个参数共同决定草稿长度与验证节奏，加速比取决于草稿的接受率——想在生产环境调优时，建议用仓库里的 bench_speculative.py 按真实负载扫一遍参数组合。
+</Note>
+
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -584,24 +594,24 @@ python3 -m sglang.launch_server \
   --tp 4
 ```
 
-Tune `--speculative-num-steps`, `--speculative-eagle-topk`, and `--speculative-num-draft-tokens` for your workload with [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py). See [PR #10233](https://github.com/sgl-project/sglang/pull/10233) for implementation details.
+根据你的工作负载，用 [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py) 调整 `--speculative-num-steps`、`--speculative-eagle-topk` 和 `--speculative-num-draft-tokens`。实现细节见 [PR #10233](https://github.com/sgl-project/sglang/pull/10233)。
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x)
-- Tensor Parallelism: 8
-- Model: Qwen/Qwen3-Next-80B-A3B-Instruct
-- sglang version: 0.5.6
+- 硬件：NVIDIA B200 GPU（8 块）
+- 张量并行：8
+- 模型：Qwen/Qwen3-Next-80B-A3B-Instruct
+- SGLang 版本：0.5.6
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios.
+我们使用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上进行性能评估。该数据集包含真实对话数据，能更好地反映实际使用场景下的性能。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感型基准测试
 
-- Server Command:
+- 服务端命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -609,7 +619,7 @@ python -m sglang.launch_server \
   --tp 8
 ```
 
-- Test Command:
+- 测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -618,7 +628,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -659,9 +669,9 @@ Max ITL (ms):                            10.07
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐量敏感型基准测试
 
-- Server Command:
+- 服务端命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -669,7 +679,7 @@ python -m sglang.launch_server \
   --tp 8 \
 ```
 
-- Test Command:
+- 测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -678,7 +688,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-**Test Results:**
+**测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -719,17 +729,17 @@ Max ITL (ms):                            486.38
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-### 5.2.1 GSM8K Benchmark
+### 5.2.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200 --port 8000
 ```
 
-- **Results**:
+- **结果**：
 
   - Qwen3-Next-80B-A3B-Instruct
 
@@ -748,9 +758,9 @@ python3 -m sglang.test.few_shot_gsm8k --num-questions 200 --port 8000
     Output throughput: 3288.737 token/s
     ```
 
-### 5.2.2 MMLU Benchmark
+### 5.2.2 MMLU 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 cd sglang
@@ -758,7 +768,7 @@ bash benchmark/mmlu/download_data.sh
 python3 benchmark/mmlu/bench_sglang.py --nsub 10
 ```
 
-- **Results**:
+- **结果**：
 
   - Qwen3-Next-80B-A3B-Instruct
 

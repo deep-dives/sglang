@@ -1,40 +1,45 @@
 ---
 title: Qwen3.5
 metatags:
-    description: "Deploy Qwen3.5 with SGLang - flagship Qwen model with unified vision-language foundation, hybrid architecture, and scalable reasoning."
+    description: "使用 SGLang 部署 Qwen3.5——Qwen 旗舰模型，统一视觉语言基础、混合架构与可扩展推理。"
 ---
 
 import { Qwen35Deployment } from '/src/snippets/autoregressive/qwen35-deployment.jsx'
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) is the latest flagship model in the Qwen series developed by Alibaba, representing a significant leap forward with unified vision-language foundation, efficient hybrid architecture, and scalable reinforcement learning.
+[Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) 是阿里巴巴推出的 Qwen 系列最新旗舰模型，在统一视觉语言基础、高效混合架构和可扩展强化学习上实现了重大跨越。
 
-Qwen3.5 features a Gated Delta Networks combined with sparse Mixture-of-Experts architecture (397B total parameters, 17B activated), delivering high-throughput inference with minimal latency. It supports multimodal inputs (text, image, video) and natively handles context lengths of up to 262,144 tokens, extensible to over 1M tokens.
+Qwen3.5 采用 Gated Delta Network 与稀疏混合专家（MoE）架构组合（总参数 397B，激活 17B），在极低延迟下实现高吞吐推理。它支持多模态输入（文本、图像、视频），原生支持最长 262,144 token 的上下文，并可通过扩展支持超过 1M token。
 
-**Architecture details:**
-- **Hybrid Attention:** Gated Delta Networks (linear, O(n) complexity) combined with full attention every 4th layer — linear layers provide low-cost long-context processing while periodic full attention ensures high associative recall.
-- **MoE routing:** Top-10 active out of 512 routed experts plus a dedicated shared expert for universal features, keeping 17B parameters active from 397B total.
-- **Native multimodal:** DeepStack Vision Transformer with Conv3d temporal encoding for image and video understanding without separate visual encoders.
+<Note>
+💡 AI Infra 学习笔记：Qwen3.5 的「混合注意力」是当前长上下文模型的主流方向：线性注意力（Gated DeltaNet）把复杂度降到 O(n)，让长序列处理成本大幅下降，但纯线性注意力难以精确回忆信息；因此每隔几层插入一次标准全注意力来补足「联想记忆」。对推理引擎来说，这种架构意味着注意力层不再是统一的 kernel 调用——需要分别调度线性注意力与全注意力路径，还要为 mamba 状态单独管理显存（这就是下面 `--mamba-radix-cache-strategy` 与 `--max-mamba-cache-size` 这些参数的由来）。
+</Note>
 
-**Key Features:**
 
-- **Unified Vision-Language Foundation**: Early fusion training on multimodal tokens achieves cross-generational parity with Qwen3 and outperforms Qwen3-VL models
-- **Efficient Hybrid Architecture**: Gated Delta Networks + sparse MoE (397B total / 17B active) for high-throughput inference
-- **Hybrid Reasoning**: Thinking mode enabled by default with step-by-step reasoning, can be disabled for direct responses
-- **Tool Calling**: Built-in tool calling support with `qwen3_coder` parser
-- **Multi-Token Prediction (MTP)**: Speculative decoding support for lower latency
-- **201 Language Support**: Expanded multilingual coverage across 201 languages and dialects
+**架构细节：**
+- **混合注意力**：Gated Delta Network（线性注意力，复杂度 O(n)）与每隔 4 层插入一次的全注意力相结合——线性层以极低代价处理长上下文，周期性全注意力则保证较强的联想记忆能力。
+- **MoE 路由**：512 个路由专家中激活 top-10，另设一个专门的共享专家负责通用特征，在 397B 总参数中保持 17B 激活。
+- **原生多模态**：采用带 Conv3d 时间编码的 DeepStack Vision Transformer，无需独立的视觉编码器即可理解图像和视频。
 
-**Available Models:**
+**主要特性：**
+
+- **统一视觉语言基础**：对多模态 token 进行早期融合训练，达到与 Qwen3 跨代持平的水平，并优于 Qwen3-VL 系列模型
+- **高效混合架构**：Gated Delta Network + 稀疏 MoE（总参数 397B / 激活 17B），支撑高吞吐推理
+- **混合推理**：默认开启思考模式，逐步推理，也可关闭以直接作答
+- **工具调用**：内置工具调用支持，使用 `qwen3_coder` 解析器
+- **多 token 预测（MTP）**：支持投机解码，降低延迟
+- **201 种语言支持**：多语言覆盖扩展至 201 种语言和方言
+
+**可用模型：**
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>BF16 (Full precision)</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>FP8 (8-bit Quantized)</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>FP4 (4-bit Quantized)</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>BF16（全精度）</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>FP8（8 位量化）</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>FP4（4 位量化）</th>
     </tr>
   </thead>
   <tbody>
@@ -89,11 +94,11 @@ Qwen3.5 features a Gated Delta Networks combined with sparse Mixture-of-Experts 
   </tbody>
 </table>
 
-**License:** Apache 2.0
+**许可证：** Apache 2.0
 
-## 2. SGLang Installation
+## 2. 安装 SGLang
 
-SGLang from the main branch is required for Qwen3.5. You can install from source or use a Docker image:
+Qwen3.5 需要使用 main 分支的 SGLang。你可以从源码安装，也可以使用 Docker 镜像：
 
 ```bash Command
 # Install from source
@@ -109,63 +114,63 @@ docker pull lmsysorg/sglang-rocm:v0.5.15.post1-rocm720-mi30x-20260715
 docker pull lmsysorg/sglang-rocm:v0.5.15.post1-rocm720-mi35x-20260715
 ```
 
-For the full Docker setup and other installation methods, please refer to the [official SGLang installation guide](../../../docs/get-started/install).
+完整的 Docker 配置和其它安装方式请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform and capabilities.
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台和模型能力自动生成对应的部署命令。
 
 <Qwen35Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-- Speculative decoding (MTP) can significantly reduce latency for interactive use cases.
-- **H100 FP8:** Add `--enable-symm-mem` to enable NCCL symmetric memory for faster collectives and better performance under multi-GPU settings.
-- **AMD GPUs (MI300X / MI325X / MI355X):** Use `SGLANG_USE_AITER=1` and `SGLANG_USE_AITER_UNIFIED_ATTN=1` with `--attention-backend aiter`, which requires `--page-size 16` and can also enable `--enable-aiter-allreduce-fusion`. Additionally set `AITER_FLYDSL_FORCE=1` to force the AITER FlyDSL MoE kernels and `SGLANG_MAMBA_SSM_DTYPE=bfloat16` to store the Mamba SSM state in bfloat16 (instead of the default float32). For the **MXFP4 checkpoint on MI355X**, set `ROCM_QUICK_REDUCE_QUANTIZATION=INT8` to route multi-GPU collectives through INT8-quantized ROCm quick all-reduce, and drop `--enable-aiter-allreduce-fusion` (the two are mutually exclusive; quick all-reduce is preferred for this recipe).
-- **Watchdog timeout:** Increase `--watchdog-timeout` to `1200` or higher for this large model, as weight loading can take significant time.
-- **Mamba Radix Cache**: Qwen3.5's hybrid Gated Delta Networks architecture supports two mamba scheduling strategies via `--mamba-radix-cache-strategy`:
-  - **V1 (`no_buffer`)**: Default. No overlap scheduler, lower memory usage. Required for AMD MI GPUs.
-  - **V2 (`extra_buffer`)**: Enables overlap scheduling and branching point caching with `--mamba-radix-cache-strategy extra_buffer --page-size 64`. Requires FLA kernel backend (NVIDIA GPUs only). Trades higher mamba state memory for better throughput. Strictly superior in non-KV-cache-bound scenarios; in KV-cache-bound cases, weigh the overlap scheduling benefit against reduced max concurrency. `--page-size` must satisfy `FLA_CHUNK_SIZE % page_size == 0` or `page_size % FLA_CHUNK_SIZE == 0` (`FLA_CHUNK_SIZE` is currently 64).
-- The `--mem-fraction-static` flag is recommended for optimal memory utilization, adjust it based on your hardware and workload.
-- Context length defaults to 262,144 tokens. If you encounter OOM errors, consider reducing it, but maintain at least 128K to preserve thinking capabilities.
-- To speed up weight loading for this large model, add `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'` to the launch command.
-- **CUDA IPC Transport**: Add `SGLANG_USE_CUDA_IPC_TRANSPORT=1` as an environment variable to use CUDA IPC for transferring multimodal features, significantly improving TTFT (Time To First Token). Note: this consumes additional memory proportional to image size, so you may need to lower `--mem-fraction-static` or `--max-running-requests`.
-- **Multimodal Attention Backend**: Use `--mm-attention-backend fa3` on H100/H200 for better vision performance, or `--mm-attention-backend fa4` on B200/B300.
-- **B200 (FP8)**: Add `--enable-flashinfer-allreduce-fusion` for optimized throughput on Blackwell.
-- For processing large images or videos, you may need to lower `--mem-fraction-static` to leave room for image feature tensors.
-- Hardware requirements:
-    - **BF16**: ~397B parameters require ~800GB of GPU memory for weights.
-        - **H100 (80GB)** requires tp=16 (2 nodes) since each rank needs ~100GB at tp=8.
-        - **H200 (141GB)** runs with tp=8.
-        - **B200 (183GB)** runs with tp=8.
-        - **B300 (275GB)** runs with tp=4.
-        - **MI300X (192GB)** runs with tp=8.
-        - **MI325X (256GB)** runs with tp=4.
-        - **MI355X (288GB)** runs with tp=4.
-    - **FP8**: The FP8 quantized model requires ~400GB for weights, cutting memory in half.
-        - **H100 (80GB)** runs with tp=8.
-        - **H200 (141GB)** runs with tp=4.
-        - **B200 (183GB)** runs with tp=4.
-        - **B300 (275GB)** runs with tp=2.
-        - **MI300X (192GB)** runs with tp=4.
-        - **MI325X (256GB)** runs with tp=2.
-        - **MI355X (288GB)** runs with tp=2.
-    - **FP4**: The FP4 quantized model requires ~250GB for weights, cutting memory by almost 4x. NVFP4 ([nvidia/Qwen3.5-397B-A17B-NVFP4](https://huggingface.co/nvidia/Qwen3.5-397B-A17B-NVFP4)) requires B200/B300 (Blackwell architecture); AMD provides an MXFP4 checkpoint ([amd/Qwen3.5-397B-A17B-MXFP4](https://huggingface.co/amd/Qwen3.5-397B-A17B-MXFP4)) for MI355X.
-        - **B200 (183GB)** runs with tp=4. (NVFP4)
-        - **B300 (275GB)** runs with tp=2. (NVFP4)
-        - **MI355X (288GB)** runs with tp=2 (use tp=4 for low concurrency). (MXFP4)
+- 投机解码（MTP）可以显著降低交互式场景的延迟。
+- **H100 FP8**：添加 `--enable-symm-mem` 以启用 NCCL 对称内存，加快集合通信，在多 GPU 场景下获得更好的性能。
+- **AMD GPU（MI300X / MI325X / MI355X）**：使用 `SGLANG_USE_AITER=1` 和 `SGLANG_USE_AITER_UNIFIED_ATTN=1`，并配合 `--attention-backend aiter`（需要 `--page-size 16`，还可以开启 `--enable-aiter-allreduce-fusion`）。另外设置 `AITER_FLYDSL_FORCE=1` 强制使用 AITER FlyDSL MoE kernel，并设置 `SGLANG_MAMBA_SSM_DTYPE=bfloat16` 以 bfloat16 存储 Mamba SSM 状态（默认是 float32）。对于 **MI355X 上的 MXFP4 检查点**，设置 `ROCM_QUICK_REDUCE_QUANTIZATION=INT8` 让多 GPU 集合通信走 INT8 量化的 ROCm quick all-reduce，并去掉 `--enable-aiter-allreduce-fusion`（两者互斥；本配方优先使用 quick all-reduce）。
+- **Watchdog 超时**：对于这种大模型，把 `--watchdog-timeout` 提高到 `1200` 或更高，因为权重加载可能耗时很长。
+- **Mamba Radix 缓存**：Qwen3.5 的混合 Gated Delta Network 架构通过 `--mamba-radix-cache-strategy` 支持两种 mamba 调度策略：
+  - **V1（`no_buffer`）**：默认。无重叠调度器，显存占用更低。AMD MI GPU 必需。
+  - **V2（`extra_buffer`）**：使用 `--mamba-radix-cache-strategy extra_buffer --page-size 64` 启用重叠调度与分支点缓存。需要 FLA kernel 后端（仅 NVIDIA GPU）。以更高的 mamba 状态显存换取更高吞吐。在非 KV 缓存受限场景下严格更优；在 KV 缓存受限场景下，需要在重叠调度带来的收益与并发度下降之间权衡。`--page-size` 必须满足 `FLA_CHUNK_SIZE % page_size == 0` 或 `page_size % FLA_CHUNK_SIZE == 0`（目前 `FLA_CHUNK_SIZE` 为 64）。
+- 建议用 `--mem-fraction-static` 参数获得最优的显存利用率，请根据你的硬件和工作负载调整。
+- 上下文长度默认为 262,144 token。如果遇到 OOM 错误，可以考虑调小，但建议至少保留 128K 以保持思考能力。
+- 为了加快这种大模型的权重加载，在启动命令中加入 `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'`。
+- **CUDA IPC 传输**：添加环境变量 `SGLANG_USE_CUDA_IPC_TRANSPORT=1`，用 CUDA IPC 传输多模态特征，可显著改善 TTFT（首 token 延迟）。注意：这会按图像大小消耗额外显存，你可能需要调低 `--mem-fraction-static` 或 `--max-running-requests`。
+- **多模态注意力后端**：在 H100/H200 上用 `--mm-attention-backend fa3` 获得更好的视觉性能，在 B200/B300 上用 `--mm-attention-backend fa4`。
+- **B200（FP8）**：添加 `--enable-flashinfer-allreduce-fusion` 以在 Blackwell 上获得优化吞吐。
+- 处理大图或视频时，你可能需要调低 `--mem-fraction-static`，为图像特征张量留出空间。
+- 硬件要求：
+    - **BF16**：约 397B 参数，权重需要约 800GB GPU 显存。
+        - **H100（80GB）** 需要 tp=16（2 个节点），因为 tp=8 时每个 rank 需要约 100GB。
+        - **H200（141GB）** 用 tp=8 即可。
+        - **B200（183GB）** 用 tp=8 即可。
+        - **B300（275GB）** 用 tp=4 即可。
+        - **MI300X（192GB）** 用 tp=8 即可。
+        - **MI325X（256GB）** 用 tp=4 即可。
+        - **MI355X（288GB）** 用 tp=4 即可。
+    - **FP8**：FP8 量化模型权重约需 400GB，显存减半。
+        - **H100（80GB）** 用 tp=8 即可。
+        - **H200（141GB）** 用 tp=4 即可。
+        - **B200（183GB）** 用 tp=4 即可。
+        - **B300（275GB）** 用 tp=2 即可。
+        - **MI300X（192GB）** 用 tp=4 即可。
+        - **MI325X（256GB）** 用 tp=2 即可。
+        - **MI355X（288GB）** 用 tp=2 即可。
+    - **FP4**：FP4 量化模型权重约需 250GB，显存降到接近 1/4。NVFP4（[nvidia/Qwen3.5-397B-A17B-NVFP4](https://huggingface.co/nvidia/Qwen3.5-397B-A17B-NVFP4)）需要 B200/B300（Blackwell 架构）；AMD 为 MI355X 提供 MXFP4 检查点（[amd/Qwen3.5-397B-A17B-MXFP4](https://huggingface.co/amd/Qwen3.5-397B-A17B-MXFP4)）。
+        - **B200（183GB）** 用 tp=4 即可。（NVFP4）
+        - **B300（275GB）** 用 tp=2 即可。（NVFP4）
+        - **MI355X（288GB）** 用 tp=2 即可（低并发时用 tp=4）。（MXFP4）
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Hardware</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Memory</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>硬件</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>显存</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>BF16 TP</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>FP8 TP</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>FP4 TP</th>
@@ -225,16 +230,21 @@ This section provides deployment configurations optimized for different hardware
 </table>
 
 <Warning>
-**FP8 KV Cache**: `--kv-cache-dtype fp8_e4m3` quantizes the KV cache to FP8 at runtime. Since these FP8 model checkpoints do not include pre-calibrated KV cache scaling factors, SGLang defaults to a scale of 1.0, which may cause noticeable accuracy degradation on reasoning-heavy tasks. It is not included in the generated commands above; add it manually only if memory constraints require the trade-off.
+**FP8 KV 缓存**：`--kv-cache-dtype fp8_e4m3` 会在运行时把 KV 缓存量化为 FP8。由于这些 FP8 模型检查点并未附带预先校准好的 KV 缓存缩放因子，SGLang 默认使用缩放系数 1.0，这可能在推理密集型任务上造成明显的精度下降。上面的生成命令中并未包含该参数；仅在显存确实紧张、愿意接受这一权衡时才手动加上。
 </Warning>
 
-- **Xeon CPU service configuration**: Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+<Note>
+💡 AI Infra 学习笔记：KV 缓存是解码阶段最大的显存开销，把 KV 缓存量化到 FP8 可以省约一半空间，从而支持更长的上下文或更高的并发。但 KV 缓存量化与权重量化不同：它需要根据真实数据分布预先校准每通道/每头的缩放因子，否则直接使用缩放系数 1.0 会在推理密集任务上明显掉点。生产环境通常要么用自带校准因子的量化检查点，要么先在代表性数据上跑一遍校准流程。
+</Note>
 
-## 4. Model Invocation
 
-**NVIDIA:**
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-Deploy Qwen3.5-397B-A17B with the following command (H200, all features enabled):
+## 4. 模型调用
+
+**NVIDIA：**
+
+用以下命令部署 Qwen3.5-397B-A17B（H200，全部特性开启）：
 
 ```shell Command
 sglang serve \
@@ -251,9 +261,9 @@ sglang serve \
   --port 30000
 ```
 
-**AMD:**
+**AMD：**
 
-Deploy Qwen3.5-397B-A17B with the following command (MI300X/MI325X/MI355X):
+用以下命令部署 Qwen3.5-397B-A17B（MI300X/MI325X/MI355X）：
 
 ```shell Command
 SGLANG_USE_AITER=1 \
@@ -275,17 +285,17 @@ python3 -m sglang.launch_server \
   --host 0.0.0.0 \
   --port 30000
 ```
-> **Note:** To enable MTP (speculative decoding), append `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`.
+> **注意：** 要启用 MTP（投机解码），请追加 `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`。
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基本的 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Vision Input
+### 4.2 视觉输入
 
-Qwen3.5 supports image and video inputs as a unified vision-language model. Here is an example with an image:
+Qwen3.5 是统一的视觉语言模型，支持图像和视频输入。下面是一个图像输入示例：
 
 ```python Example
 from openai import OpenAI
@@ -342,7 +352,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -419,20 +429,20 @@ The image is a minimalist, black-and-white line drawing featuring geometric shap
 The arrangement creates a diagonal symmetry. The two largest circles are on a diagonal from bottom-left to top-right, while the two smallest circles are on a diagonal from top-left to bottom-right. The intersecting lines create a complex web of curves and angles in the center of the image.
 ```
 
-### 4.3 Advanced Usage
+### 4.3 高级用法
 
-#### 4.3.1 Reasoning Parser
+#### 4.3.1 推理解析器
 
-Qwen3.5 supports Thinking mode **by default**. Enable the reasoning parser during deployment to separate the thinking and content sections. The thinking process is returned via `reasoning_content` in the streaming response.
+Qwen3.5 **默认**支持思考模式。部署时启用推理解析器，可以把思考过程和回答内容分开。思考过程会通过流式响应中的 `reasoning_content` 返回。
 
-To disable thinking and use Instruct mode, pass `chat_template_kwargs` at request time:
+要关闭思考、使用指令模式，请在请求时传入 `chat_template_kwargs`：
 
-- **Thinking mode** (default): The model performs step-by-step reasoning before answering. No extra parameters needed.
-- **Instruct mode** (`{"enable_thinking": false}`): The model responds directly without a thinking process.
+- **思考模式**（默认）：模型在回答前先逐步推理。无需额外参数。
+- **指令模式**（`{"enable_thinking": false}`）：模型直接作答，不进行思考。
 
-**Example 1: Thinking Mode (Default)**
+**示例 1：思考模式（默认）**
 
-Thinking mode is enabled by default. The model will reason step-by-step before answering, and the thinking process is returned via `reasoning_content`:
+思考模式默认开启。模型会先逐步推理再作答，思考过程通过 `reasoning_content` 返回：
 
 ```python Example
 from openai import OpenAI
@@ -480,7 +490,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -607,9 +617,9 @@ $$3600 \rightarrow 36.00$$
 15% of 240 is **36**.
 ```
 
-**Example 2: Instruct Mode (Thinking Off)**
+**示例 2：指令模式（关闭思考）**
 
-To disable thinking and get a direct response, pass `{"enable_thinking": false}` via `chat_template_kwargs`:
+要关闭思考、直接作答，请通过 `chat_template_kwargs` 传入 `{"enable_thinking": false}`：
 
 ```python Example
 from openai import OpenAI
@@ -640,7 +650,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 To find 15% of 240, you can follow these steps:
@@ -668,11 +678,11 @@ To find 15% of 240, you can follow these steps:
 15% of 240 is **36**.
 ```
 
-#### 4.3.2 Tool Calling
+#### 4.3.2 工具调用
 
-Qwen3.5 supports tool calling capabilities. Enable the tool call parser during deployment. Thinking mode is on by default; to disable it for tool calling requests, pass `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`.
+Qwen3.5 支持工具调用。部署时启用工具调用解析器。思考模式默认开启；要在工具调用请求中关闭它，请传入 `extra_body={"chat_template_kwargs": {"enable_thinking": False}}`。
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -753,7 +763,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -776,18 +786,18 @@ Tool Call: None
    Arguments: }
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Accuracy Benchmark
+### 5.1 精度基准测试
 
-#### 5.1.1 GSM8K Benchmark
+#### 5.1.1 GSM8K 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/gsm8k/bench_sglang.py --port 30000
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 100%|██████████████████████████████████████████████████████████████████████████████████████████████████████████| 200/200 [00:31<00:00,  6.43it/s]
 Accuracy: 0.975
@@ -796,9 +806,9 @@ Latency: 31.784 s
 Output throughput: 998.166 token/s
 ```
 
-#### 5.1.2 GSM8K with lm-eval (5-shot)
+#### 5.1.2 用 lm-eval 评估 GSM8K（5-shot）
 
-Evaluate using the industry-standard `lm-eval` harness for reproducible accuracy reporting:
+使用行业标准的 `lm-eval` 评估工具，以获得可复现的精度报告：
 
 ```bash Command
 pip install lm-eval[api]
@@ -811,14 +821,14 @@ lm_eval --model local-completions \
     --trust_remote_code
 ```
 
-#### 5.1.3 MMMU Benchmark
+#### 5.1.3 MMMU 基准测试
 
-- Benchmark Command
+- 基准测试命令
 ```bash Command
 python3 benchmark/mmmu/bench_sglang.py --concurrency 128 --port 30000 --max-new-tokens 512
 ```
 
-- Test Result
+- 测试结果
 ```text Output
 {'Accounting': {'acc': 1.0, 'num': 3},
  'Agriculture': {'acc': 1.0, 'num': 4},
@@ -854,16 +864,16 @@ eval out saved to ./val_sglang.json
 Overall accuracy: 0.978
 ```
 
-### 5.2 Speed Benchmark
+### 5.2 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: H200 (8x)
-- Model: Qwen3.5-397B-A17B
-- Tensor Parallelism: 8
-- SGLang Version: main branch
+- 硬件：H200（8 块）
+- 模型：Qwen3.5-397B-A17B
+- 张量并行：8
+- SGLang 版本：main 分支
 
-Server Launch Command:
+服务端启动命令：
 ```bash Command
 SGLANG_USE_CUDA_IPC_TRANSPORT=1 python -m sglang.launch_server \
   --model Qwen/Qwen3.5-397B-A17B \
@@ -879,7 +889,7 @@ SGLANG_USE_CUDA_IPC_TRANSPORT=1 python -m sglang.launch_server \
   --port 30000
 ```
 
-#### 5.2.1 Latency Benchmark
+#### 5.2.1 延迟基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -934,7 +944,7 @@ Max ITL (ms):                            58.03
 ==================================================
 ```
 
-#### 5.2.2 Throughput Benchmark
+#### 5.2.2 吞吐量基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -989,11 +999,11 @@ Max ITL (ms):                            1220.68
 ==================================================
 ```
 
-### 5.3 Vision Speed Benchmark
+### 5.3 视觉速度基准测试
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation with random images. Each request has 128 input tokens, two 720p images, and 1024 output tokens.
+我们使用 SGLang 内置的基准测试工具，用随机图像进行性能评估。每个请求包含 128 个输入 token、两张 720p 图片和 1024 个输出 token。
 
-#### 5.3.1 Latency Benchmark
+#### 5.3.1 延迟基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \
@@ -1015,7 +1025,7 @@ python3 -m sglang.bench_serving \
 TODO
 ```
 
-#### 5.3.2 Throughput Benchmark
+#### 5.3.2 吞吐量基准测试
 
 ```bash Command
 python3 -m sglang.bench_serving \

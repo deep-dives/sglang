@@ -1,75 +1,84 @@
 ---
 title: Llama 4
 metatags:
-    description: "Deploy Llama 4 Scout and Maverick with SGLang - Meta's latest generation open-source LLMs with industry-leading performance."
+    description: "用 SGLang 部署 Llama 4 Scout 与 Maverick——Meta 最新一代开源大语言模型，性能行业领先。"
 ---
 
 import { Llama4ScoutDeployment } from '/src/snippets/autoregressive/llama4-scout-deployment.jsx';
 import { Llama4MaverickDeployment } from '/src/snippets/autoregressive/llama4-maverick-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Llama 4](https://github.com/meta-llama/llama-models/blob/main/models/llama4/MODEL_CARD.md) is Meta's latest generation of open-source LLM model with industry-leading performance.
+[Llama 4](https://github.com/meta-llama/llama-models/blob/main/models/llama4/MODEL_CARD.md) 是 Meta 最新一代开源大语言模型，性能处于行业领先水平。
 
-SGLang has supported Llama 4 Scout (109B) and Llama 4 Maverick (400B) since [v0.4.5](https://github.com/sgl-project/sglang/releases/tag/v0.4.5).
+SGLang 从 [v0.4.5](https://github.com/sgl-project/sglang/releases/tag/v0.4.5) 起就支持 Llama 4 Scout（109B）和 Llama 4 Maverick（400B）。
 
-Ongoing optimizations are tracked in the [Roadmap](https://github.com/sgl-project/sglang/issues/5118).
+持续的优化进展记录在 [Roadmap](https://github.com/sgl-project/sglang/issues/5118) 中。
 
-This generation delivers comprehensive upgrades across the board:
+这一代模型在各方面都带来了全面升级：
 
-The highly capable Llama 4 Maverick with 17B active parameters out of ~400B total, with 128 experts.
-The efficient Llama 4 Scout also has 17B active parameters out of ~109B total, using just 16 experts.
-Both models leverage early fusion for native multimodality, enabling them to process text and image inputs. Maverick and Scout are both trained on up to 40 trillion tokens on data encompassing 200 languages (with specific fine-tuning support for 12 languages including Arabic, Spanish, German, and Hindi).
+能力出众的 Llama 4 Maverick 总参数约 400B、激活参数 17B，拥有 128 个专家。
+高效的 Llama 4 Scout 总参数约 109B、激活参数同样为 17B，只用了 16 个专家。
+两个模型都采用早期融合（early fusion）实现原生多模态，可同时处理文本和图像输入。Maverick 与 Scout 都在多达 40 万亿 token、覆盖 200 种语言的数据上训练（并针对 12 种语言做了专门的微调支持，包括阿拉伯语、西班牙语、德语和印地语）。
 
-For more details, please refer to the official llama4 Repository:https://www.llama.com/models/llama-4/
+<Note>
+💡 AI Infra 学习笔记：Llama 4 是典型的「MoE + 混合注意力」架构——Maverick 总参数约 400B、激活仅 17B，128 个专家；同时把局部注意力（SWA）与全局注意力层交错，让长上下文只对部分层做全量计算。对推理引擎而言，这带来两个优化点：一是 MoE 需要专家并行（EP）来分摊专家计算，二是 SWA 与全局注意力需要不同的 KV 缓存策略——只对全局层保留完整 KV、局部层按窗口截断，就能在超长上下文下大幅省显存。
+</Note>
 
-## 2. SGLang Installation
+更多细节请参考官方 llama4 仓库：https://www.llama.com/models/llama-4/
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据硬件平台和需求选择最合适的安装方法。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+SGLang CPU 安装请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides a progressive guide from quick deployment to performance optimization, suitable for users at different levels.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供从快速部署到性能优化的渐进式指南，适合不同水平的用户。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model variant, deployment strategy, and thinking capabilities.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下方的配置选择器，根据你的硬件平台、模型版本、部署策略和思考能力自动生成对应的部署命令。
 
 <Llama4ScoutDeployment />
 
 <Llama4MaverickDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置要点
 
-- **OOM Mitigation:** Reduce `--context-length` to avoid GPU out-of-memory. Recommended: Scout up to 1M on 8×H100, up to 2.5M on 8×H200; Maverick doesn't need context-length set on 8×H200. With hybrid KV cache enabled, Scout can reach 5M on 8×H100 and 10M on 8×H200.
-- **Attention Backend Auto-Selection:** SGLang automatically picks the optimal backend. Manual override with `--attention-backend`:
-  - Blackwell (B200/GB200): `trtllm_mha`
-  - Hopper (H100/H200): `fa3`
-  - AMD GPUs: `aiter`
-  - Intel XPU: `intel_xpu`
-  - Other: `triton`
-- **Chat Template:** Add `--chat-template llama-4` for chat completion tasks.
-- **Multi-Modal:** Add `--enable-multimodal` to enable image input support.
-- **Hybrid KV Cache:** Set `--swa-full-tokens-ratio` to control the ratio of SWA (local attention) KV tokens to full-attention KV tokens (default: 0.8, range: 0–1).
-- **EAGLE Speculative Decoding:** Supported for Llama 4 Scout and Maverick via EAGLE3. Enable with the interactive command generator above.
-- **Xeon CPU service configuration:** Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+- **避免 OOM**：调低 `--context-length` 可避免 GPU 显存不足。推荐值：Scout 在 8×H100 上最高 1M、8×H200 上最高 2.5M；Maverick 在 8×H200 上无需设置 context-length。启用混合 KV 缓存后，Scout 在 8×H100 上可达 5M、8×H200 上可达 10M。
+- **Attention 后端自动选择**：SGLang 会自动挑选最优后端。如需手动指定，用 `--attention-backend`：
+  - Blackwell (B200/GB200)：`trtllm_mha`
+  - Hopper (H100/H200)：`fa3`
+  - AMD GPU：`aiter`
+  - Intel XPU：`intel_xpu`
+  - 其它：`triton`
+- **对话模板**：对话补全任务加上 `--chat-template llama-4`。
+- **多模态**：加上 `--enable-multimodal` 以支持图像输入。
+- **混合 KV 缓存**：用 `--swa-full-tokens-ratio` 控制 SWA（局部注意力）层 KV token 与全注意力层 KV token 的比例（默认 0.8，范围 0–1）。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：混合 KV 缓存正是为「局部注意力 + 全局注意力」混合的模型设计的。`--swa-full-tokens-ratio` 控制的是 SWA（局部注意力）层 KV 与全注意力层 KV 的比例：只给全局层存完整 KV、局部层用滑动窗口截断，缓存占用就能大幅下降——这也是 Scout 能在 8×H200 上把上下文推到 10M 的关键。理解这个比例的含义，就能理解这类参数为什么直接决定长上下文的显存上限。
+</Note>
 
-### 4.1 Basic Usage
+- **EAGLE 投机解码**：Llama 4 Scout 与 Maverick 均支持 EAGLE3 投机解码。用上方的交互式命令生成器启用。
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中「启动推理引擎」一节的 `Notes` 部分，了解参数如何配置，尤其是 TP（张量并行）和 NUMA 绑定的设置。
 
-For basic API usage and request examples, please refer to:
+## 4. 模型调用
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+### 4.1 基础用法
 
-### 4.2 Advanced Usage
+基础 API 用法和请求示例请参考：
 
-#### 4.2.1 Launch the docker
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
+
+### 4.2 进阶用法
+
+#### 4.2.1 启动 docker
 ```shell Command
 docker pull lmsysorg/sglang:v0.5.9-rocm720-mi30x
 ```
@@ -87,10 +96,10 @@ docker run -d -it --ipc=host --network=host --privileged \
   /bin/bash
 ```
 
-#### 4.2.2 Launch the server
+#### 4.2.2 启动服务
 
 ### Llama-4-Scout
-8-GPU deployment command:
+8 卡部署命令：
 
 ```bash Command
 sglang serve \
@@ -101,7 +110,7 @@ sglang serve \
 ```
 
 ### Llama-4-Maverick
-8-GPU deployment command:
+8 卡部署命令：
 
 ```bash Command
 sglang serve \
@@ -110,9 +119,9 @@ sglang serve \
   --trust-remote-code
 ```
 
-#### 4.2.3 EAGLE Speculative Decoding
+#### 4.2.3 EAGLE 投机解码
 
-SGLang supports Llama 4 Maverick (400B) with [EAGLE speculative decoding](../../../docs/advanced_features/speculative_decoding). Enable with the EAGLE3 algorithm and the SGLang EAGLE3 draft model:
+SGLang 支持用 [EAGLE 投机解码](../../../docs/advanced_features/speculative_decoding) 服务 Llama 4 Maverick（400B）。用 EAGLE3 算法和 SGLang 的 EAGLE3 草稿模型启用：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -126,19 +135,19 @@ python3 -m sglang.launch_server \
   --tp 8
 ```
 
-## 5. Benchmark
-### 5.1 Speed Benchmark (Scout)
-Test Environment:
+## 5. 基准测试
+### 5.1 速度基准测试（Scout）
+测试环境：
 
-Hardware: AMD MI300x GPU
+硬件：AMD MI300X GPU
 
-Model: Llama-4-Scout
+模型：Llama-4-Scout
 
-Tensor Parallelism: 8
+张量并行：8
 
-sglang version: 0.5.9
+SGLang 版本：0.5.9
 
-- **Model Deployment**
+- **模型部署**
 ```bash Command
 sglang serve \
   --model-path meta-llama/Llama-4-Scout-17B-16E-Instruct \
@@ -147,8 +156,8 @@ sglang serve \
   --trust-remote-code
 ```
 
-### 5.1.1 Low Concurrency (Latency-Optimized)
-- Benchmark Command:
+### 5.1.1 低并发（延迟优化）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -161,7 +170,7 @@ python3 -m sglang.bench_serving \
   --request-rate inf
 ```
 
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -200,8 +209,8 @@ P99 ITL (ms):                            7.52
 Max ITL (ms):                            10.44
 ==================================================
 ```
-### 5.1.2 Medium Concurrency (Balanced)
-- Benchmark Command:
+### 5.1.2 中等并发（均衡）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -213,7 +222,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16 \
   --request-rate inf
 ```
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -252,8 +261,8 @@ P99 ITL (ms):                            67.88
 Max ITL (ms):                            74.05
 ==================================================
 ```
-### 5.1.3 High Concurrency (Throughput-Optimized)
-- Benchmark Command:
+### 5.1.3 高并发（吞吐优化）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -265,7 +274,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100 \
   --request-rate inf
 ```
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -305,18 +314,18 @@ Max ITL (ms):                            226.06
 ==================================================
 ```
 
-### 5.2 Speed Benchmark (Maverick)
-Test Environment:
+### 5.2 速度基准测试（Maverick）
+测试环境：
 
-Hardware: AMD MI300x GPU
+硬件：AMD MI300X GPU
 
-Model: Llama-4-Maverick
+模型：Llama-4-Maverick
 
-Tensor Parallelism: 8
+张量并行：8
 
-sglang version: 0.5.9
+SGLang 版本：0.5.9
 
-- **Model Deployment**
+- **模型部署**
 ```bash Command
 sglang serve \
   --model-path meta-llama/Llama-4-Maverick-17B-128E-Instruct \
@@ -325,8 +334,8 @@ sglang serve \
   --trust-remote-code
 ```
 
-### 5.2.1 Low Concurrency (Latency-Optimized)
-- Benchmark Command:
+### 5.2.1 低并发（延迟优化）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -338,7 +347,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1 \
   --request-rate inf
 ```
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -377,8 +386,8 @@ P99 ITL (ms):                            6.08
 Max ITL (ms):                            7.02
 ==================================================
 ```
-### 5.2.2 Medium Concurrency (Balanced)
-- Benchmark Command:
+### 5.2.2 中等并发（均衡）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -390,7 +399,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16 \
   --request-rate inf
 ```
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -429,8 +438,8 @@ P99 ITL (ms):                            55.62
 Max ITL (ms):                            868.54
 ==================================================
 ```
-### 5.2.3 High Concurrency (Throughput-Optimized)
-- Benchmark Command:
+### 5.2.3 高并发（吞吐优化）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -442,7 +451,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100 \
   --request-rate inf
 ```
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -481,11 +490,11 @@ P99 ITL (ms):                            78.82
 Max ITL (ms):                            268.17
 ==================================================
 ```
-### 5.3 Accuracy Benchmark
+### 5.3 精度基准测试
 
-#### 5.3.1 GSM8K Benchmark
+#### 5.3.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200
@@ -505,15 +514,15 @@ Latency: 9.739 s
 Output throughput: 2405.505 token/s
 ```
 
-#### 5.3.2 MMLU Pro with lm-eval
+#### 5.3.2 用 lm-eval 跑 MMLU Pro
 
-Accuracy on MMLU Pro matches [Meta's official benchmark numbers](https://ai.meta.com/blog/llama-4-multimodal-intelligence/) on 8×H100 (reproduction details: [PR #5092](https://github.com/sgl-project/sglang/pull/5092)):
+8×H100 上 MMLU Pro 的精度与 [Meta 官方基准数字](https://ai.meta.com/blog/llama-4-multimodal-intelligence/) 一致（复现细节见 [PR #5092](https://github.com/sgl-project/sglang/pull/5092)）：
 
 <table style={{width: "100%", borderCollapse: "collapse"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
-      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>Official</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
+      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>官方</th>
       <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>SGLang</th>
     </tr>
   </thead>
@@ -531,7 +540,7 @@ Accuracy on MMLU Pro matches [Meta's official benchmark numbers](https://ai.meta
   </tbody>
 </table>
 
-**Scout:**
+**Scout：**
 
 ```bash Command
 # Start the server
@@ -551,7 +560,7 @@ lm_eval --model local-chat-completions \
   --num_fewshot 0
 ```
 
-**Maverick:**
+**Maverick：**
 
 ```bash Command
 # Start the server

@@ -1,71 +1,79 @@
 ---
 title: Llama-3.1
 metatags:
-    description: "Deploy Llama 3.1 (8B/70B/405B) with SGLang - 128K context, tool use, multilingual support, and speculative decoding optimization."
+    description: "用 SGLang 部署 Llama 3.1（8B/70B/405B）——128K 上下文、工具调用、多语言支持，以及投机解码优化。"
 ---
-## 1. Model Introduction
+## 1. 模型介绍
 
-Llama 3.1 is a collection of pretrained and instruction tuned generative models, released in July 2024 by Meta. These models are available in 8B, 70B and 405B sizes, with the 405B variant being the most capable fully-open source model at the time.
+Llama 3.1 是 Meta 于 2024 年 7 月发布的一系列预训练与指令微调生成模型，提供 8B、70B 和 405B 三种规模，其中 405B 是当时能力最强的完全开源模型。
 
-These models bring open intelligence to all, with several new features and improvements:
+<Note>
+💡 AI Infra 学习笔记：Llama 系列是开源模型的行业基准，其几个关键架构决策影响了整个推理栈。分组查询注意力（GQA）让多个查询头共享同一组 KV，显著降低 KV 缓存占用；旋转位置编码（RoPE）把位置信息融入注意力打分，支持向更长上下文外推。理解这些结构，才能理解为什么不同模型在 KV 缓存、前缀缓存上的表现差异巨大——这也是推理引擎做内存优化时首先关注的模型侧因素。
+</Note>
 
-- **Stronger General Intelligence**: These models showcase significant improvements in coding, state-of-the-art tool use, and overall stronger reasoning capabilities.
-- **Extended Context Length**: Llama 3.1 extends the context length to 128K tokens to improve performance over long context tasks such as summarization and code reasoning.
-- **Tool Use**: Llama 3.1 is trained to interact with a search engine, python interpreter and mathematical engine, and also improves zero-shot tool use capabilities to interact with potentially unseen tools.
-- **Multilinguality**: Llama 3.1 supports 7 languages in addition to English: French, German, Hindi, Italian, Portuguese, Spanish, and Thai.
+这些模型为所有人带来了开放智能，并有多项新特性与改进：
 
-For further details, please refer to the [Llama 3.1 blog](https://ai.meta.com/blog/meta-llama-3-1/) and the [Llama 3.1 model card](https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/MODEL_CARD.md).note
+- **更强的通用智能**：在编码、SOTA 级工具使用以及整体推理能力上都有显著提升。
+- **更长的上下文**：Llama 3.1 把上下文扩展到 128K token，提升摘要、代码推理等长上下文任务的表现。
+- **工具使用**：Llama 3.1 经过训练可与搜索引擎、Python 解释器和数学引擎交互，零样本工具使用能力也有提升，能调用可能从未见过的工具。
+- **多语言**：除英语外，Llama 3.1 还支持 7 种语言：法语、德语、印地语、意大利语、葡萄牙语、西班牙语和泰语。
 
-## 2. SGLang Installation
+更多细节请参考 [Llama 3.1 博客](https://ai.meta.com/blog/meta-llama-3-1/) 和 [Llama 3.1 模型卡](https://github.com/meta-llama/llama-models/blob/main/models/llama3_1/MODEL_CARD.md)。note
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据硬件平台和需求选择最合适的安装方法。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+SGLang CPU 安装请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to generate a launch command for Llama 3.1 collection of models.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下方的配置选择器为 Llama 3.1 系列模型生成启动命令。
 
 import { Llama31Deployment } from "/src/snippets/autoregressive/llama31-deployment.jsx";
 
 <Llama31Deployment />
-### 3.2 Configuration Tips
+### 3.2 配置要点
 
-**Speculative Decoding (NVIDIA GPUs):**
+**投机解码（NVIDIA GPU）：**
 
-- Using Speculative Decoding for latency-sensitive scenarios:
-  - `--speculative-algorithm EAGLE3`: Speculative decoding algorithm
-  - `--speculative-num-steps 3`: Number of speculative verification rounds
-  - `--speculative-eagle-topk 1`: Top-k sampling for draft tokens
-  - `--speculative-num-draft-tokens 4`: Number of draft tokens per step
-  - `--speculative-draft-model-path`: The path of the draft model weights. This can be a local folder or a Hugging Face repo ID such as [`yuhuili/EAGLE3-LLaMA3.1-Instruct-8B`](https://huggingface.co/yuhuili/EAGLE3-LLaMA3.1-Instruct-8B).
+- 延迟敏感场景使用投机解码：
+  - `--speculative-algorithm EAGLE3`：投机解码算法
+  - `--speculative-num-steps 3`：投机校验轮数
+  - `--speculative-eagle-topk 1`：草稿 token 的 Top-k 采样
+  - `--speculative-num-draft-tokens 4`：每步的草稿 token 数
+  - `--speculative-draft-model-path`：草稿模型权重的路径，可以是本地文件夹或 Hugging Face 仓库 ID，例如 [`yuhuili/EAGLE3-LLaMA3.1-Instruct-8B`](https://huggingface.co/yuhuili/EAGLE3-LLaMA3.1-Instruct-8B)。
 
-**AMD GPU Deployment:**
+<Note>
+💡 AI Infra 学习笔记：投机解码（speculative decoding）的思路是先用一个轻量草稿模型快速生成多个候选 token，再用大模型一次性并行校验：接受则原来「一个前向只出一步」变成「一次前向出多步」。`--speculative-num-draft-tokens` 控制每步草稿数，`--speculative-num-steps` 控制校验轮数。它在延迟敏感场景能显著压低逐 token 延迟，代价是多占一份草稿模型的显存。
+</Note>
 
-- **Hardware-Aware TP**: MI355X (256GB memory) supports lower TP values compared to MI300X/MI325X (192GB)
-- **Verified TP Configurations**:
-  - MI300X/MI325X: 405B BF16 (TP=8), 405B FP8 (TP=4), 70B/8B (TP=1)
-  - MI355X: 405B BF16 (TP=4), 405B FP8 (TP=2), 70B/8B (TP=1)
-- **FP8 Model Variants**:
-  - 405B: Use Meta's official `meta-llama/Llama-3.1-405B-Instruct-FP8`
-  - 70B/8B: Use AMD's optimized `amd/Llama-3.1-{size}-Instruct-FP8-KV`
-- **Tool Calling**: Enable with `--tool-call-parser llama3` for Instruct models
+**AMD GPU 部署：**
 
-**Xeon CPU Deployment:**
+- **按硬件选择 TP**：MI355X（256GB 显存）支持比 MI300X/MI325X（192GB）更小的 TP 值
+- **已验证的 TP 配置**：
+  - MI300X/MI325X：405B BF16（TP=8）、405B FP8（TP=4）、70B/8B（TP=1）
+  - MI355X：405B BF16（TP=4）、405B FP8（TP=2）、70B/8B（TP=1）
+- **FP8 模型版本**：
+  - 405B：用 Meta 官方的 `meta-llama/Llama-3.1-405B-Instruct-FP8`
+  - 70B/8B：用 AMD 优化过的 `amd/Llama-3.1-{size}-Instruct-FP8-KV`
+- **工具调用**：Instruct 模型用 `--tool-call-parser llama3` 启用
 
-- Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+**Xeon CPU 部署：**
 
-## 4. Model Invocation
+- 请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中「启动推理引擎」一节的 `Notes` 部分，了解参数如何配置，尤其是 TP（张量并行）和 NUMA 绑定的设置。
 
-### 4.1 Basic Usage
+## 4. 模型调用
 
-SGLang exposes an OpenAI-compatible endpoint. First, start the server
+### 4.1 基础用法
+
+SGLang 提供兼容 OpenAI 的端点。先启动服务端
 
 ```shell Command
 sglang serve \
@@ -94,7 +102,7 @@ resp = client.chat.completions.create(
 print(resp.choices[0].message.content)
 ```
 
-**Output Example:**
+**输出示例：**
 
 ````text Output
 **Exponential Backoff Retry Function in Python**
@@ -142,11 +150,11 @@ def exponential_backoff_retry(url, method, retries=3, backoff_factor=1, max_dela
 ...
 ````
 
-### 4.2 Advanced Usage
+### 4.2 进阶用法
 
-#### 4.2.1 Tool Calling
+#### 4.2.1 工具调用
 
-Llama3 supports tool calling capabilities. First, start the server with tool call parser enabled:
+Llama 3 支持工具调用。先启用工具调用解析器启动服务端：
 
 ```shell Command
 sglang serve \
@@ -155,7 +163,7 @@ sglang serve \
   --tp 8
 ```
 
-**Python Example**
+**Python 示例**
 
 ```python Example
 from openai import OpenAI
@@ -236,17 +244,17 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-Reference: [SGLang Tool Parser Documentation](../../../docs/advanced_features/tool_parser#openai-compatible-api)
+参考：[SGLang 工具解析器文档](../../../docs/advanced_features/tool_parser#openai-compatible-api)
 
-**Output Example**
+**输出示例**
 
 ```text Output
 🔧 Tool Call: get_weather
    Arguments: {"city": "Boston", "unit": "fahrenheit"}
 ```
 
-**Handling Tool Call Results**
-After getting the tool call, you can execute the function:
+**处理工具调用结果**
+拿到工具调用后，你可以执行该函数：
 
 ```python Example
 def get_weather(location, unit="celsius"):
@@ -285,22 +293,22 @@ print(final_response.choices[0].message.content)
 # Output: "The current weather in Boston is **22°C** and **sunny**. A perfect day to spend outside"
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA A100 GPU (8x)
-- Model: Meta-Llama/Llama-3.1-70B
-- Tensor Parallelism: 8
-- sglang version: 0.5.6
+- 硬件：NVIDIA A100 GPU ×8
+- 模型：Meta-Llama/Llama-3.1-70B
+- 张量并行：8
+- SGLang 版本：0.5.6
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios.
+我们用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上评估性能。该数据集包含真实对话数据，能更好地反映实际使用场景下的表现。
 
-#### 5.1.1 Standard Scenario Benchmark
+#### 5.1.1 标准场景基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 sglang serve \
@@ -308,9 +316,9 @@ sglang serve \
   --tp 8
 ```
 
-##### 5.1.1.1 Low Concurrency
+##### 5.1.1.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 sglang serve \
@@ -323,7 +331,7 @@ sglang serve \
   --max-concurrency 1
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -364,7 +372,7 @@ Max ITL (ms):                            21.95
 ==================================================
 ```
 
-##### 5.1.1.2 Medium Concurrency
+##### 5.1.1.2 中等并发
 
 ```shell Command
 sglang serve \
@@ -377,7 +385,7 @@ sglang serve \
   --max-concurrency 16
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -418,7 +426,7 @@ Max ITL (ms):                            478.92
 ==================================================
 ```
 
-##### 5.1.1.3 High Concurrency
+##### 5.1.1.3 高并发
 
 ```shell Command
 sglang serve \
@@ -431,7 +439,7 @@ sglang serve \
   --max-concurrency 100
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -472,9 +480,9 @@ Max ITL (ms):                            1107.09
 ==================================================
 ```
 
-#### 5.1.2 Summarization Scenario Benchmark
+#### 5.1.2 摘要场景基准测试
 
-##### 5.1.2.1 Low Concurrency
+##### 5.1.2.1 低并发
 
 ```shell Command
 sglang serve \
@@ -526,7 +534,7 @@ Max ITL (ms):                            23.08
 ==================================================
 ```
 
-##### 5.1.2.2 Medium Concurrency
+##### 5.1.2.2 中等并发
 
 ```shell Command
 sglang serve \
@@ -578,7 +586,7 @@ Max ITL (ms):                            2529.51
 ==================================================
 ```
 
-##### 5.1.2.3 High Concurrency
+##### 5.1.2.3 高并发
 
 ```shell Command
 sglang serve \
@@ -630,17 +638,17 @@ Max ITL (ms):                            1970.03
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200
 ```
 
-- **Results**:
+- **结果**：
 
 ```text Output
 Accuracy: 0.830

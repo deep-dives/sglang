@@ -1,64 +1,72 @@
 ---
 title: GLM-OCR
 metatags:
-    description: "Deploy GLM-OCR with SGLang - state-of-the-art OCR performance for complex document understanding."
+    description: "使用 SGLang 部署 GLM-OCR——面向复杂文档理解的 SOTA OCR 性能。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[GLM-OCR](https://huggingface.co/zai-org/GLM-OCR) is a multimodal OCR model for complex document understanding, built on the GLM-V encoder–decoder architecture. It introduces Multi-Token Prediction (MTP) loss and stable full-task reinforcement learning to improve training efficiency, recognition accuracy, and generalization.
+[GLM-OCR](https://huggingface.co/zai-org/GLM-OCR) 是一个面向复杂文档理解的多模态 OCR 模型，基于 GLM-V 编码器—解码器架构构建。它引入了多 token 预测（MTP）损失和稳定的全任务强化学习，以提升训练效率、识别准确率和泛化能力。
 
-The model integrates the CogViT visual encoder pre-trained on large-scale image–text data, a lightweight cross-modal connector with efficient token downsampling, and a GLM-0.5B language decoder. Combined with a two-stage pipeline of layout analysis and parallel recognition based on PP-DocLayout-V3, GLM-OCR delivers robust and high-quality OCR performance across diverse document layouts.
+该模型集成了在大规模图文数据上预训练的 CogViT 视觉编码器、带高效 token 下采样的轻量跨模态连接器，以及 GLM-0.5B 语言解码器。再结合基于 PP-DocLayout-V3 的「版面分析 + 并行识别」两阶段流水线，GLM-OCR 能在多样的文档版式上提供稳健、高质量的 OCR 性能。
 
-**Hardware Support:** NVIDIA B200/H100/H200
+**硬件支持：** NVIDIA B200/H100/H200
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：OCR/文档理解是典型的多模态推理负载——图像先经视觉编码器（CogViT）变成视觉 token，再经轻量跨模态连接器下采样后送入语言解码器。只有 0.9B 参数让这种模型特别「轻」：推理延迟和算力成本都很低，天然适合高并发和边缘部署，也让「文档解析 + LLM 后处理」的流水线成为可能。
+</Note>
 
-- **State-of-the-Art Performance**: Achieves 94.62 on OmniDocBench V1.5, ranking #1, and delivers SOTA results across major document understanding benchmarks, including formula recognition, table recognition, and information extraction.
-- **Optimized for Real-World Scenarios**: Specifically optimized for practical business cases, maintaining stable and accurate performance on complex tables, code documents, seals, and other challenging layouts.
-- **Efficient Inference**: With only 0.9B parameters, GLM-OCR supports deployment via vLLM and SGLang, significantly reducing inference latency and compute cost—well suited for high-concurrency and edge deployments.
-- **Easy to Use**: Fully open-sourced with a complete SDK and inference toolchain, enabling one-line invocation and seamless integration into existing systems.
+**主要特性：**
 
-For more details, please refer to the [official GLM-OCR model card](https://huggingface.co/zai-org/GLM-OCR).
+- **SOTA 性能**：在 OmniDocBench V1.5 上取得 94.62 分、排名第一，并在公式识别、表格识别、信息抽取等主要文档理解基准测试上均取得 SOTA 结果。
+- **面向真实场景优化**：专门针对实际业务场景优化，在复杂表格、代码文档、印章等棘手版式上仍能保持稳定准确的性能。
+- **高效推理**：仅有 0.9B 参数，GLM-OCR 支持通过 vLLM 和 SGLang 部署，显著降低推理延迟和算力成本——非常适合高并发和边缘部署。
+- **易于使用**：完全开源，附带完整的 SDK 和推理工具链，支持一行调用、无缝接入现有系统。
 
-## 2. SGLang Installation
+更多细节请参考[官方 GLM-OCR 模型卡片](https://huggingface.co/zai-org/GLM-OCR)。
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据自己的硬件平台和需求选择最合适的方式。
 
-## 3. Model Deployment
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节针对不同硬件平台和使用场景给出部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform and deployment options. You can optionally enable MTP (Multi-Token Prediction) for faster inference using EAGLE speculative decoding.
+### 3.1 基础配置
+
+**交互式命令生成器**：使用下面的配置选择器，可自动生成适配你硬件平台和部署选项的命令。你还可以选择启用 MTP（多 token 预测），借助 EAGLE 投机解码获得更快的推理。
 
 import { GLMOCRDeployment } from '/src/snippets/autoregressive/glm-ocr-deployment.jsx'
 
 <GLMOCRDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- **CUDA IPC Transport**: The `SGLANG_USE_CUDA_IPC_TRANSPORT=1` environment variable enables CUDA IPC for transferring multimodal features, which significantly improves TTFT.
-- **MTP (Multi-Token Prediction)**: Enable MTP to use EAGLE speculative decoding for faster inference. This feature predicts multiple tokens at once to reduce latency.
-- **Memory Management**: For memory-constrained environments, you may need to adjust `--mem-fraction-static` and/or `--max-running-requests`.
+- **CUDA IPC 传输**：设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1` 环境变量，用 CUDA IPC 传输多模态特征，可显著改善 TTFT。
+- **MTP（多 token 预测）**：启用 MTP 使用 EAGLE 投机解码加速推理。该特性一次预测多个 token，从而降低延迟。
+- **显存管理**：对显存受限的环境，你可能需要调整 `--mem-fraction-static` 和/或 `--max-running-requests`。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：这里的两条优化与 GLM-4.5V 一脉相承——多模态特征在「视觉编码器 → 语言模型」之间的搬运是 TTFT 的重要构成，CUDA IPC 共享内存传输能省掉跨进程拷贝；MTP 则用一次预测多个 token 的投机解码降低端到端延迟。小模型 + 轻量优化，正是 OCR 这类高并发服务的典型组合。
+</Note>
 
-### 4.1 Basic Usage
+## 4. 模型调用
 
-For basic API usage and request examples, please refer to:
+### 4.1 基础用法
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+基础 API 用法和请求示例请参考：
 
-### 4.2 Advanced Usage
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-#### 4.2.1 OCR Image Processing
+### 4.2 高级用法
 
-GLM-OCR supports OCR tasks on various document types. Here's a basic example:
+#### 4.2.1 OCR 图像处理
+
+GLM-OCR 支持多种文档类型的 OCR 任务。下面是一个基础示例：
 
 ```python Example
 import time
@@ -98,7 +106,7 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Example Output:**
+**输出示例：**
 
 ```text Output
 Response costs: 2.29s
@@ -115,15 +123,15 @@ CHANGE DUE 3,000
 
 ```
 
-#### 4.2.2 Complex Document Processing
+#### 4.2.2 复杂文档处理
 
-GLM-OCR excels at processing complex documents including:
+GLM-OCR 擅长处理复杂文档，包括：
 
-- **Tables**: Accurate extraction of tabular data with structure preservation
-- **Formulas**: Mathematical formula recognition
-- **Code Documents**: Source code extraction from screenshots
-- **Seals and Stamps**: Recognition of seals and stamps in documents
-- **Multi-layout Documents**: Mixed content with text, images, and tables
+- **表格**：准确抽取表格数据并保留结构
+- **公式**：数学公式识别
+- **代码文档**：从截图中提取源代码
+- **印章**：识别文档中的印章
+- **多版式文档**：文本、图像和表格混合的内容
 
 ```python Example
 import time
@@ -162,15 +170,15 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Accuracy Benchmark
+### 5.1 准确率基准测试
 
-Document model accuracy on standard benchmarks:
+记录模型在标准基准测试上的准确率：
 
-#### 5.1.1 OCRBench Benchmark
+#### 5.1.1 OCRBench 基准测试
 
-- Benchmark Command
+- 基准测试命令
 
 ```bash Command
 python3 -m lmms_eval \
@@ -183,7 +191,7 @@ python3 -m lmms_eval \
   --output_path ./logs
 ```
 
-- Test Result
+- 测试结果
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -198,14 +206,14 @@ python3 -m lmms_eval \
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Tasks</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Version</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Filter</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>任务</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>版本</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>过滤</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>n-shot</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Metric</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>指标</th>
       <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}></th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Value</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Stderr</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>数值</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>标准误</th>
     </tr>
   </thead>
   <tbody>
@@ -224,4 +232,4 @@ python3 -m lmms_eval \
 
 #### 5.1.2 OmniDocBench V1.5
 
-GLM-OCR achieves **94.62** on OmniDocBench V1.5, ranking #1 among all models, demonstrating state-of-the-art performance across major document understanding benchmarks.
+GLM-OCR 在 OmniDocBench V1.5 上取得 **94.62** 分、位列所有模型第一，展现了在主要文档理解基准测试上的 SOTA 性能。

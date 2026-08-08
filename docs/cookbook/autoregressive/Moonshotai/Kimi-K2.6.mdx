@@ -1,28 +1,32 @@
 ---
 title: Kimi-K2.6
 metatags:
-    description: "Deploy Kimi-K2.6 native multimodal agentic model with SGLang - reasoning, tool calling, and multimodal capabilities."
+    description: "用 SGLang 部署 Kimi-K2.6 原生多模态智能体模型——支持推理、工具调用与多模态能力。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6) is an open-source, native multimodal agentic model by Moonshot AI, delivering industry-leading coding, long-horizon execution, and agent swarm capabilities. It matches or surpasses GPT-5.4, Claude Opus 4.6, and Gemini 3.1 Pro across key benchmarks.
+[Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6) 是 Moonshot AI 开源的、原生多模态智能体模型，在代码编写、长时执行（long-horizon execution）和智能体集群（agent swarm）方面处于行业领先水平。在关键基准上，它与 GPT-5.4、Claude Opus 4.6、Gemini 3.1 Pro 相当甚至更优。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：Kimi-K2.6 这类「超长上下文 + 长时智能体」负载，是推理引擎内存优化的压力测试。思考型模型会在给出答案前产生数千甚至数万 token 的推理内容，KV 缓存随之线性膨胀；多轮智能体任务则会让同一段历史被反复处理。应对手段通常包括：前缀缓存（prefix caching）/Radix 缓存复用相同前缀的 KV、KV 缓存量化（FP8）、分块预填充（chunked prefill）降低峰值显存，以及必要时的前缀重计算。这些正是超长上下文服务优化的核心。
+</Note>
 
-- **Long-Horizon Coding**: Excels at complex, end-to-end coding tasks with 13+ hours of continuous execution and 4,000+ lines of code modification, generalizing across languages (Rust, Go, Python) and tasks (frontend, devops, performance optimization).
-- **Coding-Driven Design**: Transforms prompts and visual inputs into production-ready interfaces with motion-rich elements including WebGL shaders, GSAP + Framer Motion, and Three.js 3D.
-- **Agent Swarms Elevated**: Scales to 300 parallel sub-agents executing 4,000 coordinated steps per run. One prompt, 100+ files.
-- **Proactive Agents**: Powers OpenClaw, Hermes Agent, and other autonomous frameworks for 5-day continuous operation.
-- **Native Multimodality**: Pre-trained on vision–language tokens with MoonViT (400M parameters) for visual understanding, cross-modal reasoning, and agentic tool use grounded in visual inputs.
+**核心特性：**
 
-**Benchmarks (Open-Source SOTA):**
+- **长时编码**：擅长复杂的端到端编码任务，可连续执行 13 小时以上、修改 4000+ 行代码，并横跨多种语言（Rust、Go、Python）与任务类型（前端、DevOps、性能优化）。
+- **编码驱动的设计**：能把提示词和视觉输入转化为可直接上线的界面，包含 WebGL 着色器、GSAP + Framer Motion、Three.js 3D 等丰富的动效元素。
+- **进阶智能体集群**：单次运行可扩展到 300 个并行子智能体、执行 4000 步协调动作。一条提示词，产出 100+ 文件。
+- **主动式智能体**：为 OpenClaw、Hermes Agent 等自主框架提供动力，可连续运行 5 天。
+- **原生多模态**：在视觉-语言 token 上预训练，配合 MoonViT（4 亿参数）实现视觉理解、跨模态推理以及基于视觉输入的智能体工具调用。
+
+**基准成绩（开源 SOTA）：**
 
 <table>
   <thead>
     <tr>
-      <th>Benchmark</th>
-      <th>Score</th>
+      <th>基准测试</th>
+      <th>分数</th>
     </tr>
   </thead>
   <tbody>
@@ -61,55 +65,59 @@ metatags:
   </tbody>
 </table>
 
-**Recommended Generation Parameters:**
-- Thinking Mode: `temperature=1.0`, `top_p=0.95`
-- Instant Mode: `temperature=0.6`, `top_p=0.95`
+**推荐的生成参数：**
+- 思考模式：`temperature=1.0`、`top_p=0.95`
+- 即时模式：`temperature=0.6`、`top_p=0.95`
 
-**Available Models:**
+**可用模型：**
 
-- **INT4 (native checkpoint)**: [moonshotai/Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6)
-- **NVFP4 (4-bit quantized, NVIDIA Blackwell)**: [nvidia/Kimi-K2.6-NVFP4](https://huggingface.co/nvidia/Kimi-K2.6-NVFP4)
+- **INT4（原生检查点）**：[moonshotai/Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6)
+- **NVFP4（4 位量化，NVIDIA Blackwell）**：[nvidia/Kimi-K2.6-NVFP4](https://huggingface.co/nvidia/Kimi-K2.6-NVFP4)
 
-**License:** Modified MIT for the native checkpoint. The NVIDIA NVFP4 checkpoint is governed by the [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/).
+**许可证：** 原生检查点采用修改版 MIT 许可；NVIDIA NVFP4 检查点受 [NVIDIA Open Model License](https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/) 约束。
 
-For details, see [official documentation](https://huggingface.co/moonshotai/Kimi-K2.6) and [tech blog](https://kimi.com/blog/kimi-k2-6).
+更多细节见[官方文档](https://huggingface.co/moonshotai/Kimi-K2.6)和[技术博客](https://kimi.com/blog/kimi-k2-6)。
 
-## 2. SGLang Installation
+## 2. SGLang 安装
 
-Refer to the [official SGLang installation guide](../../../docs/get-started/install).
+请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, deployment strategy, and capabilities.
+**交互式命令生成器**：用下方的配置选择器，根据你的硬件平台、部署策略和功能选项自动生成对应的部署命令。
 
 import { KimiK26Deployment } from '/src/snippets/autoregressive/kimi-k26-deployment.jsx'
 
 <KimiK26Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置要点
 
-- **Memory**: Requires GPUs with ≥140GB each. The native INT4 checkpoint supports H200 (8×, TP=8), B300 (8×, TP=8), GB300 (4×, TP=4), MI300X/MI325X (4×, TP=4), and MI350X/MI355X (4×, TP=4). Use `--context-length 128000` to conserve memory.
-- **NVFP4**: Use `nvidia/Kimi-K2.6-NVFP4` with `--quantization modelopt_fp4` on NVIDIA Blackwell. Use `tp=8` on B300 and `tp=4` on GB300.
-- **AMD GPU TP Constraint**: On AMD GPUs, TP must be ≤ 4 (not 8). Kimi-K2.6 has 64 attention heads; the AITER MLA kernel requires `heads_per_gpu % 16 == 0`. With TP=4, each GPU gets 16 heads (valid). With TP=8, each GPU gets 8 heads (invalid).
-- **AMD Docker Image**: Use `lmsysorg/sglang:v0.5.9-rocm700-mi35x` for MI350X/MI355X and `lmsysorg/sglang:v0.5.9-rocm700-mi30x` for MI300X/MI325X.
-- **DP Attention**: Enable with `--dp <N> --enable-dp-attention` for production throughput. A common choice is to set `--dp` equal to `--tp`, but this is not required.
-- **Reasoning Parser**: Add `--reasoning-parser kimi_k2` to separate thinking and content in model outputs.
-- **Tool Call Parser**: Add `--tool-call-parser kimi_k2` for structured tool calls.
-- **AMD FP8 KV Cache**: On AMD platforms the generator adds `--kv-cache-dtype fp8_e4m3` by default and sets `--mem-fraction-static 0.8` to fit the INT4 weights plus KV cache. FP8 KV cache trades a small amount of accuracy for memory; omit the flag if you observe accuracy regressions on your workload.
+- **显存**：需要单卡显存 ≥140GB 的 GPU。原生 INT4 检查点支持 H200（8 卡，TP=8）、B300（8 卡，TP=8）、GB300（4 卡，TP=4）、MI300X/MI325X（4 卡，TP=4）、MI350X/MI355X（4 卡，TP=4）。用 `--context-length 128000` 节省显存。
+- **NVFP4**：在 NVIDIA Blackwell 上，用 `nvidia/Kimi-K2.6-NVFP4` 并加 `--quantization modelopt_fp4`。B300 用 `tp=8`，GB300 用 `tp=4`。
+- **AMD GPU 的 TP 限制**：在 AMD GPU 上，TP 必须 ≤ 4（不能是 8）。Kimi-K2.6 有 64 个注意力头；AITER MLA kernel 要求 `heads_per_gpu % 16 == 0`。TP=4 时每卡分到 16 个头（合法），TP=8 时每卡 8 个头（不合法）。
+- **AMD Docker 镜像**：MI350X/MI355X 用 `lmsysorg/sglang:v0.5.9-rocm700-mi35x`，MI300X/MI325X 用 `lmsysorg/sglang:v0.5.9-rocm700-mi30x`。
+- **DP Attention**：生产环境用 `--dp <N> --enable-dp-attention` 提升吞吐。常见做法是把 `--dp` 设成与 `--tp` 相同，但并非必须。
+- **推理解析器**：加上 `--reasoning-parser kimi_k2`，把模型输出中的思考过程与回答内容分开。
+- **工具调用解析器**：加上 `--tool-call-parser kimi_k2` 以支持结构化工具调用。
+- **AMD FP8 KV 缓存**：在 AMD 平台上，生成器默认会加上 `--kv-cache-dtype fp8_e4m3`，并把 `--mem-fraction-static` 设为 0.8，以便把 INT4 权重和 KV 缓存都装进显存。FP8 KV 缓存用少量精度换取显存；如果发现你的负载精度下降，就去掉该参数。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：部署时的显存本质是「权重 + KV 缓存」的分配博弈。权重是固定的（INT4 等量化可显著缩小），KV 缓存则随并发和上下文长度动态增长，由 `--mem-fraction-static` 控制静态内存预留比例；`--context-length` 直接设定单请求上下文的硬上限。调这几个参数，就是在吞吐（能塞进多少并发请求）与长上下文支持之间权衡——这也是部署显存分析题的常见考点。
+</Note>
 
-### 4.1 Basic Usage
+## 4. 模型调用
 
-See [Basic API Usage](../../../docs/basic_usage/send_request).
+### 4.1 基础用法
 
-### 4.2 Advanced Usage
+见 [基础 API 用法](../../../docs/basic_usage/send_request)。
 
-#### 4.2.1 Multimodal (Vision + Text) Input
+### 4.2 进阶用法
 
-Kimi-K2.6 supports native multimodal input with images:
+#### 4.2.1 多模态（视觉 + 文本）输入
+
+Kimi-K2.6 原生支持带图片的多模态输入：
 
 ```python Example
 from openai import OpenAI
@@ -143,7 +151,7 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 This image shows a **paper receipt from Auntie Anne's**, the pretzel chain restaurant. Here's a detailed breakdown:
@@ -172,11 +180,11 @@ This image shows a **paper receipt from Auntie Anne's**, the pretzel chain resta
 The transaction is in **Indonesian Rupiah (IDR)**, indicating this purchase was made at an Auntie Anne's location in Indonesia. The customer bought one Cinnamon Sugar pretzel for 17,000 IDR and received 3,000 IDR in change after paying with 20,000 IDR cash.
 ```
 
-#### 4.2.2 Reasoning Output
+#### 4.2.2 推理输出
 
-Kimi-K2.6 supports both thinking mode (default) and instant mode.
+Kimi-K2.6 同时支持思考模式（默认）和即时模式。
 
-**Thinking Mode (default)** — reasoning content is automatically separated:
+**思考模式（默认）**——推理内容会自动分离：
 
 ```python Example
 from openai import OpenAI
@@ -199,7 +207,7 @@ print("====== Response (Thinking Mode) ======")
 print(response.choices[0].message.content)
 ```
 
-**Instant Mode (thinking off)** — disable thinking for faster responses:
+**即时模式（关闭思考）**——关闭思考以获得更快的响应：
 
 ```python Example
 response = client.chat.completions.create(
@@ -214,7 +222,7 @@ print("====== Response (Instant Mode) ======")
 print(response.choices[0].message.content)
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 ====== Reasoning Content (Thinking Mode) ======
@@ -263,9 +271,9 @@ Since 0.90 > 0.11
 This is a common trick question because people sometimes mistakenly compare 11 and 9 as whole numbers after the decimal point, forgetting that 9.9 = 9.90, which is greater than 9.11.
 ```
 
-#### 4.2.3 Tool Calling
+#### 4.2.3 工具调用
 
-Kimi-K2.6 supports tool calling capabilities for agentic tasks:
+Kimi-K2.6 支持工具调用，可用于智能体任务：
 
 ```python Example
 from openai import OpenAI
@@ -336,14 +344,14 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
     print(f"  Arguments: {tool_call['arguments']}")
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 Tool Call: get_weather
   Arguments: {"location": "Beijing"}
 ```
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # Send tool result back to the model
@@ -376,7 +384,7 @@ final_response = client.chat.completions.create(
 print(final_response.choices[0].message.content)
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 The weather in Beijing is currently **22°C and sunny**. ☀️
@@ -384,9 +392,9 @@ The weather in Beijing is currently **22°C and sunny**. ☀️
 It's a nice, warm day there—great for being outdoors!
 ```
 
-#### 4.2.4 Multimodal + Tool Calling (Agentic Vision)
+#### 4.2.4 多模态 + 工具调用（智能体视觉）
 
-Combine vision understanding with tool calling for advanced agentic tasks:
+把视觉理解与工具调用结合起来，完成进阶的智能体任务：
 
 ```python Example
 from openai import OpenAI
@@ -458,7 +466,7 @@ if msg.tool_calls:
         print(f"  Arguments: {tc.function.arguments}")
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 === Reasoning ===
@@ -474,11 +482,11 @@ Let me search for this product and similar items for you.
   Arguments: {"query":"Auntie Anne's Cinnamon Sugar Pretzel"}
 ```
 
-#### 4.2.5 Speculative Decoding
+#### 4.2.5 投机解码
 
 **NVIDIA**
 
-Deploy Kimi-K2.6 with the following command (H200/B300, all features enabled):
+用以下命令部署 Kimi-K2.6（H200/B300，开启全部特性）：
 
 ```shell Command
 sglang serve \
@@ -496,7 +504,7 @@ sglang serve \
   --port 30000
 ```
 
-Deploy Kimi-K2.6-NVFP4 with the following command (B300, all features enabled):
+用以下命令部署 Kimi-K2.6-NVFP4（B300，开启全部特性）：
 
 ```shell Command
 sglang serve \
@@ -515,29 +523,29 @@ sglang serve \
   --port 30000
 ```
 
-For GB300, use `--tp 4`.
+GB300 请用 `--tp 4`。
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Accuracy Benchmark
+### 5.1 精度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: 8× NVIDIA H200
-- Model: moonshotai/Kimi-K2.6 (INT4)
-- Tensor Parallelism: 8
-- SGLang version: 0.5.9
-- Reasoning Parser: `kimi_k2`
-- Tool Call Parser: `kimi_k2`
+- 硬件：8× NVIDIA H200
+- 模型：moonshotai/Kimi-K2.6（INT4）
+- 张量并行：8
+- SGLang 版本：0.5.9
+- 推理解析器：`kimi_k2`
+- 工具调用解析器：`kimi_k2`
 
-#### NVIDIA NVFP4 Accuracy Reference
+#### NVIDIA NVFP4 精度参考
 
-NVIDIA reports the following accuracy results for `nvidia/Kimi-K2.6-NVFP4` compared with the native INT4 baseline, using `temperature=1.0`, `top_p=0.95`, and max tokens 128,000:
+NVIDIA 发布了 `nvidia/Kimi-K2.6-NVFP4` 相对原生 INT4 基线的精度对比结果，使用 `temperature=1.0`、`top_p=0.95`，max tokens 设为 128,000：
 
 <table>
   <thead>
     <tr>
-      <th>Precision</th>
+      <th>精度</th>
       <th>GPQA Diamond</th>
       <th>SciCode</th>
       <th>τ²-Bench Telecom</th>
@@ -548,7 +556,7 @@ NVIDIA reports the following accuracy results for `nvidia/Kimi-K2.6-NVFP4` compa
   </thead>
   <tbody>
     <tr>
-      <td>Baseline (INT4)</td>
+      <td>基线（INT4）</td>
       <td>90.9</td>
       <td>52.6</td>
       <td>98.2</td>
@@ -568,13 +576,13 @@ NVIDIA reports the following accuracy results for `nvidia/Kimi-K2.6-NVFP4` compa
   </tbody>
 </table>
 
-#### 5.1.1 K2-Vendor-Verifier (Tool Calling)
+#### 5.1.1 K2-Vendor-Verifier（工具调用）
 
-- Dataset: [K2-Vendor-Verifier](https://github.com/MoonshotAI/K2-Vendor-Verifier) tool-calls dataset (2,000 requests)
-- Evaluation Tool: K2-Vendor-Verifier `tool_calls_eval.py`
-- Settings: temperature=1.0, max_tokens=64,000, concurrency=256
+- 数据集：[K2-Vendor-Verifier](https://github.com/MoonshotAI/K2-Vendor-Verifier) 工具调用数据集（2000 个请求）
+- 评估工具：K2-Vendor-Verifier 的 `tool_calls_eval.py`
+- 设置：temperature=1.0、max_tokens=64,000、concurrency=256
 
-**Evaluation Command:**
+**评估命令：**
 
 ```shell Command
 cd K2-Vendor-Verifier
@@ -589,30 +597,30 @@ python tool_calls_eval.py tool-calls/samples.jsonl \
   --output kimi-k26-results.jsonl
 ```
 
-**Results:**
+**结果：**
 
 <table>
   <thead>
     <tr>
-      <th>Metric</th>
-      <th>Value</th>
+      <th>指标</th>
+      <th>数值</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td>Success Rate</td>
+      <td>成功率</td>
       <td>99.95% (1999/2000)</td>
     </tr>
     <tr>
-      <td>Tool Call Triggered</td>
+      <td>触发工具调用</td>
       <td>970</td>
     </tr>
     <tr>
-      <td>Tool Call Valid</td>
+      <td>工具调用有效</td>
       <td>89.6% (869/970)</td>
     </tr>
     <tr>
-      <td>Tool Call Invalid (schema error)</td>
+      <td>工具调用无效（schema 错误）</td>
       <td>10.4% (101/970)</td>
     </tr>
   </tbody>
@@ -620,12 +628,12 @@ python tool_calls_eval.py tool-calls/samples.jsonl \
 
 #### 5.1.2 AIME 2025
 
-- Dataset: [AIME 2025](https://huggingface.co/datasets/nvidia/aime25) (30 problems)
-- Evaluation Tool: [NVIDIA NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills)
-- Prompt: `eval/matharena/aime` (MathArena format with `\boxed{}` answers)
-- Settings: temperature=1.0, top_p=0.95, max_tokens=131,072, 32 seeds
+- 数据集：[AIME 2025](https://huggingface.co/datasets/nvidia/aime25)（30 道题）
+- 评估工具：[NVIDIA NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills)
+- 提示词：`eval/matharena/aime`（MathArena 格式，答案用 `\boxed{}` 包裹）
+- 设置：temperature=1.0、top_p=0.95、max_tokens=131,072、32 个随机种子
 
-**Evaluation Command:**
+**评估命令：**
 
 ```shell Command
 # Prepare dataset
@@ -649,13 +657,13 @@ for RS in $(seq 0 31); do
 done
 ```
 
-**Results:**
+**结果：**
 
 <table>
   <thead>
     <tr>
-      <th>Evaluation Mode</th>
-      <th>Accuracy</th>
+      <th>评估模式</th>
+      <th>准确率</th>
     </tr>
   </thead>
   <tbody>
@@ -674,15 +682,15 @@ done
   </tbody>
 </table>
 
-> 22 out of 32 seeds achieved a perfect score of 30/30. The remaining 10 seeds each missed exactly 1 problem (29/30).
+> 32 个随机种子中有 22 个拿到满分 30/30，其余 10 个各自只错 1 题（29/30）。
 
 #### 5.1.3 GPQA Diamond
 
-- Dataset: [GPQA Diamond](https://huggingface.co/datasets/Idavidrein/gpqa) (198 questions, 4-choice multiple choice)
-- Evaluation Tool: [Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) with `inspect_evals/gpqa_diamond`
-- Settings: temperature=1.0, top_p=0.95, max_tokens=131,072, 4 epochs, cot=True
+- 数据集：[GPQA Diamond](https://huggingface.co/datasets/Idavidrein/gpqa)（198 道四选一选择题）
+- 评估工具：[Inspect AI](https://github.com/UKGovernmentBEIS/inspect_ai) 配合 `inspect_evals/gpqa_diamond`
+- 设置：temperature=1.0、top_p=0.95、max_tokens=131,072、4 个 epoch、cot=True
 
-**Evaluation Command:**
+**评估命令：**
 
 ```shell Command
 OPENAI_BASE_URL=http://localhost:30000/v1 OPENAI_API_KEY=placeholder \
@@ -695,13 +703,13 @@ inspect eval inspect_evals/gpqa_diamond \
   -T cot=True
 ```
 
-**Results (partial — 553/792 samples across 4 epochs):**
+**结果（部分完成——4 个 epoch 共 553/792 个样本）：**
 
 <table>
   <thead>
     <tr>
-      <th>Evaluation Mode</th>
-      <th>Accuracy</th>
+      <th>评估模式</th>
+      <th>准确率</th>
     </tr>
   </thead>
   <tbody>
@@ -716,7 +724,7 @@ inspect eval inspect_evals/gpqa_diamond \
   <thead>
     <tr>
       <th>Epoch</th>
-      <th>Accuracy</th>
+      <th>准确率</th>
     </tr>
   </thead>
   <tbody>
@@ -741,11 +749,11 @@ inspect eval inspect_evals/gpqa_diamond \
 
 #### 5.1.4 OCRBench
 
-- Dataset: [OCRBench](https://huggingface.co/datasets/echo840/OCRBench) (1,000 questions with images)
-- Evaluation Tool: [Kimi-Vendor-Verifier](https://github.com/MoonshotAI/Kimi-Vendor-Verifier) (inspect-ai based)
-- Settings: max_tokens=4,096, thinking mode enabled (opensource)
+- 数据集：[OCRBench](https://huggingface.co/datasets/echo840/OCRBench)（1000 道带图问题）
+- 评估工具：[Kimi-Vendor-Verifier](https://github.com/MoonshotAI/Kimi-Vendor-Verifier)（基于 inspect-ai）
+- 设置：max_tokens=4,096、开启思考模式（opensource）
 
-**Evaluation Command:**
+**评估命令：**
 
 ```shell Command
 cd Kimi-Vendor-Verifier
@@ -759,13 +767,13 @@ python3 eval.py ocrbench \
   --max-connections 256
 ```
 
-**Results:**
+**结果：**
 
 <table>
   <thead>
     <tr>
-      <th>Evaluation Mode</th>
-      <th>Accuracy</th>
+      <th>评估模式</th>
+      <th>准确率</th>
     </tr>
   </thead>
   <tbody>
@@ -776,15 +784,15 @@ python3 eval.py ocrbench \
   </tbody>
 </table>
 
-#### 5.1.5 MMMU Pro Vision
+#### 5.1.5 MMMU Pro 视觉
 
-- Dataset: [MMMU Pro](https://huggingface.co/datasets/MMMU/MMMU_Pro) standard 10-option subset (1,730 questions with images)
-- Evaluation Tool: [Kimi-Vendor-Verifier](https://github.com/MoonshotAI/Kimi-Vendor-Verifier) (inspect-ai based)
-- Settings: max_tokens=32,768, thinking mode (default), max_connections=256
+- 数据集：[MMMU Pro](https://huggingface.co/datasets/MMMU/MMMU_Pro) 标准 10 选项子集（1730 道带图问题）
+- 评估工具：[Kimi-Vendor-Verifier](https://github.com/MoonshotAI/Kimi-Vendor-Verifier)（基于 inspect-ai）
+- 设置：max_tokens=32,768、思考模式（默认）、max_connections=256
 
-> **Important**: Kimi-K2.6 is a reasoning model. Setting `max_tokens` too low (e.g., 4096) causes the thinking process to consume the entire token budget, leaving no tokens for the final answer. Use `max_tokens=32768` or higher.
+> **重要**：Kimi-K2.6 是推理模型。把 `max_tokens` 设得太低（例如 4096）时，思考过程会耗尽整个 token 预算，导致最终答案没有 token 可用。请用 `max_tokens=32768` 或更高。
 
-**Evaluation Command:**
+**评估命令：**
 
 ```shell Command
 cd Kimi-Vendor-Verifier
@@ -797,13 +805,13 @@ python3 eval.py mmmu \
   --max-connections 256
 ```
 
-**Results (1,481/1,730 samples completed):**
+**结果（完成 1,481/1,730 个样本）：**
 
 <table>
   <thead>
     <tr>
-      <th>Evaluation Mode</th>
-      <th>Accuracy</th>
+      <th>评估模式</th>
+      <th>准确率</th>
     </tr>
   </thead>
   <tbody>
@@ -814,24 +822,24 @@ python3 eval.py mmmu \
   </tbody>
 </table>
 
-### 5.2 Speed Benchmark
+### 5.2 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA H200 GPU (8x)
-- Model: Kimi-K2.6
-- Tensor Parallelism: 8
-- SGLang Version: 0.5.9
+- 硬件：NVIDIA H200 GPU ×8
+- 模型：Kimi-K2.6
+- 张量并行：8
+- SGLang 版本：0.5.9
 
 <Info>
-Kimi-K2.6 shares the same architecture as K2.5. Speed benchmarks are expected to be equivalent. The results below are measured with K2.5 and serve as a reference.
+Kimi-K2.6 与 K2.5 架构相同，速度基准预计也基本一致。下面的结果是用 K2.5 测得，仅作参考。
 </Info>
 
-We use SGLang's built-in benchmarking tool with the `random` dataset for standardized performance evaluation.
+我们用 SGLang 内置的基准测试工具配合 `random` 数据集做标准化性能评估。
 
-#### 5.2.1 Latency Benchmark
+#### 5.2.1 延迟基准测试
 
-- **Model Deployment:**
+- **模型部署：**
 
 ```shell Command
 sglang serve \
@@ -842,9 +850,9 @@ sglang serve \
   --port 30000
 ```
 
-**Scenario 1: Chat (1K/1K)**
+**场景 1：对话（1K/1K）**
 
-- Low Concurrency
+- 低并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -898,7 +906,7 @@ Max ITL (ms):                            29.38
 ==================================================
 ```
 
-- Medium Concurrency (Balanced)
+- 中等并发（均衡）
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -952,7 +960,7 @@ Max ITL (ms):                            655.61
 ==================================================
 ```
 
-- High Concurrency (Throughput-Optimized)
+- 高并发（吞吐优化）
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1006,9 +1014,9 @@ Max ITL (ms):                            3118.59
 ==================================================
 ```
 
-**Scenario 2: Reasoning (1K/8K)**
+**场景 2：推理（1K/8K）**
 
-- Low Concurrency
+- 低并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1062,7 +1070,7 @@ Max ITL (ms):                            45.22
 ==================================================
 ```
 
-- Medium Concurrency
+- 中等并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1116,9 +1124,9 @@ Max ITL (ms):                            272.05
 ==================================================
 ```
 
-**Scenario 3: Summarization (8K/1K)**
+**场景 3：摘要（8K/1K）**
 
-- Low Concurrency
+- 低并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1172,7 +1180,7 @@ Max ITL (ms):                            62.70
 ==================================================
 ```
 
-- Medium Concurrency
+- 中等并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1226,7 +1234,7 @@ Max ITL (ms):                            6540.24
 ==================================================
 ```
 
-- High Concurrency
+- 高并发
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1280,26 +1288,26 @@ Max ITL (ms):                            7778.47
 ==================================================
 ```
 
-### 5.3 Speed Benchmark (AMD MI350X)
+### 5.3 速度基准测试（AMD MI350X）
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: AMD Instinct MI350X GPU (4x)
-- Model: Kimi-K2.6 (INT4)
-- Tensor Parallelism: 4
-- SGLang Version: 0.5.9
-- Docker Image: `lmsysorg/sglang:v0.5.9-rocm700-mi35x`
-- ROCm: 7.0
+- 硬件：AMD Instinct MI350X GPU ×4
+- 模型：Kimi-K2.6（INT4）
+- 张量并行：4
+- SGLang 版本：0.5.9
+- Docker 镜像：`lmsysorg/sglang:v0.5.9-rocm700-mi35x`
+- ROCm：7.0
 
-We use SGLang's built-in benchmarking tool with the `random` dataset for standardized performance evaluation.
+我们用 SGLang 内置的基准测试工具配合 `random` 数据集做标准化性能评估。
 
 <Info>
-**AMD GPU TP Constraint**: Kimi-K2.6 requires TP ≤ 4 on AMD GPUs. The model has 64 attention heads, and the AITER MLA kernel requires `heads_per_gpu % 16 == 0`. With TP=4, each GPU gets 16 heads (valid). With TP=8, each GPU gets 8 heads (invalid).
+**AMD GPU 的 TP 限制**：在 AMD GPU 上，Kimi-K2.6 要求 TP ≤ 4。模型有 64 个注意力头，AITER MLA kernel 要求 `heads_per_gpu % 16 == 0`。TP=4 时每卡分到 16 个头（合法），TP=8 时每卡 8 个头（不合法）。
 </Info>
 
-#### 5.3.1 Latency Benchmark
+#### 5.3.1 延迟基准测试
 
-- **Model Deployment:**
+- **模型部署：**
 
 ```shell Command
 SGLANG_USE_AITER=1 SGLANG_ROCM_FUSED_DECODE_MLA=0 \
@@ -1315,7 +1323,7 @@ sglang serve \
   --port 30000
 ```
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -1329,7 +1337,7 @@ python3 -m sglang.bench_serving \
   --request-rate inf
 ```
 
-- **Results:**
+- **结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -1371,7 +1379,7 @@ Max ITL (ms):                            36.92
 ==================================================
 ```
 
-- Medium Concurrency (Balanced)
+- 中等并发（均衡）
 
 ```shell Command
 python3 -m sglang.bench_serving \

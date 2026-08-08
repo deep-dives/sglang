@@ -1,20 +1,20 @@
 ---
 title: DeepSeek-V4
-description: "Deploy DeepSeek-V4 with SGLang — verified launch commands, benchmarks, and tuning for Flash Official (0731), Flash, and Pro."
+description: "使用 SGLang 部署 DeepSeek-V4——Flash Official (0731)、Flash 与 Pro 的已验证启动命令、基准测试与调优。"
 tag: NEW
 ---
 
-## Deployment
+## 部署
 
 <a id="install" />
 
-<Accordion title="Install SGLang">
+<Accordion title="安装 SGLang">
 
-For all methods and hardware platforms, see the [official SGLang installation guide](../../../docs/get-started/install). The two paths below match the **Python / Docker** toggle in the command panel.
+所有方法与硬件平台请参见[官方 SGLang 安装指南](../../../docs/get-started/install)。下面两条路径与命令面板里的 **Python / Docker** 切换对应。
 
 <Tabs>
 
-<Tab title="Python (pip / uv)">
+<Tab title="Python（pip / uv）">
 
 ```bash Command
 pip install --upgrade pip
@@ -22,17 +22,17 @@ pip install uv
 uv pip install sglang
 ```
 
-Then run the **Python** output of the command panel below in that environment.
+然后在该环境中运行下方命令面板输出的 **Python** 命令。
 
 </Tab>
 
 <Tab title="Docker">
 
-For how to launch the image, see [Install → Method 3: Using Docker](../../../docs/get-started/install#method-3-using-docker). A minimal example (substitute the inner `sglang serve ...` with whatever the command generator below produces):
+镜像如何启动参见 [安装 → 方法三：使用 docker](../../../docs/get-started/install#method-3-using-docker)。一个最小示例（把内部的 `sglang serve ...` 换成下方命令生成器的输出）：
 
-**NVIDIA GPUs**
+**NVIDIA GPU**
 
-A single image — `lmsysorg/sglang:latest` — covers the **datacenter GPUs** in this cookbook (B200 / B300 / GB200 / GB300 / H100 / H200 / RTX PRO 6000).
+单个镜像 `lmsysorg/sglang:latest` 即可覆盖本 cookbook 涉及的**数据中心 GPU**（B200 / B300 / GB200 / GB300 / H100 / H200 / RTX PRO 6000）。
 
 ```bash Command
 docker pull lmsysorg/sglang:latest
@@ -47,11 +47,11 @@ docker run --gpus all \
     sglang serve <use args below>
 ```
 
-**AMD GPUs (ROCm)**
+**AMD GPU（ROCm）**
 
-AMD uses the daily-updated `lmsysorg/sglang-rocm` images. You can find the latest images on [Docker Hub](https://hub.docker.com/r/lmsysorg/sglang-rocm/tags). We recommend the ROCm 7.2 version.
+AMD 使用每日更新的 `lmsysorg/sglang-rocm` 镜像。最新镜像见 [Docker Hub](https://hub.docker.com/r/lmsysorg/sglang-rocm/tags)。我们推荐 ROCm 7.2 版本。
 
-For example:
+例如：
 - **MI355X** → `lmsysorg/sglang-rocm:v0.5.14-rocm720-mi35x-20260710`
 - **MI300X** → `lmsysorg/sglang-rocm:v0.5.13.post1-rocm720-mi30x-20260623`
 
@@ -76,11 +76,11 @@ docker run \
 
 </Accordion>
 
-Pick your hardware + recipe to generate the launch command. The three serving strategies cover the common operating points:
+选择你的硬件与方案，生成启动命令。三种服务策略覆盖常见的工作点：
 
-- **Low-Latency** — fastest reply for a single user. Pick for chat.
-- **Balanced** — good speed with several users at once. Use for typical multi-user serving.
-- **High-Throughput** — most tokens per second across many users. Best for batch jobs.
+- **低延迟（Low-Latency）**——单用户最快的响应。聊天场景选它。
+- **均衡（Balanced）**——同时服务多个用户时的良好速度。适用于典型的多用户服务。
+- **高吞吐（High-Throughput）**——多用户下每秒产出最多的 token。最适合批处理任务。
 
 import { Deployment } from "/src/snippets/_deployment.jsx";
 import { config }     from "/src/snippets/configs/deepseek-ai/deepseek-v4.jsx";
@@ -89,45 +89,45 @@ import { benchmarks } from "/src/snippets/configs/deepseek-ai/deepseek-v4-benchm
 <Deployment config={config} benchmarks={benchmarks} />
 
 <Note>
-  For a runnable end-to-end example, see the [DeepSeek-V4-Flash demo notebook](https://github.com/sgl-project/sglang/blob/main/docs/demo/deepseek_v4_flash.ipynb).
+  可运行的端到端示例参见 [DeepSeek-V4-Flash demo notebook](https://github.com/sgl-project/sglang/blob/main/docs/demo/deepseek_v4_flash.ipynb)。
 </Note>
 
 <div style={{fontSize: "0.85em", lineHeight: "1.55", color: "#6b7280", margin: "0.5rem 0 1rem 0"}}>
-  <p style={{margin: "0 0 0.3rem 0"}}><strong>Panel controls</strong> (top of the command box):</p>
+  <p style={{margin: "0 0 0.3rem 0"}}><strong>面板控件</strong>（命令框顶部）：</p>
   <ul style={{margin: 0, paddingLeft: "1.25rem"}}>
-    <li style={{marginBottom: "0.2rem"}}><strong>Python / Docker</strong> — bare <code>sglang serve …</code> for an existing SGLang env, or a <code>docker run … sglang serve …</code> wrap against the per-hardware image from the <a href="#install">Install SGLang</a> panel above.</li>
-    <li style={{marginBottom: "0.2rem"}}><strong>⧉ Copy</strong> — copies the current command (with whichever framing is active) to your clipboard.</li>
-    <li style={{marginBottom: "0.2rem"}}><strong>$ cURL</strong> — a sample request against <code>localhost:30000</code> to confirm the server is up.</li>
-    <li style={{marginBottom: "0.2rem"}}><strong>⚙ Env</strong> — edits the placeholders (<code>HOST_IP</code>, <code>PORT</code>, <code>HF_TOKEN</code>, <code>NODE_RANK</code>, <code>NODE0_IP</code>) the command and cURL share. Persists in localStorage across cookbooks.</li>
-    <li><strong>Verified / Not Verified</strong> badge — green when the <code>(hw, variant, quant, strategy, nodes)</code> combo has been run end-to-end on real hardware; yellow when auto-derived from a neighbor and not yet re-checked.</li>
+    <li style={{marginBottom: "0.2rem"}}><strong>Python / Docker</strong> —— 对已有 SGLang 环境直接用裸的 <code>sglang serve …</code>，或按上方「<a href="#install">安装 SGLang</a>」面板中对应硬件的镜像，用 <code>docker run … sglang serve …</code> 包裹。</li>
+    <li style={{marginBottom: "0.2rem"}}><strong>⧉ 复制</strong> —— 把当前命令（按当前生效的框架）复制到剪贴板。</li>
+    <li style={{marginBottom: "0.2rem"}}><strong>$ cURL</strong> —— 对 <code>localhost:30000</code> 发一个示例请求，确认服务已启动。</li>
+    <li style={{marginBottom: "0.2rem"}}><strong>⚙ 环境变量</strong> —— 编辑命令与 cURL 共用的占位符（<code>HOST_IP</code>、<code>PORT</code>、<code>HF_TOKEN</code>、<code>NODE_RANK</code>、<code>NODE0_IP</code>）。在各 cookbook 之间持久化到 localStorage。</li>
+    <li><strong>已验证 / 未验证</strong> 徽章 —— 当 <code>(hw, variant, quant, strategy, nodes)</code> 组合已在真实硬件上端到端跑通时显示绿色；当从相邻配置自动推导、尚未复核时显示黄色。</li>
   </ul>
 </div>
 
-## Playground
+## Playground {#playground}
 
-The Playground is where you experiment with **SGLang features beyond the verified matrix**. The Deploy panel above only emits combinations the SGLang team has signed off on; the Playground lets you turn on additional knobs on top of whichever cell the Deploy panel is currently showing. The base is read live from your Deploy selection — only your overrides change.
+Playground 用于试验**已验证矩阵之外的 SGLang 特性**。上面的部署面板只输出 SGLang 团队已签核的组合；Playground 则允许你在部署面板当前显示的单元格之上再打开更多开关。基础配置实时读取自你的部署选择——只有你的覆盖项会改变。
 
-The knobs come in two flavors:
+开关分两类：
 
-- **Built-in SGLang features** — parallelism overrides (TP / CP / DP-Attention — DP-Attention's value is the DP degree, with `off` to disable), MoE backend + EP, reasoning / tool-call parsers, speculative-decoding presets, prefill/decode disaggregation, HiCache tiers, and HiSparse hierarchical sparse attention (decode-role only — the card appears once PD-Disagg mode is set to decode).
-- **DeepSeek-V4 specific features** — MegaMoE W4A8 / W4A4 fused kernel (Blackwell only; Hopper SM90 uses a separate all-FP8 MegaMoE path — see Configuration Tips below).
+- **内置 SGLang 特性** —— 并行覆盖（TP / CP / DP-Attention——DP-Attention 的取值即 DP 度数，可用 `off` 关闭）、MoE 后端与 EP、推理解析器 / 工具调用解析器、投机解码预设、预填充/解码分离部署、HiCache 层级，以及 HiSparse 分层稀疏注意力（仅解码角色——当 PD 分离模式设为 decode 时该卡片才出现）。
+- **DeepSeek-V4 专属特性** —— MegaMoE W4A8 / W4A4 融合 kernel（仅 Blackwell；Hopper SM90 走独立的全 FP8 MegaMoE 路径——见下方配置技巧）。
 
-Lines highlighted **green** are added by your overrides; lines with **red strikethrough** were in the verified base but stripped by an override. When no override differs from the base cell, the playground inherits the base's **Verified** badge; any actual change flips it to **Not Verified** until the new configuration is run end-to-end and submitted back.
+**绿色**高亮的行是你的覆盖项新增的；**红色删除线**的行属于已验证基础配置、但被某个覆盖项移除。当覆盖项与基础单元格完全一致时，Playground 继承基础的**已验证**徽章；任何实际改动都会把它翻转为**未验证**，直到新配置端到端跑通并回传。
 
 import { Playground } from "/src/snippets/_playground.jsx";
 
 <Playground config={config} />
 
 <div style={{fontSize: "0.85em", lineHeight: "1.55", color: "#6b7280", margin: "0.5rem 0 1rem 0"}}>
-  <p style={{margin: "0 0 0.3rem 0"}}><strong>Panel controls</strong> reuse <strong>Python / Docker</strong> · <strong>⧉ Copy</strong> · <strong>$ cURL</strong> · <strong>⚙ Env</strong> from the Deploy panel, plus one extra:</p>
+  <p style={{margin: "0 0 0.3rem 0"}}><strong>面板控件</strong>沿用部署面板的 <strong>Python / Docker</strong> · <strong>⧉ Copy</strong> · <strong>$ cURL</strong> · <strong>⚙ Env</strong>，另加一个：</p>
   <ul style={{margin: 0, paddingLeft: "1.25rem"}}>
-    <li><strong>Submit ↗</strong> — opens a pre-filled GitHub issue so you can land your override combo as a new verified cookbook cell. Shown only while the badge says <strong>Not Verified</strong>; click it once you've actually run the command on your hardware and confirmed it works.</li>
+    <li><strong>提交 ↗</strong> —— 打开一个预填好的 GitHub issue，把你的覆盖组合作为新的已验证 cookbook 单元格提交。仅在徽章显示 <strong>未验证</strong> 时出现；在真实硬件上跑通并确认后点击它。</li>
   </ul>
 </div>
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-**DeepSeek-V4** is the next-generation Mixture-of-Experts model from DeepSeek, released 2026-04-24 under an **MIT License**. The 0731 Flash refresh adds a checkpoint with a bundled DSpark draft head:
+**DeepSeek-V4** 是 DeepSeek 的下一代混合专家（MoE）模型，于 2026-04-24 以 **MIT 许可**发布。0731 Flash 更新版额外提供一份捆绑 DSpark 草稿头的检查点：
 
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>
   <colgroup>
@@ -138,10 +138,10 @@ import { Playground } from "/src/snippets/_playground.jsx";
   </colgroup>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Variant</th>
-      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Total params</th>
-      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>Active (MoE)</th>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>Use</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>变体</th>
+      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>总参数</th>
+      <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.02)"}}>激活参数（MoE）</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, whiteSpace: "nowrap", backgroundColor: "rgba(255,255,255,0.05)"}}>用途</th>
     </tr>
   </thead>
   <tbody>
@@ -149,55 +149,59 @@ import { Playground } from "/src/snippets/_playground.jsx";
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash">DeepSeek-V4-Flash</a></strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>284B</strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.02)"}}>13B</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>single-node serving on B200 / B300 / GB200 / GB300 / H200 (TP=4); RTX PRO 6000 (TP=2); H100 (TP=8)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>单节点服务：B200 / B300 / GB200 / GB300 / H200（TP=4）；RTX PRO 6000（TP=2）；H100（TP=8）</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731">DeepSeek-V4-Flash-0731</a></strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>304</strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.02)"}}>13B</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Flash Official (0731), with a bundled DSpark draft head; verified on 8×B200, 4×GB300, and 4×H200</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>Flash Official（0731），内置 DSpark 草稿头；已在 8×B200、4×GB300 与 4×H200 上验证</td>
     </tr>
     <tr>
       <td style={{padding: "9px 12px", fontWeight: 500, backgroundColor: "rgba(255,255,255,0.02)"}}><strong><a href="https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro">DeepSeek-V4-Pro</a></strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.05)"}}><strong>1.6T</strong></td>
       <td style={{padding: "9px 12px", textAlign: "right", backgroundColor: "rgba(255,255,255,0.02)"}}>49B</td>
-      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>high-capacity: B200 / B300 (TP=8) · GB300 (TP=4) · H200 FP4 (TP=8) · GB200 (2-node, TP=8) · H200 FP8 (2-node, TP=16) · H100 (2-node, TP=16)</td>
+      <td style={{padding: "9px 12px", backgroundColor: "rgba(255,255,255,0.05)"}}>高容量：B200 / B300（TP=8）· GB300（TP=4）· H200 FP4（TP=8）· GB200（双节点，TP=8）· H200 FP8（双节点，TP=16）· H100（双节点，TP=16）</td>
     </tr>
   </tbody>
 </table>
 
-The Instruct checkpoints ship as **FP4 MoE experts + FP8 attention / dense** (one mixed-precision checkpoint covers every FP4-capable GPU). Matching `*-Base` repos ship pure FP8 mixed and are for further pre-training only — not for chat or tool calling.
+Instruct 检查点以 **FP4 MoE 专家 + FP8 注意力/稠密层**的形式发布（一个混合精度检查点即可覆盖所有支持 FP4 的 GPU）。对应的 `*-Base` 仓库发布纯 FP8 混合检查点，仅供继续预训练使用——不用于聊天或工具调用。
 
-**Highlights:** hybrid CSA + HCA attention (~27% inference FLOPs / ~10% KV cache vs DSv3.2 at 1M context), manifold-constrained hyper-connections (mHC), Muon optimizer, **1M-token context** (32T+ pre-training tokens), three reasoning modes (*Non-think* / *Think High* / *Think Max* — use ≥ 384K context for Think Max), and a dedicated `encoding_dsv4.encode_messages` Python encoder + DSML tool-call grammar.
+**亮点：** 混合 CSA + HCA 注意力（在 1M 上下文下相比 DSv3.2 推理 FLOPs 约 -27% / KV 缓存约 -10%）、流形约束超连接（mHC）、Muon 优化器、**1M token 上下文**（32T+ 预训练 token）、三种推理模式（*Non-think* / *Think High* / *Think Max* —— Think Max 需 ≥ 384K 上下文），以及专用的 `encoding_dsv4.encode_messages` Python 编码器 + DSML 工具调用文法。
 
-**Recommended generation:** `temperature=1.0`, `top_p=1.0`.
+**推荐的生成参数：** `temperature=1.0`，`top_p=1.0`。
 
-**Resources:** HuggingFace · [Flash Official (0731)](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731) · [Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) · [Pro](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro)  ·  ModelScope · [Flash](https://modelscope.cn/models/deepseek-ai/DeepSeek-V4-Flash) · [Pro](https://modelscope.cn/models/deepseek-ai/DeepSeek-V4-Pro).
+**资源：** HuggingFace · [Flash Official (0731)](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash-0731) · [Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) · [Pro](https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro) · ModelScope · [Flash](https://modelscope.cn/models/deepseek-ai/DeepSeek-V4-Flash) · [Pro](https://modelscope.cn/models/deepseek-ai/DeepSeek-V4-Pro)。
 
-## 2. Configuration Tips
+<Note>
+💡 AI Infra 学习笔记：DeepSeek-V4 的混合注意力（CSA + HCA）是稀疏/压缩注意力的进一步演进——把大部分注意力压缩成紧凑状态，显著降低推理 FLOPs 与 KV 缓存；1M 上下文下相比 DSv3.2 的 FLOPs 与 KV 缓存都有约一个数量级的下降幅度。再叠加 MegaMoE（把专家分派与 GEMM 融合进单个 kernel）与 DSpark（内置草稿头投机解码），长上下文与解码吞吐两大瓶颈被一起优化。这类"压缩注意力 + 融合 MoE"组合是下一代推理引擎优化的主要方向。
+</Note>
+
+## 2. 配置技巧
 
 {/* TODO: expand this section as more recipes are validated end-to-end. */}
 
-**Concurrency & DeepEP dispatch buffer**
+**并发与 DeepEP 分派缓冲**
 
-Must hold: `max-running-requests × MTP_draft_tokens ≤ SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK`. Violating it blows DeepEP's dispatch buffer at steady-state load (`deep_ep.cpp:1105`). When tuning, move `--cuda-graph-max-bs-decode`, `--max-running-requests`, and the env together.
+必须满足：`max-running-requests × MTP_draft_tokens ≤ SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK`。违反它会在稳态负载下撑爆 DeepEP 的分派缓冲（`deep_ep.cpp:1105`）。调优时，把 `--cuda-graph-max-bs-decode`、`--max-running-requests` 与环境变量一起调整。
 
-The generator currently picks values on the **conservative** side (mirroring an internal stress-test matrix). They run safely out of the box but likely leave throughput on the table — please tune them up toward your actual workload's peak concurrency and report findings back so the defaults can be revised.
+命令生成器目前取值偏**保守**（镜像自内部压测矩阵）。它们开箱即用、安全运行，但很可能留了吞吐量余量——请按你实际负载的峰值并发向上调优，并把结果反馈回来，以便修订默认值。
 
-**Speculative decoding**
+**投机解码**
 
-The original Flash and Pro recipes use EAGLE. Flash Official (0731) uses the bundled DSpark draft head; see [DSpark](#3-4-dspark-speculative-decoding) for its launch and tuning notes.
+原始 Flash 与 Pro 方案使用 EAGLE。Flash Official (0731) 使用内置的 DSpark 草稿头；启动与调优说明见 [DSpark](#3-4-dspark-speculative-decoding)。
 
-For the original Flash and Pro checkpoints:
+对于原始 Flash 与 Pro 检查点：
 
-- `low-latency`: steps=3, draft-tokens=4 → largest win at bs=1.
-- `balanced`: steps=1, draft-tokens=2 → gentler MTP, reduces throughput hit at higher batch.
-- `high-throughput`: MTP disabled — at saturation the verify step costs more than it saves.
-- MTP runs on the v2 speculative path.
+- `low-latency`：steps=3、draft-tokens=4 → 在 bs=1 时收益最大。
+- `balanced`：steps=1、draft-tokens=2 → 更温和的 MTP，减少高批大小下的吞吐损失。
+- `high-throughput`：禁用 MTP —— 饱和时验证步骤的成本超过了收益。
+- MTP 运行在 v2 投机路径上。
 
-**Compressed attention state dtype**
+**压缩注意力状态 dtype**
 
-DeepSeek-V4 uses hybrid compressed attention for long-context efficiency. `SGLANG_DSV4_COMPRESS_STATE_DTYPE` controls the dtype of the C4 / C128 compressed attention state pools. Supported values are `float32` / `fp32` (default: `float32`) and `bfloat16` / `bf16`. For BF16 on the offline compression path:
+DeepSeek-V4 使用混合压缩注意力来提升长上下文效率。`SGLANG_DSV4_COMPRESS_STATE_DTYPE` 控制 C4 / C128 压缩注意力状态池的 dtype。支持 `float32` / `fp32`（默认：`float32`）与 `bfloat16` / `bf16`。要在离线压缩路径上使用 BF16：
 
 ```bash Command
 SGLANG_DSV4_COMPRESS_STATE_DTYPE=bf16 \
@@ -206,16 +210,13 @@ sglang serve \
   <other args>
 ```
 
-This BF16 setting applies only to the compressed attention state pools and reduces the GPU memory footprint of each compressed-state slot. It does not change model weight precision or the main KV cache dtype. With automatic pool sizing and no explicit capacity cap, the same memory budget holds more slots, and the startup log shows larger `c4_state` and `c128_state` pool sizes. Keep the default `float32` setting for the most conservative behavior.
+该 BF16 设置只作用于压缩注意力状态池，减少每个压缩状态槽位的 GPU 显存占用。它不改变模型权重精度或主 KV 缓存的 dtype。在自动池大小、无显式容量上限的情况下，同样的显存预算可以容纳更多槽位，启动日志会显示更大的 `c4_state` 与 `c128_state` 池大小。保守起见请保持默认的 `float32`。
 
-**EPLB + Waterfill (Experimental)**
+**EPLB + Waterfill（实验性）**
 
-For recorded/static EPLB reproduction, first record an expert-distribution file by following
-[Capture expert selection distribution in MoE models](../../../docs/basic_usage/native_api.mdx#capture-expert-selection-distribution-in-moe-models).
-For reproduction runs, use the generated `expert_distribution_recorder_*.pt` as
-the initial expert location. **Please checkout to latest main branch for this feature.**
+要复现记录的/静态 EPLB，先按 [在 MoE 模型中捕获专家选择分布](../../../docs/basic_usage/native_api.mdx#capture-expert-selection-distribution-in-moe-models) 记录一份专家分布文件。复现运行用生成的 `expert_distribution_recorder_*.pt` 作为初始专家位置。**该特性请切换到最新 main 分支。**
 
-For non-PD reproduction, use:
+非 PD 复现使用：
 
 ```bash Command
 --moe-a2a-backend deepep \
@@ -224,9 +225,7 @@ For non-PD reproduction, use:
 --enable-waterfill
 ```
 
-For PD-Disagg reproduction, use `normal` mode on the prefill server and
-`low_latency` mode on the decode server. Add the same `--init-expert-location`
-flag to both commands:
+PD 分离复现中，预填充服务端用 `normal` 模式，解码服务端用 `low_latency` 模式。两条命令都加相同的 `--init-expert-location` 参数：
 
 ```bash Command
 # prefill
@@ -242,16 +241,14 @@ flag to both commands:
 --enable-waterfill
 ```
 
-You can also add `--ep-num-redundant-experts` and `--eplb-algorithm` to customize
-EPLB placement.
+你还可以加 `--ep-num-redundant-experts` 与 `--eplb-algorithm` 自定义 EPLB 放置。
 
-Waterfill also supports MegaMOE. Use `--moe-a2a-backend megamoe
---enable-waterfill` to keep the MegaMOE backend while applying Waterfill to the
-fused shared expert slot.
+Waterfill 也支持 MegaMOE。用 `--moe-a2a-backend megamoe
+--enable-waterfill` 保持 MegaMOE 后端，同时把 Waterfill 应用到融合的共享专家槽位。
 
-**FP4 Indexer (Experimental)**
+**FP4 Indexer（实验性）**
 
-DeepSeek-V4 uses the default indexer path unless `--enable-deepseek-v4-fp4-indexer` is set. Enable this flag to use the experimental FP4 C4 indexer on SM100 GPUs with DeepGEMM FP4 indexer support. This path is intended for decode-heavy long-context workloads where reducing indexer cache bandwidth is beneficial.
+除非设置 `--enable-deepseek-v4-fp4-indexer`，DeepSeek-V4 使用默认的 indexer 路径。启用该参数可在支持 DeepGEMM FP4 indexer 的 SM100 GPU 上使用实验性 FP4 C4 indexer。该路径面向解码密集的长上下文负载，可减少 indexer 缓存带宽占用。
 
 ```bash Command
 # Please use the latest main branch for this feature.
@@ -262,12 +259,12 @@ sglang serve \
   --enable-deepseek-v4-fp4-indexer
 ```
 
-**NVFP4 Hybrid Checkpoints**
+**NVFP4 混合检查点**
 
-The [`nvidia/DeepSeek-V4-Pro-NVFP4`](https://huggingface.co/nvidia/DeepSeek-V4-Pro-NVFP4) and
-[`nvidia/DeepSeek-V4-Flash-NVFP4`](https://huggingface.co/nvidia/DeepSeek-V4-Flash-NVFP4) checkpoints
-quantize MoE experts to **NVFP4** while keeping attention and dense layers in
-**FP8**. It requires `--moe-runner-backend flashinfer_trtllm_routed` which will be automatically selected if not provided.
+[`nvidia/DeepSeek-V4-Pro-NVFP4`](https://huggingface.co/nvidia/DeepSeek-V4-Pro-NVFP4) 与
+[`nvidia/DeepSeek-V4-Flash-NVFP4`](https://huggingface.co/nvidia/DeepSeek-V4-Flash-NVFP4) 检查点
+把 MoE 专家量化到 **NVFP4**，同时把注意力与稠密层保持在 **FP8**。
+需要 `--moe-runner-backend flashinfer_trtllm_routed`（未指定时会自动选择）。
 
 ```bash Command
 sglang serve \
@@ -275,7 +272,7 @@ sglang serve \
   --tp 8
 ```
 
-or
+或
 
 ```bash Command
 sglang serve \
@@ -283,71 +280,56 @@ sglang serve \
   --tp 8
 ```
 
-Requires Blackwell (SM100+). The MTP layer in this checkpoint stays
-MXFP4-packed and is routed through the `Mxfp4FlashinferTrtllmMoEMethod` path
-automatically.
+需要 Blackwell（SM100+）。该检查点中的 MTP 层保持 MXFP4 打包，并自动路由到 `Mxfp4FlashinferTrtllmMoEMethod` 路径。
 
 <a id="hopper-note" />
 
-**Hopper (H100 / H200) note**
+**Hopper（H100 / H200）说明**
 
-Two options are available for running DeepSeek-V4 on Hopper:
+在 Hopper 上运行 DeepSeek-V4 有两条路可选：
 
-- **Original FP4 checkpoints** — apply the W4A16 MoE kernels (Marlin) as the command generator picks for Hopper cells. This path works on both H100 and H200 and is the only option for H100 (no FP8 path). It is TP-only; on H200 the Pro variant fits on a single 8-GPU node, while H100 Pro needs 2 nodes (TP=16).
-- **Converted FP8 checkpoints** (H100 and H200 only) — pre-repackaged FP8 weights at [`sgl-project/DeepSeek-V4-Flash-FP8`](https://huggingface.co/sgl-project/DeepSeek-V4-Flash-FP8) and [`sgl-project/DeepSeek-V4-Pro-FP8`](https://huggingface.co/sgl-project/DeepSeek-V4-Pro-FP8) unlock DP-attention + DeepEP and richer parallelism (e.g. Pro TP=16 across 2 nodes).
+- **原始 FP4 检查点** —— 命令生成器为 Hopper 单元格选用 W4A16 MoE kernel（Marlin）。该路径在 H100 与 H200 上均可工作，也是 H100 的唯一选择（无 FP8 路径）。它仅支持 TP；H200 上 Pro 变体可装入单个 8-GPU 节点，而 H100 Pro 需要 2 个节点（TP=16）。
+- **转换后的 FP8 检查点**（仅 H100 与 H200）—— 预打包的 FP8 权重位于 [`sgl-project/DeepSeek-V4-Flash-FP8`](https://huggingface.co/sgl-project/DeepSeek-V4-Flash-FP8) 与 [`sgl-project/DeepSeek-V4-Pro-FP8`](https://huggingface.co/sgl-project/DeepSeek-V4-Pro-FP8)，可解锁 DP-attention + DeepEP 以及更丰富的并行度（例如 Pro 跨 2 节点的 TP=16）。
 
-On these FP8 checkpoints you can additionally enable the all-FP8 **MegaMoE** path on SM90 for higher long-context / large-decode throughput — see the **SM90 (Hopper) FP8 MegaMoE** note in Configuration Tips below.
+在这些 FP8 检查点上，还可以在 SM90 启用全 FP8 的 **MegaMoE** 路径，以提升长上下文/大解码吞吐——见下方配置技巧中的 **SM90 (Hopper) FP8 MegaMoE** 说明。
 
-PD-Disagg recipes on H200 may require `docker run --privileged --ulimit memlock=-1`
-(or `--device /dev/infiniband:/dev/infiniband --cap-add IPC_LOCK`) so mooncake
-can discover the IB HCAs; without IB exposure mooncake silently falls back to
-TCP, which can lead to garbled KV transfer on large checkpoints.
+H200 上的 PD 分离方案可能需要 `docker run --privileged --ulimit memlock=-1`
+（或 `--device /dev/infiniband:/dev/infiniband --cap-add IPC_LOCK`），让 mooncake
+能发现 IB HCA；若未暴露 IB，mooncake 会静默回退到 TCP，在大检查点上可能导致 KV 传输损坏。
 
-**RTX PRO 6000 (SM120 / Blackwell Desktop) note**
+**RTX PRO 6000（SM120 / Blackwell 桌面）说明**
 
-RTX PRO 6000 (96 GB) runs **Flash only** with the FlashInfer MXFP4 MoE runner.
-V4-Pro doesn't fit on 8× 96 GB; the Deploy panel greys out unsupported recipes.
-HiCache and MegaMoE are **not** supported on RTX PRO 6000.
+RTX PRO 6000（96 GB）仅用 FlashInfer MXFP4 MoE runner 运行 **Flash**。
+V4-Pro 装不进 8× 96 GB；部署面板会置灰不支持的方案。
+RTX PRO 6000 上**不支持** HiCache 与 MegaMoE。
 
-**AMD (MI300X / MI355X) note**
+**AMD（MI300X / MI355X）说明**
 
-- **Model checkpoints** — for correct accuracy, the FP4 model uses the stock `deepseek-ai/DeepSeek-V4-{Flash,Pro}`, and the FP8 model uses the repackaged `sgl-project/DeepSeek-V4-{Flash,Pro}-FP8`.
-- **Supported models** — **MI300X** supports DeepSeek-V4-Flash in FP8; **MI355X** supports DeepSeek-V4-Flash / Pro in both FP4 and FP8. All recipes run single-node.
-- **TP / DP setting** — both TP=4 and TP=8 are supported. At low concurrency we recommend **TP-only**; at high concurrency use **TP + DP**, which additionally needs `--dp 8 --enable-dp-attention --enable-prefill-delayer --prefill-delayer-max-delay-ms 5000`.
-- **MTP** — speculative decoding is supported; add `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`.
-- **Kernels** — uses the Unified KV attention and the flydsl MoE.
+- **模型检查点** —— 为保证正确精度，FP4 模型使用原版 `deepseek-ai/DeepSeek-V4-{Flash,Pro}`，FP8 模型使用重新打包的 `sgl-project/DeepSeek-V4-{Flash,Pro}-FP8`。
+- **支持的模型** —— **MI300X** 支持 FP8 的 DeepSeek-V4-Flash；**MI355X** 支持 FP4 与 FP8 的 DeepSeek-V4-Flash / Pro。所有方案均为单节点运行。
+- **TP / DP 设置** —— TP=4 与 TP=8 均支持。低并发时推荐**仅 TP**；高并发时用 **TP + DP**，需要额外加 `--dp 8 --enable-dp-attention --enable-prefill-delayer --prefill-delayer-max-delay-ms 5000`。
+- **MTP** —— 支持投机解码；加 `--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`。
+- **Kernel** —— 使用 Unified KV 注意力与 flydsl MoE。
 
 **MegaMoE**
 
-MegaMoE fuses expert dispatch + GEMM into a single kernel for higher throughput
-on MoE layers. To enable it, use the **MegaMoE** chip in the Playground
-below — the playground will swap `--moe-a2a-backend deepep` for
-`--moe-a2a-backend megamoe` and add the relevant env vars automatically.
+MegaMoE 把专家分派 + GEMM 融合进单个 kernel，提升 MoE 层的吞吐量。启用方法：用下方 Playground 里的 **MegaMoE** 芯片——Playground 会自动把 `--moe-a2a-backend deepep` 换成 `--moe-a2a-backend megamoe` 并添加相关环境变量。
 
-Two variants are exposed:
-- **W4A8** — default MegaMoE kernel (FP4 weights, FP8 activations).
-- **W4A4** — adds `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1` and
-  `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1` to run the custom W4A4
-  kernel (FP4 activations). Higher throughput with negligible accuracy drop
-  (~89.5 GPQA on Pro).
+暴露两个变体：
+- **W4A8** —— 默认 MegaMoE kernel（FP4 权重、FP8 激活）。
+- **W4A4** —— 增加 `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1` 与 `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1`，运行自定义 W4A4 kernel（FP4 激活）。吞吐更高，精度损失可忽略（Pro 上约 89.5 GPQA）。
 
-Notes:
-- The W4A8 / W4A4 variants above are **Blackwell-only** (B200 / B300 / GB200 / GB300). On **Hopper (SM90, H100 / H200)** use the all-FP8 MegaMoE path described below instead.
-- MegaMoE is **only wired into the `high-throughput` recipe** on Blackwell (per [sgl-project/sglang#26451](https://github.com/sgl-project/sglang/pull/26451)). The chip is hidden on `low-latency` and `balanced` — switch to `high-throughput` to expose it.
-- When running MegaMoE, don't set `--moe-runner-backend` manually.
-- Adjust `SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK` based on your workload and memory usage. Setting higher number of tokens for MegaMoE requires more HBM space (recommended: 8320 for high-throughput).
+注意：
+- 上面的 W4A8 / W4A4 变体**仅限 Blackwell**（B200 / B300 / GB200 / GB300）。在 **Hopper（SM90，H100 / H200）** 上请改用下面描述的全 FP8 MegaMoE 路径。
+- MegaMoE **只接入 Blackwell 上的 `high-throughput` 方案**（见 [sgl-project/sglang#26451](https://github.com/sgl-project/sglang/pull/26451)）。该芯片在 `low-latency` 与 `balanced` 上隐藏——切到 `high-throughput` 才会出现。
+- 运行 MegaMoE 时不要手动设置 `--moe-runner-backend`。
+- 按你的负载与显存使用调整 `SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK`。MegaMoE 处理更多 token 需要更多 HBM 空间（high-throughput 推荐 8320）。
 
-**SM90 (Hopper) FP8 MegaMoE (Experimental)**
+**SM90（Hopper）FP8 MegaMoE（实验性）**
 
-On SM90 (Hopper, H100 / H200), the all-FP8 MegaMoE path routes MoE through the
-DeepGEMM `mega_moe` runner for higher long-context / large-decode throughput on
-the FP8 checkpoints. Unlike the Blackwell W4A8 / W4A4 variants above, experts
-stay in **FP8** — keep `SGLANG_DSV4_FP4_EXPERTS=0`. It requires a `sgl-deep-gemm`
-build with SM90 FP8 MegaMoE support. **Please use the latest image for this
-feature.**
+在 SM90（Hopper，H100 / H200）上，全 FP8 MegaMoE 路径把 MoE 路由到 DeepGEMM `mega_moe` runner，在 FP8 检查点上提升长上下文/大解码吞吐。与上面的 Blackwell W4A8 / W4A4 变体不同，这里的专家保持 **FP8** —— 保持 `SGLANG_DSV4_FP4_EXPERTS=0`。它需要一个带 SM90 FP8 MegaMoE 支持的 `sgl-deep-gemm` 构建。**该特性请使用最新镜像。**
 
-Enable the MegaMoE path with `--moe-a2a-backend megamoe` — or equivalently set
-`SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=1`, which auto-configures the same backend:
+用 `--moe-a2a-backend megamoe` 启用 MegaMoE 路径——或等价地设置 `SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=1`，它会自动配置相同的后端：
 
 ```bash Command
 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=4096 \
@@ -359,25 +341,19 @@ sglang serve \
   --chunked-prefill-size 4096
 ```
 
-`SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK` caps the number of tokens
-the MegaMoE path processes per rank (i.e. per GPU); the MegaMoE path is only used
-for batches at or below this cap. The right value depends on your parallelism /
-token-split scheme, and larger values reserve more HBM.
+`SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK` 限制 MegaMoE 路径每个 rank（即每张 GPU）处理的 token 数；只有不超过该上限的批会走 MegaMoE 路径。合适取值取决于你的并行/token 切分方式，更大的值会预留更多 HBM。
 
-**GB300 PD-Disagg cross-pod MNNVL**
+**GB300 PD 分离跨 pod MNNVL**
 
-On some GB300 clusters with cross-pod KV transfer over NVLink, mooncake may
-fail with `nvlink_transport.cpp:497 Requested address ... not found!`. If
-this happens, prepend `MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`
-to both prefill and decode `sglang serve` commands.
+在某些通过 NVLink 做跨 pod KV 传输的 GB300 集群上，mooncake 可能报 `nvlink_transport.cpp:497 Requested address ... not found!`。若遇到，在预填充与解码两条 `sglang serve` 命令前加 `MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`。
 
-## 3. Advanced Usage
+## 3. 高级用法
 
-### 3.1 Reasoning
+### 3.1 推理
 
-Enable the `deepseek-v4` reasoning parser (toggle **Reasoning Parser** in the **Parsers** card of the [Playground above](#playground)) to separate thinking from the final answer into `reasoning_content` vs `content`.
+启用 `deepseek-v4` 推理解析器（在[上方 Playground](#playground) 的 **Parsers** 卡片中切换 **Reasoning Parser**），即可把思考与最终答案分开为 `reasoning_content` 与 `content`。
 
-<Accordion title="Streaming with Thinking Process (Python)">
+<Accordion title="带思考过程的流式输出（Python）">
 
 ```python Example
 from openai import OpenAI
@@ -424,7 +400,7 @@ print()
 
 </Accordion>
 
-<Accordion title="Example Output">
+<Accordion title="输出示例">
 
 ```text Output
 We are asked: "What is 15% of 240?" This is a simple percentage problem. I need to provide a step-by-step solution. The user wants the solution explained step by step. I'll calculate 15% of 240: 0.15 * 240 = 36. I'll break it down into steps: understand what percent means, convert percentage to decimal or fraction, then multiply. I'll present the answer clearly.</think>To find 15% of 240, follow these steps:
@@ -447,11 +423,11 @@ Multiply the decimal form by 240:
 
 </Accordion>
 
-### 3.2 Tool Calling
+### 3.2 工具调用
 
-Enable the `deepseekv4` tool-call parser (toggle **Tool Call Parser** in the **Parsers** card of the [Playground above](#playground)) to surface structured tool calls via `message.tool_calls`.
+启用 `deepseekv4` 工具调用解析器（在[上方 Playground](#playground) 的 **Parsers** 卡片中切换 **Tool Call Parser**），即可通过 `message.tool_calls` 输出结构化的工具调用。
 
-<Accordion title="Python Example with Thinking Process">
+<Accordion title="带思考过程的 Python 示例">
 
 ```python Example
 from openai import OpenAI
@@ -529,7 +505,7 @@ print()
 
 </Accordion>
 
-<Accordion title="Example Output">
+<Accordion title="输出示例">
 
 ```text Output
 The user wants to know the weather in Beijing. I'll use the get_weather function with Beijing as the location. I don't need to specify a unit, so I'll just use the default.</think>
@@ -543,30 +519,34 @@ The user wants to know the weather in Beijing. I'll use the get_weather function
 
 </Accordion>
 
-### 3.3 HiCache (Hierarchical KV Caching)
+### 3.3 HiCache（分层 KV 缓存）
 
-HiCache enables multi-tier KV cache offloading (GPU → CPU → Storage), significantly expanding effective context capacity for long-context and multi-turn scenarios. Combined with UnifiedRadixTree, it provides intelligent prefix caching across all tiers.
+HiCache 支持多层级 KV 缓存卸载（GPU → CPU → 存储），显著扩展长上下文与多轮场景下的有效上下文容量。配合 UnifiedRadixTree，它能在所有层级间提供智能前缀缓存。
 
-To enable HiCache, open the **HiCache** card in the [Playground above](#playground) and flip **Enable**:
+要启用 HiCache，打开[上方 Playground](#playground) 的 **HiCache** 卡片并打开 **Enable**：
 
-- **L2 (GPU + CPU)** — leave Storage on `auto` (default). Cold KV pages spill to CPU pinned memory only.
-- **L3 (GPU + CPU + Storage)** — pick a Storage backend (`file` / `mooncake` / `hf3fs` / `nixl`); the Playground emits the canonical `page_first_direct` mem-layout + `direct` IO backend + `wait_complete` prefetch policy, matching the [HiCache best-practices recipe](../../../docs/advanced_features/hicache_best_practices).
+- **L2（GPU + CPU）** —— 让 Storage 保持 `auto`（默认）。冷 KV 页只会溢到 CPU 固定内存。
+- **L3（GPU + CPU + 存储）** —— 选一个存储后端（`file` / `mooncake` / `hf3fs` / `nixl`）；Playground 会输出规范的 `page_first_direct` 内存布局 + `direct` IO 后端 + `wait_complete` 预取策略，与 [HiCache 最佳实践方案](../../../docs/advanced_features/hicache_best_practices) 一致。
 
-For AMD devices,
-- **L2 (GPU + CPU)** — leave Storage on `auto` (default). Cold KV pages spill to CPU pinned memory only. Use `direct` IO backend + `page_first_direct` or `layer-first` mem-layout.
-- **L3 (GPU + CPU + Storage)** — pick a Storage backend (`file`); the Playground emits the canonical `page_first_direct` mem-layout + `direct` IO backend + `wait_complete` prefetch policy, matching the [HiCache best-practices recipe](../../../docs/advanced_features/hicache_best_practices).
+对于 AMD 设备：
+- **L2（GPU + CPU）** —— 让 Storage 保持 `auto`（默认）。冷 KV 页只会溢到 CPU 固定内存。使用 `direct` IO 后端 + `page_first_direct` 或 `layer-first` 内存布局。
+- **L3（GPU + CPU + 存储）** —— 选一个存储后端（`file`）；Playground 会输出规范的 `page_first_direct` 内存布局 + `direct` IO 后端 + `wait_complete` 预取策略，与 [HiCache 最佳实践方案](../../../docs/advanced_features/hicache_best_practices) 一致。
 
-The Write policy knob defaults to `write_through` (the upstream default); switch to `write_back` / `write_through_selective` to trade durability for write speed when the storage tier is slow.
+Write 策略旋钮默认为 `write_through`（上游默认）；当存储层较慢时，可切到 `write_back` / `write_through_selective`，用持久性换写入速度。
 
-For more details, see the [HiCache documentation](../../../docs/advanced_features/hicache).
+更多细节参见 [HiCache 文档](../../../docs/advanced_features/hicache)。
 
-### 3.4 DSpark (Speculative Decoding)
+<Note>
+💡 AI Infra 学习笔记：HiCache 是 KV 缓存的分层卸载——GPU 放不下就溢到 CPU 固定内存，再溢到存储（L2/L3），配合统一 Radix 树跨层做前缀缓存。本质是用"带宽换容量"：有效上下文容量大幅提升，但命中 CPU/存储层的请求会付出额外延迟。多轮对话与长上下文场景收益最大，需要按实际缓存命中率权衡层级配置。
+</Note>
 
-Flash Official (0731) bundles a DSpark draft head in `deepseek-ai/DeepSeek-V4-Flash-0731`. The target and draft weights therefore come from the same checkpoint: enable DSpark with `--speculative-algorithm DSPARK` and do not set a separate `--speculative-draft-model-path`.
+### 3.4 DSpark（投机解码） {#3-4-dspark-speculative-decoding}
 
-Unlike the EAGLE recipes for the original Flash and Pro checkpoints, this recipe omits `--speculative-num-steps`, `--speculative-eagle-topk`, and `--speculative-num-draft-tokens`. SGLang reads the DSpark shape from the checkpoint.
+Flash Official (0731) 在 `deepseek-ai/DeepSeek-V4-Flash-0731` 中捆绑了 DSpark 草稿头。因此目标与草稿权重来自同一个检查点：用 `--speculative-algorithm DSPARK` 启用 DSpark，不要单独设置 `--speculative-draft-model-path`。
 
-The verified 4×GB300 FP4 low-latency command is:
+与原始 Flash 和 Pro 检查点的 EAGLE 方案不同，该方案省略 `--speculative-num-steps`、`--speculative-eagle-topk` 与 `--speculative-num-draft-tokens`。SGLang 会从检查点读取 DSpark 形状。
+
+已验证的 4×GB300 FP4 低延迟命令：
 
 ```bash Command
 sglang serve \
@@ -582,12 +562,12 @@ sglang serve \
   --port 30000
 ```
 
-Keep `--mem-fraction-static 0.90` on this topology to leave enough headroom for the batch-256 verify graph. The first cold start can take 10–15 minutes while FlashInfer autotunes and SGLang captures the draft and verify graphs; later starts reuse the cache. This path is verified end-to-end on 4×GB300 with SGLang v0.5.16.
+在该拓扑上保持 `--mem-fraction-static 0.90`，为批大小为 256 的验证图留足余量。首次冷启动可能耗时 10–15 分钟（FlashInfer 自动调优、SGLang 捕获草稿与验证图）；后续启动会复用缓存。该路径已在 SGLang v0.5.16 的 4×GB300 上端到端验证。
 
-**Tune proposed draft tokens.** `--speculative-dspark-block-size N` asks DSpark to propose `N` tokens per step; the target verifies a window of `N + 1`. If the flag is omitted, SGLang reads the value from the checkpoint. The current 0731 checkpoint resolves to five proposed tokens, which is the verified default. Use the **DSpark Proposed Draft Tokens** slider in the [Playground](#playground) to sweep one through five.
+**调节提议的草稿 token 数。** `--speculative-dspark-block-size N` 让 DSpark 每步提议 `N` 个 token；目标模型验证一个 `N + 1` 的窗口。省略该参数时，SGLang 从检查点读取取值。当前 0731 检查点解析为 5 个提议 token，即已验证的默认值。用 [Playground](#playground) 里的 **DSpark Proposed Draft Tokens** 滑块在 1 到 5 之间扫描。
 
-Larger blocks can improve decode latency when acceptance stays high, but they also increase verification work and graph memory. Start from the checkpoint default, then sweep downward under the real prompt-length and concurrency distribution. The gain is usually largest for short interactive traffic and narrows as prefill dominates. Track P50/P99 TTFT and TPOT, total throughput, accepted length, GPU memory, and stop rate rather than choosing from acceptance alone.
+接受率高时更大的块能改善解码延迟，但也会增加验证工作量与图显存。从检查点默认值出发，在真实的提示词长度与并发分布下向下扫描。收益通常在短交互流量下最大，随着预填充占主导而收窄。请跟踪 P50/P99 TTFT 与 TPOT、总吞吐、接受长度、GPU 显存与停机率，而不要只看接受率。
 
-For every candidate, compare with the same recipe without `--speculative-algorithm DSPARK`. Restart the server between the DSpark and non-speculative legs, keep the request corpus, sampling, concurrency, and warmup identical, and give each `bench_serving` leg its own `--flush-cache`. Leave `--speculative-draft-attention-backend` unset unless a separate profiling run justifies an override.
+对每个候选值，都要与去掉 `--speculative-algorithm DSPARK` 的相同方案对比。在 DSpark 与非投机两段之间重启服务端，保持请求语料、采样、并发与预热一致，并给每条 `bench_serving` 段各自的 `--flush-cache`。除非单独的剖析运行证明了覆盖的合理性，否则保持 `--speculative-draft-attention-backend` 不设置。
 
-DSpark currently requires CUDA, `pp_size == 1`, and DP Attention disabled. It is not compatible with PD disaggregation on current SGLang releases; turn DSpark off before selecting a prefill or decode role. The DP-Attention and MI355X Flash Official recipes therefore run target-only. If a larger draft block or concurrency causes graph-capture OOM, lower `--mem-fraction-static`, the draft block size, or the configured maximum running requests, then rerun both performance and accuracy gates.
+DSpark 目前需要 CUDA、`pp_size == 1`，且禁用 DP Attention。它不兼容当前 SGLang 发布版的 PD 分离部署；在选 prefill 或 decode 角色前先关掉 DSpark。因此 DP-Attention 与 MI355X Flash Official 方案只能目标模型单独运行。若更大的草稿块或并发导致图捕获 OOM，请降低 `--mem-fraction-static`、草稿块大小或配置的最大运行请求数，然后重跑性能与准确率两道门槛。

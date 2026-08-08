@@ -1,69 +1,73 @@
 ---
 title: Llama-3.3-70B
 metatags:
-    description: "Deploy Llama-3.3-70B-Instruct with SGLang on AMD GPUs - 128K context, enhanced reasoning, tool calling, and multilingual support."
+    description: "用 SGLang 在 AMD GPU 上部署 Llama-3.3-70B-Instruct——128K 上下文、增强推理、工具调用与多语言支持。"
 ---
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Llama-3.3-70B-Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct) is Meta's latest 70 billion parameter instruction-tuned language model, featuring improved performance and efficiency over Llama 3.1. With a 128K token context window and enhanced capabilities across reasoning, coding, and multilingual tasks, Llama 3.3 delivers state-of-the-art results while maintaining accessibility for production deployment.
+[Llama-3.3-70B-Instruct](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct) 是 Meta 最新的 700 亿参数指令微调语言模型，在性能和效率上都优于 Llama 3.1。它拥有 128K token 的上下文窗口，在推理、编码和多语言任务上能力更强，在给出 SOTA 级结果的同时，也保持了生产部署的易用性。
 
-**Key Features:**
+<Note>
+💡 AI Infra 学习笔记：70B 模型能单卡部署，核心是显存账。BF16 权重约 140GB，刚好塞进 MI300X 的 192GB——剩下的显存才用来放 KV 缓存和中间激活，所以 `--mem-fraction-static` 和上下文长度就成了能否跑得下的关键。换成 FP8 量化后权重减半（约 70GB），给 KV 缓存留出的空间更大，这也是 FP8 变体（如 `-FP8-KV`）在服务场景里受欢迎的原因。
+</Note>
 
-- **Enhanced Performance**: Improved instruction following, reasoning, and task completion over Llama 3.1
-- **Tool Calling**: Native support for function calling and tool use scenarios
-- **Multilingual Support**: Optimized for 8 languages (English, German, French, Italian, Portuguese, Hindi, Spanish, and Thai)
-- **Extended Context**: 128K token context window for processing long documents and complex tasks
-- **Efficient Deployment**: 70B parameters enable deployment on single GPU with AMD MI300X
+**核心特性：**
 
-**License:**
-Llama 3.3 is licensed under the Llama 3.3 Community License. See [LICENSE](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct/blob/main/LICENSE) for details.
+- **更强的性能**：指令遵循、推理和任务完成度相对 Llama 3.1 都有提升
+- **工具调用**：原生支持函数调用和工具使用场景
+- **多语言支持**：针对 8 种语言优化（英语、德语、法语、意大利语、葡萄牙语、印地语、西班牙语和泰语）
+- **超长上下文**：128K token 的上下文窗口，可处理长文档和复杂任务
+- **部署高效**：70B 参数可在一张 AMD MI300X 上完成部署
 
-For more details, please refer to the [official Llama models repository](https://github.com/meta-llama/llama-models).
+**许可证：**
+Llama 3.3 采用 Llama 3.3 Community License 许可。详情见 [LICENSE](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct/blob/main/LICENSE)。
 
-## 2. SGLang Installation
+更多细节请参考 [Llama 官方模型仓库](https://github.com/meta-llama/llama-models)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. SGLang 安装
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+SGLang CPU 安装请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides deployment configurations optimized for AMD GPUs (MI300X, MI325X, MI355X) and Intel Xeon CPUs.
+## 3. 模型部署
 
-### 3.1 Interactive Configuration
+本节提供针对 AMD GPU（MI300X、MI325X、MI355X）和 Intel Xeon CPU 优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your AMD GPU setup.
+### 3.1 交互式配置
+
+**交互式命令生成器**：用下方的配置选择器，根据你的 AMD GPU 配置自动生成对应的部署命令。
 
 import { Llama33Deployment } from "/src/snippets/autoregressive/llama33-70b-deployment.jsx";
 
 <Llama33Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置要点
 
-**AMD GPU Deployment:**
+**AMD GPU 部署：**
 
-- All AMD GPUs (MI300X, MI325X, MI355X) support TP=1 for both BF16 and FP8 variants
-- **FP8 Model Variant**: Use AMD's optimized `amd/Llama-3.3-70B-Instruct-FP8-KV`
-- **Tool Calling**: Enable with `--tool-call-parser llama3` for function calling support
-- **Higher Throughput**: Optional TP=2 or TP=4 can be used for increased throughput
+- 所有 AMD GPU（MI300X、MI325X、MI355X）在 BF16 和 FP8 版本下都支持 TP=1
+- **FP8 模型版本**：用 AMD 优化过的 `amd/Llama-3.3-70B-Instruct-FP8-KV`
+- **工具调用**：用 `--tool-call-parser llama3` 启用函数调用支持
+- **更高吞吐**：可选 TP=2 或 TP=4 以提升吞吐
 
-**Xeon CPU Deployment:**
+**Xeon CPU 部署：**
 
-Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中「启动推理引擎」一节的 `Notes` 部分，了解参数如何配置，尤其是 TP（张量并行）和 NUMA 绑定的设置。
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基础用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Advanced Usage
+### 4.2 进阶用法
 
-#### 4.2.1 Tool Calling
+#### 4.2.1 工具调用
 
-Llama 3.3 70B Instruct supports native tool calling. Enable the tool parser during deployment:
+Llama 3.3 70B Instruct 原生支持工具调用。部署时启用工具解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -74,7 +78,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Python Example:**
+**Python 示例：**
 
 ```python Example
 from openai import OpenAI
@@ -128,7 +132,7 @@ if message.tool_calls:
     print(f"Arguments: {tool_call.function.arguments}")
 ```
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After executing the function, send the result back
@@ -168,9 +172,9 @@ print(final_response.choices[0].message.content)
 # Output: "The current weather in Tokyo is 22°C and sunny. A perfect day!"
 ```
 
-#### 4.2.2 Long Context Processing
+#### 4.2.2 长上下文处理
 
-Leverage the 128K context window for processing long documents:
+利用 128K 上下文窗口处理长文档：
 
 ```python Example
 from openai import OpenAI
@@ -195,11 +199,15 @@ response = client.chat.completions.create(
 print(response.choices[0].message.content)
 ```
 
-## 5. Benchmarking
+<Note>
+💡 AI Infra 学习笔记：长上下文（128K）场景下，KV 缓存随输入长度线性增长，单个请求就可能吃掉数 GB 显存。推理引擎的应对包括分块预填充（chunked prefill）平滑显存峰值、前缀缓存（prefix caching）复用公共前缀，以及 KV 量化。这也是评估长上下文模型能否在生产环境落地时最需要关注的内存维度。
+</Note>
 
-Use the SGLang benchmarking suite to test model performance with different workload patterns:
+## 5. 基准测试
 
-### 5.1 Basic Benchmark Command
+用 SGLang 基准测试套件测试模型在不同负载模式下的表现：
+
+### 5.1 基础基准测试命令
 
 ```bash Command
 python -m sglang.bench_serving \
@@ -211,25 +219,25 @@ python -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-### 5.2 Adjusting Benchmark Parameters
+### 5.2 调整基准测试参数
 
-**Input/Output Length**: Adjust `--random-input` and `--random-output` to test different workload patterns:
+**输入/输出长度**：调整 `--random-input` 和 `--random-output`，测试不同的负载模式：
 
-- Short conversations: `--random-input 1024 --random-output 1024`
-- Long outputs: `--random-input 1024 --random-output 8192`
-- Long inputs: `--random-input 8192 --random-output 1024`
+- 短对话：`--random-input 1024 --random-output 1024`
+- 长输出：`--random-input 1024 --random-output 8192`
+- 长输入：`--random-input 8192 --random-output 1024`
 
-**Concurrency Levels**: Adjust `--max-concurrency` to test different load scenarios:
+**并发级别**：调整 `--max-concurrency`，测试不同的负载场景：
 
-- Low concurrency (latency-focused): `--max-concurrency 1 --num-prompts 100`
-- Medium concurrency (balanced): `--max-concurrency 16 --num-prompts 1000`
-- High concurrency (throughput-focused): `--max-concurrency 100 --num-prompts 2000`
+- 低并发（偏重延迟）：`--max-concurrency 1 --num-prompts 100`
+- 中等并发（均衡）：`--max-concurrency 16 --num-prompts 1000`
+- 高并发（偏重吞吐）：`--max-concurrency 100 --num-prompts 2000`
 
 ---
 
-## 📚 Additional Resources
+## 📚 更多资源
 
-- [Meta Llama Models Repository](https://github.com/meta-llama/llama-models)
-- [Llama 3.3 Model Card](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)
-- [SGLang Documentation](/)
-- [AMD ROCm Documentation](https://rocm.docs.amd.com/)
+- [Meta Llama 模型仓库](https://github.com/meta-llama/llama-models)
+- [Llama 3.3 模型卡](https://huggingface.co/meta-llama/Llama-3.3-70B-Instruct)
+- [SGLang 文档](/)
+- [AMD ROCm 文档](https://rocm.docs.amd.com/)

@@ -1,16 +1,16 @@
 ---
 title: Kimi-K3
-description: "Deploy Moonshot AI's Kimi-K3 with SGLang — a 2.8T-parameter hybrid Mixture-of-Experts vision-language model (Kimi Delta Attention + MLA, 16/896 active experts) with NVIDIA and AMD recipes."
+description: "用 SGLang 部署 Moonshot AI 的 Kimi-K3——2.8T 参数的混合专家视觉语言模型（Kimi Delta Attention + MLA，激活 16/896 专家），提供 NVIDIA 与 AMD 两种方案。"
 tag: NEW
 ---
 
-## Deployment
+## 部署
 
 <a id="install" />
 
-<Accordion title="Install SGLang">
+<Accordion title="安装 SGLang">
 
-For all methods and hardware platforms, see the [official SGLang installation guide](../../../docs/get-started/install).
+所有安装方式和硬件平台见 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
 <Tabs>
 
@@ -22,34 +22,34 @@ docker pull lmsysorg/sglang:kimi-k3-cu12 # CUDA12
 docker pull lmsysorg/sglang-rocm:v0.5.16-rocm720-mi35x-20260805 # ROCM daily image
 ```
 
-These tags publish with the public K3 launch; until then, build from the Dockerfiles linked below.
+这些标签会随 K3 公开发布一并放出；在此之前，请用下方链接的 Dockerfile 自行构建。
 
-For how to launch the image, see [Install → Method 3: Using Docker](../../../docs/get-started/install#method-3-using-docker). Substitute the inner `sglang serve ...` with what the command generator below produces.
+镜像的启动方式见 [安装 → 方法三：使用 Docker](../../../docs/get-started/install#method-3-using-docker)。把其中的 `sglang serve ...` 替换为下方命令生成器给出的命令。
 
 </Tab>
 
 </Tabs>
 
-If you do not want to use a Docker image, reproduce the dependency installation steps from the [CUDA 13 Dockerfile](https://github.com/sgl-project/sglang/blob/kimi-k3/docker/kimi_k3/kimi_k3_cu13.Dockerfile) or [CUDA 12 Dockerfile](https://github.com/sgl-project/sglang/blob/kimi-k3/docker/kimi_k3/kimi_k3_cu12.Dockerfile).
+如果不想用 Docker 镜像，可以照 [CUDA 13 Dockerfile](https://github.com/sgl-project/sglang/blob/kimi-k3/docker/kimi_k3/kimi_k3_cu13.Dockerfile) 或 [CUDA 12 Dockerfile](https://github.com/sgl-project/sglang/blob/kimi-k3/docker/kimi_k3/kimi_k3_cu12.Dockerfile) 中的步骤复现依赖安装。
 
 </Accordion>
 
-Pick your hardware, then the deployment shape and operating point. Node count follows the hardware recipe (B200 2×8, GB200 4×4, H100 4×8, B300 1×8, H200 2×8 — 4×8 on Unified High-Throughput, GB300 2×4, MI350X/MI355X 1×8), so it is not a separate choice.
+先选硬件，再选部署形态与工作点。节点数由硬件方案决定（B200 2×8、GB200 4×4、H100 4×8、B300 1×8、H200 2×8——Unified 高吞吐下为 4×8、GB300 2×4、MI350X/MI355X 1×8），所以不用单独选择。
 
-**PD Mode** — `Unified` serves prefill and decode together. `Prefill` / `Decode` split them into dedicated pools (see [PD disaggregation](#3-4-pd-disaggregation)); `Prefill` ships two strategies, both chunked at 16k. On the 8-GPU platforms (B300 1×8, GB300 2×4), `Default` is TP8 and `Long-Context` is `--pp-size 8 --tp-size 1`. On the 16-GPU platforms (B200 2×8, GB200 4×4), both are `--pp-size 16 --tp-size 1` and differ only in `--mem-fraction-static` (0.85 vs 0.90) — deep PP is the throughput shape there, not just the long-context one (see [Deep PP](#deep-pp-for-prefill)).
+**PD 模式**——`Unified` 让预填充和解码在同一批服务里进行。`Prefill` / `Decode` 则把它们拆分到各自的资源池（见 [PD 分离](#3-4-pd-disaggregation)）；`Prefill` 提供两种策略，都在 16k 处分块。在 8 卡平台上（B300 1×8、GB300 2×4），`Default` 是 TP8，`Long-Context` 是 `--pp-size 8 --tp-size 1`。在 16 卡平台上（B200 2×8、GB200 4×4），两者都是 `--pp-size 16 --tp-size 1`，只差在 `--mem-fraction-static`（0.85 与 0.90）——那里的吞吐形态靠深层 PP 实现，而不只是长上下文场景（见[用于预填充的深层 PP](#deep-pp-for-prefill)）。
 
-**Strategy** — the operating point within that shape:
+**策略**——同一形态下的工作点：
 
-- **Low-Latency** — no DCP, so the MLA KV stays TP-replicated. For chat. B200 splits its two nodes into PP2 × TP8; every other platform is flat TP.
-- **Balanced** — the accuracy-preserving default: PP2 × DCPEP8 on B200 (the two pipeline stages and DCP8 split KV and KDA state), TP16/DCP16 on GB200, TP8/DCP8 on B300/GB300, TP8 ROCm/AITER on MI35x.
-- **High-Throughput** — the large-scale lane: pick a **Cluster Size** and **Large-Scale Preset** in the Playground ([details](#large-scale-presets)). The cell itself is Balanced, except on H100 (plus `extra_buffer_lazy`) and H200 (widens to 4×8 TP32/EP32 at `--mem-fraction-static 0.90`).
+- **低延迟**——不开 DCP，MLA KV 保持按 TP 复制。适合对话场景。B200 把两个节点拆成 PP2 × TP8；其余平台都是纯 TP。
+- **均衡**——保持精度的默认配置：B200 用 PP2 × DCPEP8（两个流水线阶段和 DCP8 共同拆分 KV 与 KDA 状态），GB200 用 TP16/DCP16，B300/GB300 用 TP8/DCP8，MI35x 用 TP8 ROCm/AITER。
+- **高吞吐**——面向大规模的路子：在 Playground 里选 **Cluster Size** 和 **Large-Scale Preset**（[详情](#large-scale-presets)）。格子本身仍是 Balanced，只有 H100（加上 `extra_buffer_lazy`）和 H200（在 `--mem-fraction-static 0.90` 下扩成 4×8 的 TP32/EP32）例外。
 
-`Long-Context` appears only under the `Prefill` PD mode; for long-context unified serving on B200, start from High-Throughput and raise `--context-length`.
+`Long-Context` 只在 `Prefill` PD 模式下出现；如果要在 B200 上做长上下文的 Unified 服务，从 High-Throughput 出发并把 `--context-length` 调大即可。
 
-**Spec Decode** — layers onto the strategy without changing it, on every platform except B200. DSPARK proposes 7 draft tokens per step (tune in the Playground) and requires `pp_size == 1`, so on B200 it also drops the pipeline and re-lays the same 16 GPUs flat: PP2 × TP8 → TP16, PP2 × DCPEP8 → DCPEP16. DFLASH has no published draft checkpoint. The win is largest on short interactive traffic and fades as the prompt grows.
+**投机解码**——叠加在策略之上而不改变它，除 B200 外的所有平台都支持。DSPARK 每步提议 7 个草稿 token（可在 Playground 里调整），并要求 `pp_size == 1`，所以在 B200 上它会去掉流水线、把同一批 16 卡重新铺平：PP2 × TP8 → TP16，PP2 × DCPEP8 → DCPEP16。DFLASH 没有公开的草稿检查点。收益在短交互式流量上最大，随提示词变长而递减。
 
 <Note>
-`--mamba-full-memory-ratio` is the one sizing flag, computed live: set your average request length in the [Mamba ratio calculator](#mamba-ratio-calculator); everything else follows the panels, and the result is pinned into the command.
+`--mamba-full-memory-ratio` 是唯一的容量参数，实时计算：在 [Mamba 比例计算器](#mamba-ratio-calculator) 里设置你的平均请求长度；其余都跟随面板，结果会被固定到命令里。
 </Note>
 
 import { Deployment } from "/src/snippets/_deployment.jsx";
@@ -59,75 +59,73 @@ import { KimiK3MambaRatioCalculator } from "/src/snippets/_kimi_k3_mamba_ratio_c
 
 <Deployment config={config} benchmarks={benchmarks} />
 
-### Mamba ratio calculator
+### Mamba 比例计算器 {#mamba-ratio-calculator}
 
 <KimiK3MambaRatioCalculator />
 
-<Accordion title="How --mamba-full-memory-ratio is calculated">
+<Accordion title="计算 --mamba-full-memory-ratio 的原理">
 
-`--mamba-full-memory-ratio` is the ratio between the KDA state pool and the MLA KV pool. Every parameter below except `L` is read live from the Deploy panel and Playground selection; the balanced value is the per-request cost ratio:
+`--mamba-full-memory-ratio` 是 KDA 状态池与 MLA KV 池之间的比例。下面除 `L` 外，每个参数都实时读取自 Deploy 面板和 Playground 的选择；均衡值就是每个请求的成本比：
 
 ```text
 ratio = (S + D) x state_bytes / (L x (mla_kv_bytes / DCP + draft_kv_bytes))
 ```
 
-- `S` — KDA state slots per request: `extra_buffer=5`, `extra_buffer_lazy=4`, `no_buffer=3`, disabled radix cache `=1`. `SGLANG_OPT_MAMBA_SKIP_DECODE_LOCK` frees one slot on the extra-buffer strategies; with the overlap scheduler off (or `pp > 1`, which disables it) the track buffer costs one slot instead of two.
-- `D` — verify intermediate states under speculative decoding: `0` when disabled, otherwise DSPARK block size + 1 (`8` at the default 7). ReplaySSM (`--enable-linear-replayssm-spec`) folds them into a per-slot ring, returning `D` to `0`.
-- `state_bytes` — one state slot's bytes, from K3's fixed geometry, the attention-TP width, and the SSM dtype.
-- `mla_kv_bytes` — one token's MLA latent KV bytes (KV-dtype dependent); DCP shards it across its ranks. The DSPARK draft model's KV (~1.4 KB per token) is replicated on every rank, so it enters flat — negligible without DCP, the same order as the sharded MLA share under DCP8.
-- `L` — average total request length in tokens: input + output.
+- `S`——每个请求的 KDA 状态槽数：`extra_buffer=5`、`extra_buffer_lazy=4`、`no_buffer=3`、禁用 radix 缓存时为 `1`。`SGLANG_OPT_MAMBA_SKIP_DECODE_LOCK` 在 extra-buffer 策略上能释放一个槽；关闭重叠调度器（或 `pp > 1` 会禁用）时，track 缓冲只占一个槽而不是两个。
+- `D`——投机解码下的校验中间状态数：关闭时为 `0`，否则为 DSPARK 块大小 + 1（默认 7 时为 `8`）。ReplaySSM（`--enable-linear-replayssm-spec`）把它们折叠进每个槽的环形缓冲，让 `D` 回到 `0`。
+- `state_bytes`——单个状态槽的字节数，由 K3 的固定几何结构、attention-TP 宽度和 SSM 数据类型决定。
+- `mla_kv_bytes`——单个 token 的 MLA 潜在 KV 字节数（取决于 KV 数据类型）；DCP 会把它分片到各 rank。DSPARK 草稿模型的 KV（每个 token 约 1.4 KB）在每个 rank 上复制，所以按原样计入——不开 DCP 时几乎可以忽略，DCP8 下则与分片后的 MLA 部分同量级。
+- `L`——请求的平均总长度（token 数）：输入 + 输出。
 
 </Accordion>
 
 <a id="playground" style={{ scrollMarginTop: "96px" }} />
 
-## Advanced Features Playground
+## 进阶功能 Playground
 
-The Playground is where you experiment with **SGLang features beyond the deployment matrix**. The Deploy panel above emits the recipes the SGLang team is converging on; the Playground lets you turn on additional knobs on top of whichever cell the Deploy panel is currently showing.
+Playground 用来尝试部署矩阵之外的 **SGLang 进阶功能**。上方的 Deploy 面板给出的是 SGLang 团队正在收敛的推荐配置；Playground 则允许你在 Deploy 面板当前显示的格子之上开启额外开关。
 
 import { Playground } from "/src/snippets/_playground.jsx";
 
 <Playground config={config} />
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-**Kimi-K3** is Moonshot AI's flagship hybrid MoE vision-language model: **2.8 trillion parameters**, **16 of 896 experts** active per token, roughly **2.5× the scaling efficiency of Kimi-K2**. The backbone interleaves **Kimi Delta Attention (KDA)** with MLA across 93 layers (plus Attention Residuals and Stable LatentMoE); serving supports image input and a **1M-token** window with prefix caching. Weights ship in **MXFP4**: the FlashInfer MXFP4 (trtllm-gen SiTU) runner serves them on Blackwell, Marlin (W4A16) elsewhere, MegaMoE for short-context batch throughput.
-
-K3 **always runs with thinking enabled**, with reasoning depth controlled by `reasoning_effort` (`low` / `high` / `max`; default `max`).
+**Kimi-K3** 是 Moonshot AI 的旗舰混合 MoE 视觉语言模型：**总参数 2.8 万亿**，每个 token 激活 **896 个专家中的 16 个**，扩展效率约为 **Kimi-K2 的 2.5 倍**。主干在 93 层里交错使用 **Kimi Delta Attention（KDA）** 与 MLA（并带 Attention Residuals 和 Stable LatentMoE）；服务端支持图像输入和带前缀缓存的 **1M token** 窗口。权重以 **MXFP4** 发布：Blackwell 上由 FlashInfer MXFP4（trtllm-gen SiTU）运行器服务，其它平台用 Marlin（W4A16），短上下文批量吞吐用 MegaMoE。
 
 <Note>
-Kimi-K3 is Moonshot AI's first open-source model in the trillion-plus class; **full model weights
-are scheduled to release by July 27, 2026**. The recipes on this page were validated on the public
-[`sgl-project/sglang` `kimi-k3` branch](https://github.com/sgl-project/sglang/tree/kimi-k3) — the HuggingFace
-repository (`moonshotai/Kimi-K3`) and a public `lmsysorg/sglang` image with K3 support will be
-available at launch.
-
-Every cell in the Deploy panel above is currently marked **Final Verification In Progress**: the
-recipe runs, but its serving round on the final weights and current code is still open. Re-measure
-throughput and accuracy before you rely on any of them.
+💡 AI Infra 学习笔记：K3 是「线性注意力 + 传统注意力」的混合架构——KDA（类 Mamba 的循环状态）以线性复杂度做长程建模，MLA 负责高精度注意力。对推理引擎来说，混合架构意味着除了分页 KV 缓存，还要管理一份「循环状态」（KDA state）：它按最坏情况预留、决定并发上限，且不像 KV 那样能被 DCP 分片。这是新架构给 serving 带来的新内存维度。
 </Note>
 
-**Recommended generation:** `temperature=1.0`, `top_p=0.95`, `presence_penalty=0`, `frequency_penalty=0` (fixed by the model; informational — do not hardcode in sample code).
+K3 **始终开启思考**，推理深度由 `reasoning_effort` 控制（`low` / `high` / `max`；默认 `max`）。
 
-**Resources:** [HuggingFace](https://huggingface.co/moonshotai/Kimi-K3) · [Kimi-K3 Quickstart](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart).
+<Note>
+Kimi-K3 是 Moonshot AI 首个万亿参数级别的开源模型；**完整模型权重计划在 2026 年 7 月 27 日前发布**。本页的配置是在公开的 [`sgl-project/sglang` `kimi-k3` 分支](https://github.com/sgl-project/sglang/tree/kimi-k3) 上验证的——HuggingFace 仓库（`moonshotai/Kimi-K3`）和支持 K3 的公开 `lmsysorg/sglang` 镜像会在发布时提供。
 
-## 2. Configuration Tips
+上方 Deploy 面板里的每个格子目前都标记为 **最终验证中**：配置可以运行，但针对最终权重和当前代码的服务化测试还未完成。在依赖任何一项之前，请重新测量吞吐与精度。
+</Note>
 
-**Memory: two pools, one flag.** K3 splits static memory into a worst-case-reserved **KDA state pool** (it sets the concurrency ceiling) and a paged **MLA KV pool**, divided by `--mamba-full-memory-ratio`. The command panel pins that flag to the [calculator](#mamba-ratio-calculator)'s output — set your average request length there; every other calculator input follows the panels. After boot, read back `max_total_num_tokens` (the KV side) and the admitted-request cap (the state side).
+**推荐生成参数：** `temperature=1.0`、`top_p=0.95`、`presence_penalty=0`、`frequency_penalty=0`（由模型固定；仅供参考——不要在示例代码里写死）。
 
-Capacity levers, all in the Playground. Each trades precision or cache behavior for capacity — re-verify accuracy on your workload:
+**资源：** [HuggingFace](https://huggingface.co/moonshotai/Kimi-K3) · [Kimi-K3 快速上手](https://platform.kimi.ai/docs/guide/kimi-k3-quickstart)。
 
-| Lever | Effect |
+## 2. 配置要点 {#2-configuration-tips}
+
+**显存：两个池、一个参数。** K3 把静态显存分成按最坏情况预留的 **KDA 状态池**（决定并发上限）和分页的 **MLA KV 池**，比例由 `--mamba-full-memory-ratio` 决定。命令面板会把该参数固定为[计算器](#mamba-ratio-calculator)的输出——在那里设置平均请求长度即可；计算器的其它输入都跟随面板。启动后，回读 `max_total_num_tokens`（KV 一侧）和准入请求上限（状态一侧）。
+
+容量调节手段都在 Playground 里。每一项都是用精度或缓存行为换容量——请在真实负载上重新验证精度：
+
+| 调节手段 | 效果 |
 |---|---|
-| `--mamba-radix-cache-strategy extra_buffer_lazy` | 4 state slots per request instead of 5 |
-| `--mamba-ssm-dtype bfloat16` | ~halves state bytes; with spec on, KDA verification falls back from the fused kernel to Triton |
-| `--kv-cache-dtype fp8_e4m3` | halves KV bytes per token; under PD both roles must match at connect |
-| `--mem-fraction-static` 0.90–0.92 | cheapest first win when the boot log shows a large idle `avail mem` |
-| `SGLANG_OPT_MAMBA_SKIP_DECODE_LOCK=1` | frees one more slot per request (experimental, under validation) |
+| `--mamba-radix-cache-strategy extra_buffer_lazy` | 每个请求 4 个状态槽（而不是 5 个） |
+| `--mamba-ssm-dtype bfloat16` | 状态字节约减半；开启投机后，KDA 校验从融合 kernel 回退到 Triton |
+| `--kv-cache-dtype fp8_e4m3` | 每个 token 的 KV 字节减半；PD 分离下两个角色连接时精度必须一致 |
+| `--mem-fraction-static` 0.90–0.92 | 当启动日志显示有大量空闲 `avail mem` 时，这是成本最低的优先项 |
+| `SGLANG_OPT_MAMBA_SKIP_DECODE_LOCK=1` | 每个请求再释放一个状态槽（实验性，验证中） |
 
-Speculation: DSPARK holds block size + 1 (= 8) intermediate states per request — the calculator folds this in — and an unset `--max-running-requests` resets to 48 under spec (the command panel reminds you; set it explicitly to raise).
+投机：DSPARK 每个请求持有块大小 + 1（= 8）个中间状态——计算器已把它计入——另外，未设置 `--max-running-requests` 时，开启投机后默认重置为 48（命令面板会提醒你；想调大请显式设置）。
 
-**MoE runner.** Leave `--moe-runner-backend` unset on Blackwell and it resolves to FlashInfer MXFP4 (W4A8, prebuilt trtllm-gen SiTU kernels) when the cubin pool is installed, Marlin (W4A16) otherwise; H100/H200 pin Marlin. The B200 Balanced and High-Throughput cells pin `flashinfer_mxfp4` explicitly because that is the shape they were brought up on — on an install without the pool, drop the flag to fall back to Marlin. The published Docker images already provision the **SiTU cubin pool**; to install it independently, run the same flow as the Dockerfile:
+**MoE 运行器。** Blackwell 上不设置 `--moe-runner-backend` 时，装好 cubin 池会解析为 FlashInfer MXFP4（W4A8，预构建的 trtllm-gen SiTU kernel），否则用 Marlin（W4A16）；H100/H200 固定用 Marlin。B200 的 Balanced 和 High-Throughput 格子显式固定了 `flashinfer_mxfp4`，因为这是它们调优时所用的形态——在没有 cubin 池的安装上，去掉该参数即可回退到 Marlin。发布的 Docker 镜像已预置 **SiTU cubin 池**；要独立安装，按 Dockerfile 同样的流程执行：
 
 ```bash
 wget https://github.com/sgl-project/whl/releases/download/trtllm_gen_moe_cubin_20260617/trtllm_gen_moe_cubin_pool_20260617_v0613rc1.zip
@@ -136,44 +134,44 @@ sudo unzip -q trtllm_gen_moe_cubin_pool_20260617_v0613rc1.zip -d /opt/trtllm_gen
 export SGLANG_TRTLLM_GEN_MOE_CUBIN_POOL=/opt/trtllm_gen_moe_cubin_pool/trtllm_gen_moe_cubin_pool_20260617_v0613rc1
 ```
 
-Remaining kernel sources JIT once from the public `flashinfer` wheel (a few minutes, cached).
+其余 kernel 源码会从公开的 `flashinfer` wheel 做一次 JIT 编译（几分钟，有缓存）。
 
-**Attention backend.** Leave all three attention knobs unset on Blackwell: K3 resolves prefill, decode, and — under DSPARK — verification as a set (`trtllm_mla` across the board; `cutedsl_mla` takes decode and verification under DCP). On the non-DCP recipes, setting any one of the three cancels the auto-resolution for the others. The B200 Balanced and High-Throughput cells pin `--decode-attention-backend cutedsl_mla`, which is what auto-resolution picks for those DCP recipes anyway — it is written out because it is the shape they were brought up on, not because it changes the resolution. H100/H200 pin `flashmla` for decode.
+**Attention 后端。** Blackwell 上让三个 attention 参数都保持默认：K3 会把预填充、解码和——开启 DSPARK 时的——校验作为一个整体解析（全部用 `trtllm_mla`；DCP 下解码和校验用 `cutedsl_mla`）。在非 DCP 配置里，显式设置其中任意一个，会取消另外两个的自动解析。B200 的 Balanced 和 High-Throughput 格子固定了 `--decode-attention-backend cutedsl_mla`，而这本来就是自动解析为这些 DCP 配置时选中的值——写出来只是因为这些格子是按这个形态调优的，并不是因为它改变了解析结果。H100/H200 的解码固定用 `flashmla`。
 
-**Context length.** `--context-length` bounds the longest accepted request plus some context-scaled buffers; it does not size the KV pool. For long context the lever that adds capacity is `fp8_e4m3` KV.
+**上下文长度。** `--context-length` 限制可接受的最长请求，外加一些随上下文缩放预留的缓冲；它并不决定 KV 池的大小。长上下文场景下，增加容量的手段是 `fp8_e4m3` KV。
 
-**DSPARK.** Adds `--speculative-algorithm DSPARK` plus the draft checkpoint on top of the showing strategy. Leave `--speculative-draft-attention-backend` unset. No serving round on the final draft checkpoint has landed — measure against the same recipe running NOSPEC before adopting.
+**DSPARK。** 在当前策略之上加上 `--speculative-algorithm DSPARK` 和草稿检查点。保持 `--speculative-draft-attention-backend` 不设置。针对最终草稿检查点的服务化测试尚未完成——采用前，请先与同一配置但不开启投机（NOSPEC）的运行结果对比。
 
-**Per-platform notes:**
+**各平台说明：**
 
-| Platform | Topology | Notes |
+| 平台 | 拓扑 | 说明 |
 |---|---|---|
-| B300 1×8 | TP8 (+DCP8) | accuracy-first defaults on Low-Latency and Balanced |
-| GB300 2×4 | TP8/DCP8 | MNNVL transport and cuMem auto-detected |
-| B200 2×8 | PP2 × TP8 on Low-Latency, PP2 × DCPEP8 on Balanced and High-Throughput. DSPARK re-lays the same 16 GPUs as TP16 / TP16+DCP16+EP16. PD prefill is TP1 × PP16 | Unified serves all three operating points; `Long-Context` is a `Prefill`-only strategy |
-| GB200 4×4 | TP16/DCP16 | MNNVL auto-detected |
-| H200 2×8 (4×8 on Unified High-Throughput) | TP16/EP16 + symm-mem, Marlin + FlashMLA; High-Throughput widens to TP32/EP32 over 4 nodes at mem-frac 0.90 with `extra_buffer_lazy` | same block on every node; export the cross-node NIC (`GLOO_SOCKET_IFNAME` / `NCCL_SOCKET_IFNAME`, `SGLANG_HOST_IP`); keep `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1` |
-| H100 4×8 | TP32/EP32, Marlin + FlashMLA | SM90a build of the K3 image; pin NCCL/Gloo to the same NIC on all nodes; least post-weight headroom (80 GB) |
-| MI350X/MI355X 1×8 | TP8 ROCm/AITER | AITER A8W4 FlyDSL MoE, Triton attention, graph bs up to 256, fp8 kvcache; DSPARK supported |
+| B300 1×8 | TP8 (+DCP8) | Low-Latency 与 Balanced 采用精度优先的默认配置 |
+| GB300 2×4 | TP8/DCP8 | MNNVL 传输与 cuMem 自动检测 |
+| B200 2×8 | Low-Latency 用 PP2 × TP8；Balanced 与 High-Throughput 用 PP2 × DCPEP8。DSPARK 会把同一批 16 卡重排为 TP16 / TP16+DCP16+EP16。PD 预填充用 TP1 × PP16 | Unified 覆盖全部三个工作点；`Long-Context` 是仅 `Prefill` 可用的策略 |
+| GB200 4×4 | TP16/DCP16 | MNNVL 自动检测 |
+| H200 2×8（Unified 高吞吐下为 4×8） | TP16/EP16 + symm-mem，Marlin + FlashMLA；High-Throughput 在 mem-frac 0.90 且带 `extra_buffer_lazy` 时扩成 4 节点 TP32/EP32 | 每个节点同一配置；导出跨节点网卡（`GLOO_SOCKET_IFNAME` / `NCCL_SOCKET_IFNAME`、`SGLANG_HOST_IP`）；保留 `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1` |
+| H100 4×8 | TP32/EP32，Marlin + FlashMLA | 使用 K3 镜像的 SM90a 构建；在所有节点上把 NCCL/Gloo 固定到同一网卡；加载权重后剩余显存最少（80 GB） |
+| MI350X/MI355X 1×8 | TP8 ROCm/AITER | AITER A8W4 FlyDSL MoE、Triton 注意力、graph bs 最高 256、fp8 KV 缓存；支持 DSPARK |
 
-**DCP notes** — the DCP cells are Balanced and High-Throughput on every Blackwell platform, in both the `Unified` and `Decode` roles:
+**DCP 说明**——所有 Blackwell 平台上的 DCP 格子都是 Balanced 和 High-Throughput，且在 `Unified` 与 `Decode` 两种角色下都是如此：
 
-- DCP is the only axis that shards the TP-replicated MLA KV; Low-Latency skips it.
-- Leave `--dcp-comm-backend` unset (fabric-resolved: `fi_a2a` on GB200/GB300, `a2a` on B200/B300).
-- No `--enable-symm-mem` under DCP (force-disabled for decode-graph correctness).
-- Explicit `tokenspeed_mla` force-rewrites `--kv-cache-dtype` to fp8; the default `cutedsl_mla` serves either dtype.
-- Calculator ratios run well above 1 here (`r > 1` is legal): `bfloat16` state buys admission, `fp8` KV buys context.
-- Don't use EP with an a2a backend: a2a buffers reclaim the KV that DCP buys. Compose only to measure. a2a backend is set when `SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=1` or `--moe-a2a-backend` is set.
+- DCP 是唯一能分片 TP 复制的 MLA KV 的维度；Low-Latency 不启用它。
+- 保持 `--dcp-comm-backend` 不设置（按互联自动解析：GB200/GB300 用 `fi_a2a`，B200/B300 用 `a2a`）。
+- DCP 下不要用 `--enable-symm-mem`（为保证解码图正确性会被强制禁用）。
+- 显式指定 `tokenspeed_mla` 会把 `--kv-cache-dtype` 强制重写为 fp8；默认的 `cutedsl_mla` 两种数据类型都支持。
+- 这里的计算器比例远大于 1（`r > 1` 是合法的）：`bfloat16` 状态换来更高的准入数，`fp8` KV 换来更长的上下文。
+- 不要在有 a2a 后端时使用 EP：a2a 缓冲会收回 DCP 换来的 KV 空间。组合只用于测量。设置 `SGLANG_OPT_USE_DEEPGEMM_MEGA_MOE=1` 或 `--moe-a2a-backend` 时即启用 a2a 后端。
 
-No cell has a serving round in this exact shape — treat them as starting points to verify.
+目前还没有任何格子在这种精确形态下完成过服务化测试——请把它们当作待验证的起点。
 
-## 3. Advanced Usage
+## 3. 进阶用法
 
-### 3.1 Reasoning
+### 3.1 推理
 
-K3 always thinks; the `kimi_k3` reasoning parser (toggle **Reasoning Parser** in the **Parsers** card of the [Playground above](#playground)) separates that thinking from the final answer — thinking lands in `message.reasoning_content`, the answer in `message.content`. Control the reasoning depth with `reasoning_effort` (`low` / `high` / `max`; default `max`).
+K3 始终思考；`kimi_k3` 推理解析器（在上方 [Playground](#playground) 的 **Parsers** 卡片里开关 **Reasoning Parser**）会把思考与最终答案分开——思考进入 `message.reasoning_content`，答案进入 `message.content`。用 `reasoning_effort`（`low` / `high` / `max`；默认 `max`）控制推理深度。
 
-<Accordion title="Reasoning Example (Python)">
+<Accordion title="推理示例（Python）">
 
 ```python Example
 from openai import OpenAI
@@ -191,7 +189,7 @@ print("Answer:", msg.content)
 
 </Accordion>
 
-<Accordion title="Example Output">
+<Accordion title="输出示例">
 
 ```text Output
 Pending update...
@@ -199,11 +197,11 @@ Pending update...
 
 </Accordion>
 
-### 3.2 Tool Calling
+### 3.2 工具调用
 
-Enable the `kimi_k3` tool-call parser (toggle **Tool Call Parser** in the **Parsers** card of the [Playground above](#playground)) to surface structured tool calls via `message.tool_calls`. Because K3 is a thinking model, the follow-up turn may put text in `reasoning_content` as well as `content` — print both.
+启用 `kimi_k3` 工具调用解析器（在上方 [Playground](#playground) 的 **Parsers** 卡片里开关 **Tool Call Parser**），即可通过 `message.tool_calls` 拿到结构化的工具调用。由于 K3 是思考模型，后续轮次可能在 `reasoning_content` 和 `content` 里都有文本——两个都打印。
 
-<Accordion title="Tool Calling Example (Python)">
+<Accordion title="工具调用示例（Python）">
 
 ```python Example
 from openai import OpenAI
@@ -233,7 +231,7 @@ print("Tool calls:", msg.tool_calls)
 
 </Accordion>
 
-<Accordion title="Example Output">
+<Accordion title="输出示例">
 
 ```text Output
 Pending update...
@@ -241,33 +239,37 @@ Pending update...
 
 </Accordion>
 
-### 3.3 HiCache (Hierarchical KV Caching)
+### 3.3 HiCache（分级 KV 缓存）
 
-K3's hybrid HiCache tiers the paged MLA KV **and** the KDA/mamba state across L1 (GPU) / L2 (host) / L3 (Mooncake) — enable it from the **HiCache** card in the [Playground above](#playground) for long multi-turn workloads.
+K3 的混合 HiCache 把分页 MLA KV 和 KDA/mamba 状态按 L1（GPU）/ L2（主机内存）/ L3（Mooncake）分级存放——在上方 [Playground](#playground) 的 **HiCache** 卡片里启用，适合长时间多轮对话负载。
 
-- On the DCP recipes (Blackwell Balanced / High-Throughput, in both the `Unified` and `Decode` roles), the host tiers are not fully DCP-aware yet: **L3 always, and L1+L2 with Spec Decode on, drop the DCP flags** (the command hints call it out — per-request KV capacity shrinks accordingly). L1+L2 with Spec Decode off keeps DCP. Only DCP goes: the MLA KV reverts to TP-replicated, but the cell's other parallelism stays, so B300/GB300/GB200 land on plain TP while B200 Unified keeps its `--pp-size 2` / `--ep-size`.
-- Low-Latency and the Hopper recipes take all tiers unchanged.
+- 在 DCP 配置（Blackwell 的 Balanced / High-Throughput，`Unified` 与 `Decode` 两种角色）下，主机内存层级还不能完全感知 DCP：**L3 始终、以及开启投机解码时的 L1+L2，都会去掉 DCP 参数**（命令提示里会说明——每个请求的 KV 容量随之缩小）。关闭投机解码的 L1+L2 保留 DCP。只有 DCP 被去掉：MLA KV 回到按 TP 复制，但格子里的其它并行方式保持不变，所以 B300/GB300/GB200 落到纯 TP，而 B200 Unified 保留其 `--pp-size 2` / `--ep-size`。
+- Low-Latency 和 Hopper 配置下所有层级原样保留。
 
 <a id="pd-disaggregation" />
 
-### 3.4 PD Disaggregation
+### 3.4 PD 分离 {#3-4-pd-disaggregation}
 
-PD splits prefill and decode into separate server groups; because K3 is hybrid, the transfer moves **both** the paged MLA KV and the KDA recurrent state.
+PD 把预填充和解码拆到不同的服务组；由于 K3 是混合架构，传输会同时搬移分页 MLA KV 和 KDA 循环状态。
 
-- **Transfer**: the cells emit **NiXL** (RDMA); Mooncake stays selectable in the Playground.
-- **Ports**: prefill `30000`, decode `30100` (derived ZMQ/dist ranges must not collide on a shared host). The positional `8998` after `--prefill` must match `--disaggregation-bootstrap-port`, or only the decode worker registers.
-- **Decode state pool**: chunk cache — one slot per request; `--mamba-radix-cache-strategy` is inert. Keep `--disaggregation-decode-extra-slots` pinned: unpinned it defaults to twice the batch below 32 requests and **zero** above.
+<Note>
+💡 AI Infra 学习笔记：PD 分离（prefill-decode disaggregation）把预填充和解码拆到不同服务器：预填充吃算力、算得快但 KV 暴涨，解码吃带宽、逐 token 慢出。分离后两端可以独立扩缩容与调度（这也是大规模部署的标准形态）。对 K3 这类混合架构，分离时除了搬 KV 还得搬循环状态，传输成本更高——这是混合架构在 PD 场景下的特有难点。
+</Note>
 
-#### Deep PP for prefill
+- **传输**：格子默认生成 **NiXL**（RDMA）；Mooncake 仍在 Playground 里可选。
+- **端口**：预填充 `30000`、解码 `30100`（派生的 ZMQ/dist 端口段在共享主机上不能冲突）。`--prefill` 后面的位置参数 `8998` 必须与 `--disaggregation-bootstrap-port` 一致，否则只有解码 worker 会注册。
+- **解码状态池**：块缓存——每个请求一个槽；`--mamba-radix-cache-strategy` 不生效。请保持 `--disaggregation-decode-extra-slots` 显式设置：不设置时，请求数低于 32 默认是该批次的两倍，高于 32 则为**零**。
 
-Deep PP is `--tp-size 1` with one pipeline stage per GPU — `--pp-size 8` on B300/GB300, `--pp-size 16` on B200/GB200. Pipeline P2P overlaps the next microbatch's compute, unlike TP/EP collectives, and each stage owns whole layers (a clean slice of KV and state). `--tp-size 1` is also what buys context: above TP1 the MLA KV is replicated across the TP ranks, so TP2 × PP8 holds roughly half the tokens of TP1 × PP16 for the same memory.
+#### 用于预填充的深层 PP {#deep-pp-for-prefill}
 
-- Use one stage per GPU; a shallow split still pays the in-stage all-reduce and can lose to flat TP.
-- Pays only with several requests in flight. On the 8-GPU platforms that is why `Default` stays TP8; on the 16-GPU platforms deep PP wins at the Default operating point too, so both strategies use it — measured on GB200 at ISL 8192 / concurrency 32, PP16 × TP1 reached 4550 prefill tok/s/GPU vs 3596 (PP8 × TP2), 2407 (TEP16), and 1652 (TP16). Below concurrency ~8 the pipeline cannot fill and TEP16 leads instead (1947 vs 1227) — use `--tp-size 16 --ep-size 16` there.
-- DSPARK off (`pp_size == 1` required) — on B200/GB200 that applies to `Default` as well.
-- Fan one prefill role out to several decode roles; budget for in-transfer KV on the decode side.
+深层 PP 是 `--tp-size 1`，每张 GPU 一个流水线阶段——B300/GB300 用 `--pp-size 8`，B200/GB200 用 `--pp-size 16`。与 TP/EP 的集合通信不同，流水线 P2P 能让下一个微批的计算重叠执行；每个阶段拥有完整层（KV 和状态的一个干净切片）。`--tp-size 1` 也正是换来上下文容量的关键：TP 大于 1 时 MLA KV 会在各 TP rank 间复制，所以同样显存下 TP2 × PP8 能容纳的 token 大约只有 TP1 × PP16 的一半。
 
-<Accordion title="Router">
+- 每张 GPU 一个阶段；切得太浅仍要承担阶段内的 all-reduce，可能输给纯 TP。
+- 只有多个请求同时在途时才有收益。在 8 卡平台上，这就是 `Default` 保持 TP8 的原因；在 16 卡平台上，深层 PP 在 Default 工作点同样占优，所以两种策略都用它——GB200 上实测（ISL 8192、并发 32），PP16 × TP1 达到 4550 预填充 tok/s/GPU，而 PP8 × TP2 为 3596、TEP16 为 2407、TP16 为 1652。并发低于约 8 时流水线填不满，反而 TEP16 领先（1947 对 1227）——那种情况用 `--tp-size 16 --ep-size 16`。
+- DSPARK 需要关闭（要求 `pp_size == 1`）——在 B200/GB200 上，`Default` 同样如此。
+- 一个预填充角色可以扇出到多个解码角色；请为解码侧的传输中 KV 预留预算。
+
+<Accordion title="路由器">
 
 ```bash Command
 python3 -m sglang_router.launch_router \
@@ -281,17 +283,15 @@ python3 -m sglang_router.launch_router \
 
 </Accordion>
 
-Clients then send requests to the router (`:8000`) instead of an individual role server.
+客户端随后把请求发给路由器（`:8000`），而不是发给某个角色服务器。
 
-### 3.5 VLM Serving Profiles
+### 3.5 VLM 服务配置
 
-The open-source K3 serving contract currently supports **image input only** — its
-processor rejects video and audio input.
+开源 K3 的服务契约目前只支持**图像输入**——它的 processor 会拒绝视频和音频输入。
 
-#### Recommended high-speed VLM
+#### 推荐的高速 VLM 配置
 
-The command panel now opens on the **B300 · Unified · Balanced**
-recipe below. It makes the VLM-specific performance choices explicit:
+命令面板现在默认展示下面的 **B300 · Unified · Balanced** 配置。它把 VLM 特有的性能选择显式化：
 
 ```bash Command
 sglang serve \
@@ -309,34 +309,32 @@ sglang serve \
   --port 30000
 ```
 
-- `--mm-feature-transport cuda_ipc` — single-node only: skips the CPU round trip, bounded pool (per-tensor CPU fallback when full), reserves up to `SGLANG_MM_FEATURE_CACHE_MB` on the base GPU. Multi-node recipes use CPU transport.
-- 2 processor / 16 I/O workers are the measured defaults; more adds contention.
-- Leave `--mm-attention-backend` unset — auto-selected, with a correctness fallback.
-- Don't add `--mm-enable-dp-encoder`; K3 already shards images across TP ranks.
+- `--mm-feature-transport cuda_ipc`——仅限单节点：跳过 CPU 往返，使用有界池（满了按张量回退到 CPU），在基础 GPU 上最多预留 `SGLANG_MM_FEATURE_CACHE_MB`。多节点配置用 CPU 传输。
+- 实测默认是 2 个 processor / 16 个 I/O worker；再增加只会加剧争用。
+- 保持 `--mm-attention-backend` 不设置——自动选择，并有正确性兜底。
+- 不要加 `--mm-enable-dp-encoder`；K3 已经会跨 TP 卡分片图像。
 
-#### VLM compatibility
+#### VLM 兼容性
 
-| Feature | K3 behavior |
+| 特性 | K3 的行为 |
 |---|---|
-| PD | Supported. Image processing and ViT run on prefill; the PD transfer then moves both paged MLA KV and KDA recurrent state as described in [PD disaggregation](#pd-disaggregation). |
-| EPD | Supported on the public `kimi-k3` branch. Use an `--encoder-only` vision role and a `--language-only` prefill role; add the normal decode role for full EPD. See the [EPD guide](../../../docs/advanced_features/epd_disaggregation). |
-| MM encoder DP | Built in. K3 shards complete images across TP ranks, so leave `--mm-enable-dp-encoder` unset in unified, PD-prefill, and encoder-only roles. |
-| CUDA IPC | Compatible with the local processor-to-scheduler path on a single-node unified or PD-prefill role. It does not replace `--encoder-transfer-backend` for EPD or the PD KV/KDA transfer, and its bounded pool consumes HBM. |
-| ViT BCG | Compatible with unified and encoder-only roles, but recommended only for repeated encoder shapes after measuring the HBM trade-off below. |
+| PD | 支持。图像处理与 ViT 在预填充阶段运行；随后 PD 传输会同时搬移分页 MLA KV 与 KDA 循环状态，详见 [PD 分离](#pd-disaggregation)。 |
+| EPD | 公开的 `kimi-k3` 分支支持。使用 `--encoder-only` 视觉角色和 `--language-only` 预填充角色，再补一个常规解码角色即可构成完整 EPD。见 [EPD 指南](../../../docs/advanced_features/epd_disaggregation)。 |
+| MM 编码器 DP | 内置。K3 会把完整图像分片到各 TP 卡上，因此在 unified、PD-prefill 和 encoder-only 角色中都不要设置 `--mm-enable-dp-encoder`。 |
+| CUDA IPC | 兼容单节点 unified 或 PD-prefill 角色中的本地 processor→scheduler 路径。它不能替代 EPD 或 PD KV/KDA 传输中的 `--encoder-transfer-backend`，且其有界池会占用 HBM。 |
+| ViT BCG | 兼容 unified 与 encoder-only 角色，但仅在实测下方所述的 HBM 权衡后、且编码器形状反复出现时才建议开启。 |
 
-#### Should ViT BCG be enabled?
+#### 是否该启用 ViT BCG？
 
-Keep ViT BCG **off** for general serving; enable `SGLANG_VIT_ENABLE_CUDA_GRAPH=1` only for ViT-only / EPD encoder workloads with recurring image shapes and spare HBM.
+常规服务保持 ViT BCG **关闭**；只有图像形状反复出现、且有富余 HBM 的 ViT-only / EPD 编码器负载，才启用 `SGLANG_VIT_ENABLE_CUDA_GRAPH=1`。
 
-- The win is confined to the encoder — no reliable end-to-end TTFT/TPOT gain in full-model serving.
-- Each captured graph retains HBM (graph + per-entry metadata); measure on your own shapes.
-- The default cache captures after two hits and falls back to eager above 6,144 tokens; do not enlarge it without measuring.
+- 收益仅限于编码器——在完整模型服务中没有可靠的端到端 TTFT/TPOT 提升。
+- 每个捕获的图都会占用 HBM（图 + 每条目的元数据）；请按自己的形状实测。
+- 默认缓存在命中两次后捕获，超过 6,144 token 回退到 eager 模式；未经实测不要调大它。
 
-#### Low-HBM VLM
+#### 低 HBM 的 VLM 配置
 
-Use this profile when keeping HBM headroom matters more than peak concurrency.
-It removes the 1 GiB CUDA IPC pool, keeps ViT BCG disabled, halves the context
-window, caps concurrency, and lowers the static-memory target:
+当保留 HBM 余量比峰值并发更重要时，用这个配置。它会去掉 1 GiB 的 CUDA IPC 池、保持 ViT BCG 关闭、把上下文窗口减半、限制并发，并降低静态显存目标：
 
 ```bash Command
 SGLANG_VIT_ENABLE_CUDA_GRAPH=0 \
@@ -356,25 +354,25 @@ sglang serve \
   --port 30000
 ```
 
-`--mem-fraction-static 0.82` is a conservative B300 starting point, not a portable minimum: raise it toward `0.85` if startup reports insufficient memory; if HBM must go back to other workloads, reduce context/concurrency first. The precision levers (`fp8_e4m3` KV, `bfloat16` SSM state) save far more but stay accuracy-gated.
+`--mem-fraction-static 0.82` 是 B300 上偏保守的起点，不是通用的最小值：如果启动时报显存不足，可以把它往 `0.85` 调；如果 HBM 要还给其它负载，先降低上下文/并发。精度类手段（`fp8_e4m3` KV、`bfloat16` SSM 状态）省得多，但仍受精度约束。
 
 <a id="large-scale-presets" />
 
-### 3.6 Large-Scale Serving Presets (16–64 GPUs, Blackwell)
+### 3.6 大规模服务预设（16–64 卡，Blackwell）
 
-**The KDA state pool is the concurrency ceiling** — DP, EP, and DCP do not shard it; only attention-TP width, SSM dtype, and cache strategy change the per-GPU bill. The MLA KV is cheap to shrink (fp8) or deduplicate (DCP).
+**KDA 状态池就是并发上限**——DP、EP 和 DCP 都不分片它；只有 attention-TP 宽度、SSM 数据类型和缓存策略能改变单卡开销。MLA KV 则很容易缩小（fp8）或去重（DCP）。
 
-Two presets come out of this, at `N = 8k` GPUs:
+由此得到两个预设，以 `N = 8k` 卡为例：
 
-| Preset | What it trades | Pick it for |
+| 预设 | 取舍 | 适用场景 |
 |---|---|---|
-| **Peak Throughput** — `dp = k`, attention-TP 8 | State shards 8-way. The per-step KDA all-reduce stays within one 8-GPU B200/B300 node, or spans two 4-GPU GB200/GB300 nodes over MNNVL. `--kv-cache-dtype fp8_e4m3` is load-bearing — bf16 KV does not fit 128 requests per replica. | Maximum sustained TPS — the default large-scale shape. |
-| **Peak Capacity (+DCP8)** — `dp = k` + `--dcp-size 8` | Deduplicates the attention-TP group's MLA KV: concurrency ceiling +72% at the same engine throughput, ~1.8× ITL. | Context ≥ ~16K, or per-replica concurrency past 128. |
+| **峰值吞吐**——`dp = k`、attention-TP 8 | 状态按 8 路分片。每步的 KDA 全归约只发生在一个 8 卡 B200/B300 节点内，或跨两个 4 卡 GB200/GB300 节点经 MNNVL 完成。`--kv-cache-dtype fp8_e4m3` 起着关键作用——bf16 KV 装不下单副本 128 个请求。 | 追求持续最大 TPS——默认的大规模形态。 |
+| **峰值容量（+DCP8）**——`dp = k` + `--dcp-size 8` | 对 attention-TP 组的 MLA KV 去重：在相同引擎吞吐下并发上限提升 72%，ITL 约 1.8 倍。 | 上下文 ≥ 约 16K，或单副本并发超过 128 时。 |
 
-- **Radix cache** is independent of the preset: for prefix-free traffic (offline batch, evals) switch it off (Playground's **Prefix Cache** card) — one state slot per request instead of 4–5.
-- The fully data-parallel extreme (`--dp-size` = GPU count, attention-TP 1) — the shape behind the 64-GPU sweep's ~3K tok/s per GPU — is not a preset: 288 GB GPUs only, radix forced off, no head-to-head against the preset shape.
+- **Radix 缓存**与预设无关：对无公共前缀的流量（离线批处理、评测），把它关掉（Playground 的 **Prefix Cache** 卡片）——每个请求只需 1 个状态槽，而不是 4–5 个。
+- 完全数据并行的极端形态（`--dp-size` = GPU 数，attention-TP 1）——64 卡扫描中单卡约 3K tok/s 背后的形态——不算预设：只支持 288 GB 显存的卡，radix 强制关闭，也没有与预设形态的直接对比。
 
-The Peak Throughput preset at 32 GPUs on B200/B300 (4 nodes × 8; every node runs the same command with its own `--node-rank`). On GB200/GB300 the same 32-GPU shape uses 8 nodes × 4, and the Playground emits `--nnodes 8`:
+以下是 B200/B300 上 32 卡时的 Peak Throughput 预设（4 节点 × 8 卡；每个节点用各自的 `--node-rank` 运行同一命令）。GB200/GB300 上同样的 32 卡形态用 8 节点 × 4 卡，Playground 会生成 `--nnodes 8`：
 
 ```bash Command
 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=20480 \
@@ -393,24 +391,24 @@ sglang serve \
   --host 0.0.0.0 --port 30000
 ```
 
-Scale by holding the per-replica shape fixed and moving only the replica count; pool sizing rides the calculator-driven `--mamba-full-memory-ratio`, which folds in DP, DCP, precision, and speculation:
+扩展时保持单副本形态不变，只增加副本数；池的容量跟着由计算器驱动的 `--mamba-full-memory-ratio` 走，它已把 DP、DCP、精度和投机计入：
 
-| GPUs | B200/B300 nodes | GB200/GB300 nodes | `--tp-size` / `--ep-size` | `--dp-size` |
+| GPU 数量 | B200/B300 节点数 | GB200/GB300 节点数 | `--tp-size` / `--ep-size` | `--dp-size` |
 |---|---|---|---|---|
 | 16 | 2×8 | 4×4 | 16 | 2 |
 | 32 | 4×8 | 8×4 | 32 | 4 |
 | 64 | 8×8 | 16×4 | 64 | 8 |
 
-For Peak Capacity, add `--dcp-size 8` and re-derive the pool split with the [Mamba ratio calculator](#mamba-ratio-calculator).
+要获得峰值容量，加上 `--dcp-size 8`，再用 [Mamba 比例计算器](#mamba-ratio-calculator) 重新推导池的划分。
 
-Both presets are one click away in the [Playground above](#playground): pick a **Cluster Size** and a **Large-Scale Preset** and the full command composes onto whichever cell is showing.
+两个预设在上方 [Playground](#playground) 里一键可用：选好 **Cluster Size** 和 **Large-Scale Preset**，完整命令就会拼到当前显示的格子上。
 
-Decisions the preset already makes:
+预设已经替你做的决定：
 
-- **MegaMoE on `deep_gemm`** — the fastest a2a backend; needs the SiTU cubin pool ([§2](#2-configuration-tips)).
-- **SP-MoE and shared-expert overlap** engage automatically under EP a2a; the K3 all-reduce fusion does not.
-- **Spec Decode follows the Deploy knob.** Acceptance thins at large batch; spec × EP × DP-attention is validated only at 8-GPU EP8 × DP2 (full GSM8K) — experimental at these scales.
+- **在 `deep_gemm` 上跑 MegaMoE**——最快的 a2a 后端；需要 SiTU cubin 池（[§2](#2-configuration-tips)）。
+- **SP-MoE 与共享专家重叠**在 EP a2a 下自动生效；K3 的 all-reduce 融合则不会。
+- **投机解码跟随 Deploy 开关。** 大批次下接受率下降；spec × EP × DP-attention 组合只在 8 卡 EP8 × DP2（完整 GSM8K）下验证过——在这个规模上属于实验性。
 
 <Note>
-No preset has a full serving round on final weights; the constants derive from measured single- and dual-node rounds plus a 64-GPU sweep. Validate throughput and accuracy on your workload before committing a fleet.
+目前还没有任何预设针对最终权重完成过完整的服务化测试；其中的常量来自实测的单节点、双节点测试，以及一次 64 卡扫描。在投入整个集群之前，请先在真实负载上验证吞吐与精度。
 </Note>

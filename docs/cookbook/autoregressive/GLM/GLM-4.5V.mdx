@@ -1,57 +1,61 @@
 ---
 title: GLM-4.5V
 metatags:
-    description: "Deploy GLM-4.5V vision-language model with SGLang - SOTA multimodal performance, 64K context, image reasoning and video understanding."
+    description: "使用 SGLang 部署 GLM-4.5V 视觉语言模型——SOTA 多模态性能、64K 上下文、图像推理与视频理解。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[GLM-4.5V](https://huggingface.co/zai-org/GLM-4.5V) is a state-of-the-art multimodal vision-language model from ZhipuAI, built on the next-generation flagship text foundation model GLM-4.5-Air (106B parameters, 12B active). It achieves SOTA performance among models of the same scale across 42 public vision-language benchmarks. Through efficient hybrid training, GLM-4.5V focuses on real-world usability and enables full-spectrum vision reasoning across diverse visual content types.
+[GLM-4.5V](https://huggingface.co/zai-org/GLM-4.5V) 是智谱 AI 推出的先进多模态视觉语言模型，基于下一代旗舰文本基座模型 GLM-4.5-Air（106B 参数，12B 激活）构建。它在 42 个公开视觉语言基准测试上达到了同规模模型中的 SOTA 性能。通过高效的混合训练，GLM-4.5V 聚焦于真实世界的可用性，能对多种视觉内容类型进行全谱系视觉推理。
 
-**Hardware Support:** NVIDIA B200/H100/H200, AMD MI300X/MI325X/MI355X
+**硬件支持：** NVIDIA B200/H100/H200、AMD MI300X/MI325X/MI355X
 
-GLM-4.5V introduces several key features:
+GLM-4.5V 引入了以下关键特性：
 
-- **Image Reasoning & Grounding** Scene understanding, complex multi-image analysis, and spatial recognition with precise visual element localization. Supports bounding box predictions with normalized coordinates (0-1000) for accurate object detection.
-- **Video Understanding** Long video segmentation and event recognition, supporting comprehensive temporal analysis across extended video sequences.
-- **GUI Agent Tasks** Screen reading, icon recognition, and desktop operation assistance for agent-based applications. Enables natural interaction with graphical user interfaces.
-- **Complex Chart & Long Document Parsing** Research report analysis and information extraction from documents with text, charts, tables, and figures. Processes up to 64K tokens of multimodal context.
-- **Thinking Mode Switch** Allows users to balance between quick responses and deep reasoning. Users can enable/disable Chain-of-Thought reasoning based on task requirements for improved accuracy and interpretability.
+- **图像推理与定位**：场景理解、复杂的多图像分析、空间识别与精准的视觉元素定位。支持归一化坐标（0-1000）的边界框预测，可用于准确的目标检测。
+- **视频理解**：长视频分段与事件识别，支持对长视频序列进行全面的时序分析。
+- **GUI Agent 任务**：屏幕阅读、图标识别和桌面操作辅助，面向 Agent 应用，能让人与图形界面自然交互。
+- **复杂图表与长文档解析**：研究报表分析，以及从含文本、图表、表格和图片的文档中抽取信息。最多可处理 64K token 的多模态上下文。
+- **思考模式开关**：让用户在快速响应与深度推理之间取得平衡。可根据任务需要启用或禁用思维链推理，以兼顾准确性与可解释性。
 
-## 2. SGLang Installation
+## 2. SGLang 安装
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+SGLang 提供多种安装方式。你可以根据自己的硬件平台和需求选择最合适的方式。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节针对不同硬件平台和使用场景给出部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-The GLM-4.5V offers models in various sizes and architectures, optimized for different hardware platforms. The recommended launch configurations vary by hardware and model size.
+GLM-4.5V 提供不同大小和架构的模型，针对不同硬件平台做了优化。推荐的启动配置会随硬件和模型大小而变化。
 
-**Interactive Command Generator**: Use the interactive configuration generator below to customize your deployment settings. Select your hardware platform, model size, quantization method, and other options to generate the appropriate launch command.
+**交互式命令生成器**：使用下面的交互式配置生成器定制你的部署设置。选择硬件平台、模型大小、量化方式等选项，即可生成合适的启动命令。
 
 import { GLM45VDeployment } from "/src/snippets/autoregressive/glm-45v-deployment.jsx";
 
 <GLM45VDeployment />
 
-### 3.2 Configuration Tips
-- **TTFT Optimization** : Set `SGLANG_USE_CUDA_IPC_TRANSPORT=1` to use CUDA IPC for transferring multimodal features, which significantly improves TTFT. This consumes additional memory and may require adjusting `--mem-fraction-static` and/or `--max-running-requests`. (additional memory is proportional to image size * number of images in current running requests.)
-- **TP=8 Configuration**: When using Tensor Parallelism (TP) of 8, the vision attention's 12 heads cannot be evenly divided. You can resolve this by adding `--mm-enable-dp-encoder`.
-- **Fast Model Loading**: For large models (like the 106B version), you can speed up model loading by using `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'`.
-- **Hardware Notes:**
-  - **H100 (FP8):** Use the FP8 checkpoint for best memory efficiency.
-  - **A100 / H100 (BF16):** Use standard multimodal parameters to manage throughput and GPU memory usage.
-  - **H200 / B200:** Runs out of the box, supporting full context length plus concurrent image + video processing.
-- **Additional Multimodal Parameters:**
-  - `--mm-attention-backend fa3`: Specify multimodal attention backend (Flash Attention 3).
-  - `--keep-mm-feature-on-device`: Retain multimodal feature tensors on GPU after processing to avoid D2H memory copies.
-  - `SGLANG_USE_CUDA_IPC_TRANSPORT=1`: Use CUDA IPC shared memory for multimodal data transport to significantly improve E2E latency.
+### 3.2 配置技巧
+- **TTFT 优化**：设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1`，用 CUDA IPC 传输多模态特征，可显著改善 TTFT。这会额外消耗显存，可能需要调整 `--mem-fraction-static` 和/或 `--max-running-requests`。（额外显存与「图像大小 × 当前运行请求中的图像数量」成正比。）
+- **TP=8 配置**：使用张量并行（TP）度为 8 时，视觉注意力的 12 个头无法被整除。可以通过添加 `--mm-enable-dp-encoder` 解决。
+- **快速加载模型**：对大型模型（如 106B 版本），可以用 `--model-loader-extra-config='{"enable_multithread_load": "true","num_threads": 64}'` 加快模型加载。
+- **硬件注意事项：**
+  - **H100（FP8）**：使用 FP8 检查点可获得最佳显存效率。
+  - **A100 / H100（BF16）**：使用标准多模态参数，在吞吐量与显存占用之间取得平衡。
+  - **H200 / B200**：开箱即用，支持完整上下文长度以及图像 + 视频并发处理。
+- **其它多模态参数：**
+  - `--mm-attention-backend fa3`：指定多模态注意力后端（Flash Attention 3）。
+  - `--keep-mm-feature-on-device`：处理完成后把多模态特征张量保留在 GPU 上，避免 D2H 内存拷贝。
+  - `SGLANG_USE_CUDA_IPC_TRANSPORT=1`：用 CUDA IPC 共享内存传输多模态数据，可显著改善端到端延迟。
 
-**Example with full multimodal optimizations:**
+<Note>
+💡 AI Infra 学习笔记：多模态推理里，图像/视频要先经过视觉编码器变成特征（image features），再映射为视觉 token 交给语言模型。这些特征在「编码器—语言模型」之间的搬运（GPU 间或 GPU→CPU→GPU）会直接拉高 TTFT；CUDA IPC 共享内存传输能省掉跨进程拷贝，而 `--mm-enable-dp-encoder` 则解决视觉注意力头数无法被 TP 整除的问题。多模态场景中视觉 token 往往很长，也是 KV 缓存和 prefill 计算量的主要来源之一。
+</Note>
+
+**完整多模态优化示例：**
 ```bash Command
 SGLANG_USE_CUDA_IPC_TRANSPORT=1 \
 SGLANG_VLM_CACHE_SIZE_MB=0 \
@@ -72,20 +76,20 @@ python -m sglang.launch_server \
   --enable-metrics
 ```
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基础用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Multi-Modal Inputs
+#### 4.2.1 多模态输入
 
-GLM-4.5V supports both image and video inputs. Here's a basic example with image input:
+GLM-4.5V 支持图像和视频输入。下面是一个使用图像输入的基础示例：
 
 ```python Example
 import time
@@ -125,7 +129,7 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Example Output:**
+**输出示例：**
 
 ```text Output
 Response costs: 3.37s
@@ -143,9 +147,9 @@ CASH IDR                     20,000
 CHANGE DUE                  3,000
 ```
 
-**Multi-Image Input Example:**
+**多图像输入示例：**
 
-GLM-4.5V can process multiple images in a single request for comparison or analysis:
+GLM-4.5V 可以在单个请求中处理多张图像，用于对比或分析：
 
 ```python Example
 import time
@@ -191,16 +195,16 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Example Output:**
+**输出示例：**
 
 ```text Output
 Response costs: 3.86s
 Generated text: The first image shows a close - up of a few red taxis on a street with storefronts in the background. The taxis are in a line, and the scene has an urban, busy feel with visible shop displays. The second image is an aerial view of a large taxi parking area with numerous red and green taxis, some with hoods open. The scene is more open, with a parking lot layout, and includes elements like a bridge and grassy areas. Key differences: number of taxis (few vs many), perspective (close - up vs aerial), color variety (mostly red vs red and green), and setting (street with shops vs parking lot).
 ```
 
-**Video Input Example:**
+**视频输入示例：**
 
-GLM-4.5V supports video understanding by processing video URLs:
+GLM-4.5V 通过处理视频 URL 支持视频理解：
 
 ```python Example
 import time
@@ -240,22 +244,22 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Note:**
+**注意：**
 
-- For video processing, ensure you have sufficient context length configured (up to 64K tokens)
-- Video processing may require more memory; adjust `--mem-fraction-static` accordingly
-- You can also provide local file paths using `file://` protocol
+- 处理视频时，请确保配置了足够的上下文长度（最多 64K token）
+- 视频处理可能占用更多显存；请相应调整 `--mem-fraction-static`
+- 你也可以用 `file://` 协议提供本地文件路径
 
-**Example Output:**
+**输出示例：**
 
 ```text Output
 Response costs: 3.89s
 Generated text: A person wearing blue gloves is using a microscope. They are adjusting the focus knob with one hand while holding a pipette with the other, suggesting they are preparing or examining a sample on the slide beneath the objective lens. The microscope's 40x objective lens is positioned over the slide, indicating a high-magnification observation. The person carefully manipulates the slide and the microscope controls, likely to achieve a clear view of the specimen.
 ```
 
-#### 4.2.2 Thinking Mode
+#### 4.2.2 思考模式
 
-GLM-4.5V supports thinking mode for enhanced reasoning. Enable thinking mode during deployment:
+GLM-4.5V 支持思考模式以增强推理。部署时启用思考模式：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -266,7 +270,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -315,11 +319,11 @@ for chunk in response:
 print()
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步的思考过程，让你看到模型是如何得出结论的。
 
-**Disable Thinking Mode:**
+**关闭思考模式：**
 
-To disable thinking mode for a specific request:
+要对某个具体请求关闭思考模式：
 
 ```python Example
 response = client.chat.completions.create(
@@ -329,9 +333,9 @@ response = client.chat.completions.create(
 )
 ```
 
-#### 4.2.3 Tool Calling
+#### 4.2.3 工具调用
 
-GLM-4.5V supports tool calling capabilities. Enable the tool call parser:
+GLM-4.5V 支持工具调用。启用工具调用解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -343,7 +347,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -440,7 +444,7 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -452,13 +456,13 @@ I should call the function with location="Beijing".
    Arguments: {"location": "Beijing", "unit": "celsius"}
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器会展示模型是如何决定使用某个工具的
+- 工具调用会用函数名和参数清晰地标注出来
+- 之后你可以执行该函数，把结果发回给模型以继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -498,9 +502,9 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-#### 4.2.4 Thinking Budget
+#### 4.2.4 思考预算
 
-Beyond enabling/disabling the full reasoning mode (section 4.2.2), you can cap the number of thinking tokens using `CustomLogitProcessor`. Launch with `--enable-custom-logit-processor` and pass `Glm4MoeThinkingBudgetLogitProcessor` in the request:
+除了启用/禁用完整推理模式（见 4.2.2 节），你还可以用 `CustomLogitProcessor` 限制思考 token 的数量。启动时加上 `--enable-custom-logit-processor`，并在请求中传入 `Glm4MoeThinkingBudgetLogitProcessor`：
 
 ```python Example
 import openai
@@ -519,21 +523,21 @@ response = client.chat.completions.create(
 print(response)
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Accuracy Benchmark
+### 5.1 准确率基准测试
 
-Document model accuracy on standard benchmarks:
+记录模型在标准基准测试上的准确率：
 
-#### 5.1.1 MMMU Benchmark
+#### 5.1.1 MMMU 基准测试
 
-- Benchmark Command
+- 基准测试命令
 
 ```bash Command
 python3 benchmark/mmmu/bench_sglang.py --response-answer-regex "<\|begin_of_box\|>(.*)<\|end_of_box\|>" --port 30000 --concurrency 64
 ```
 
-- Test Result
+- 测试结果
 
 ```text Output
 Benchmark time: 616.6163094160147

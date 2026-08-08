@@ -1,32 +1,36 @@
 ---
 title: DeepSeek-V3.2
 metatags:
-    description: "Deploy DeepSeek-V3.2 with SGLang - featuring DeepSeek Sparse Attention for efficient long-context processing and deep reasoning capabilities."
+    description: "使用 SGLang 部署 DeepSeek-V3.2——通过 DeepSeek 稀疏注意力实现高效长上下文处理与深度推理能力。"
 ---
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-The DeepSeek-V3.2 series includes three model variants, each optimized for different use cases:
+DeepSeek-V3.2 系列包含三个模型变体，各自针对不同使用场景优化：
 
-**[DeepSeek-V3.2-Exp](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp)** is an upgraded version of DeepSeek-V3.1-Terminus, introducing the DeepSeek Sparse Attention (DSA) mechanism through continued training. DSA is a fine-grained sparse attention mechanism powered by a lightning indexer, enabling DeepSeek-V3.2-Exp to achieve significant efficiency improvements in long-context scenarios. Recommended for general conversations, long-context processing, and efficient inference.
+**[DeepSeek-V3.2-Exp](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp)** 是 DeepSeek-V3.1-Terminus 的升级版，通过持续训练引入 DeepSeek 稀疏注意力（DSA）机制。DSA 是一种由闪电级 indexer 驱动的细粒度稀疏注意力机制，让 DeepSeek-V3.2-Exp 在长上下文场景下获得显著的效率提升。推荐用于通用对话、长上下文处理与高效推理。
 
-**[DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2)** is the standard version suitable for general tasks and conversational scenarios. For local deployment, we recommend setting the sampling parameters to temperature = 1.0, top_p = 0.95. Recommended for standard conversations and general tasks.
+**[DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2)** 是标准版本，适用于通用任务与对话场景。本地部署时，我们建议把采样参数设置为 temperature = 1.0、top_p = 0.95。推荐用于标准对话与通用任务。
 
-**[DeepSeek-V3.2-Speciale](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Speciale)** is a special variant designed exclusively for deep reasoning tasks. This model is specifically optimized for scenarios requiring complex logical reasoning and deep thinking. However this model does not support tool calls (see below). For local deployment, we recommend setting the sampling parameters to temperature = 1.0, top_p = 0.95. Recommended for deep reasoning tasks, complex logical problems, and mathematical reasoning.
+**[DeepSeek-V3.2-Speciale](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Speciale)** 是专为深度推理任务设计的特殊变体。该模型专门针对需要复杂逻辑推理与深度思考的场景优化。但该模型不支持工具调用（见下文）。本地部署时，我们建议把采样参数设置为 temperature = 1.0、top_p = 0.95。推荐用于深度推理任务、复杂逻辑问题与数学推理。
 
-**[DeepSeek-V3.2-NVFP4](https://huggingface.co/nvidia/DeepSeek-V3.2-NVFP4)** is an NVIDIA-optimized NVFP4-quantized variant of DeepSeek-V3.2 for Blackwell devices. It uses ModelOpt FP4 quantization with a choice of MoE runner backends (`flashinfer_trtllm` (recommended), `flashinfer_cutlass`, or `flashinfer_cutedsl`), enabling efficient deployment with lower tensor parallelism (TP=4). It supports the same features as DeepSeek-V3.2 including tool calling, reasoning, and speculative decoding (MTP).
+**[DeepSeek-V3.2-NVFP4](https://huggingface.co/nvidia/DeepSeek-V3.2-NVFP4)** 是面向 Blackwell 设备、由 NVIDIA 优化的 DeepSeek-V3.2 NVFP4 量化变体。它使用 ModelOpt FP4 量化，可选多种 MoE runner 后端（`flashinfer_trtllm`（推荐）、`flashinfer_cutlass` 或 `flashinfer_cutedsl`），能以更低的张量并行度（TP=4）高效部署。它支持与 DeepSeek-V3.2 相同的功能，包括工具调用、推理与投机解码（MTP）。
 
-**[DeepSeek-V3.2-MXFP4](https://huggingface.co/amd/DeepSeek-V3.2-mxfp4)** is an OCP-MXFP4 optimized variant for DeepSeek-V3.2 for AMD MI300X/MI355X devices. It uses OCP MXFP4 quantization with a triton mxfp4 backend (the same backend for gptoss-120B), enabling efficient deployment with lower tensor parallelism (TP=8) in a single node. It includes the same features as DeepSeek-V3.2 including tool calling, reasoning, fp8-kv, CP, TP and speculative decoding MTP.
+**[DeepSeek-V3.2-MXFP4](https://huggingface.co/amd/DeepSeek-V3.2-mxfp4)** 是面向 AMD MI300X/MI355X 设备的 OCP-MXFP4 优化变体。它使用 OCP MXFP4 量化与 triton mxfp4 后端（与 gptoss-120B 相同的后端），能在单节点内以更低的张量并行度（TP=8）高效部署。它包含与 DeepSeek-V3.2 相同的功能，包括工具调用、推理、fp8-kv、CP、TP 与投机解码 MTP。
 
-## 2. SGLang Installation
+<Note>
+💡 AI Infra 学习笔记：DeepSeek 稀疏注意力（DSA）是 V3.2 的核心创新——先用一个轻量 indexer 快速选出每个查询最相关的 top-k 关键 token，再做稀疏注意力，把长序列注意力从 O(n²) 降到接近线性，同时 KV 缓存命中与预填充成本都大幅下降。这是处理 128K+ 长上下文、降低 TTFT 的关键技术，与 MLA 一起构成 DeepSeek 系模型的"显存省一半、算力省一大截"组合拳。
+</Note>
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据自己的硬件平台和需求选择最合适的安装方式。
 
-### 2.1 Docker Images
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-Pre-built Docker images are available for different hardware platforms:
+### 2.1 Docker 镜像
+
+针对不同硬件平台提供了预构建的 Docker 镜像：
 
 ```bash Command
 # NVIDIA H200 / B200
@@ -45,49 +49,49 @@ docker pull lmsysorg/sglang:dsv32-a2
 docker pull lmsysorg/sglang:dsv32-a3
 ```
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides a progressive guide from quick deployment to performance optimization, suitable for users at different levels.
+本节提供从快速部署到性能优化的渐进式指南，适合不同水平的用户。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model variant, deployment strategy, and thinking capabilities. SGLang supports serving DeepSeek V3.2 on NVIDIA H200, B200, and AMD MI300X/MI355X GPUs.
+**交互式命令生成器**：用下面的配置选择器，可根据你的硬件平台、模型变体、部署策略与思考能力自动生成对应的部署命令。SGLang 支持在 NVIDIA H200、B200 与 AMD MI300X/MI355X GPU 上服务 DeepSeek V3.2。
 
 import { DeepSeekV32Deployment } from "/src/snippets/autoregressive/deepseek-v32-deployment.jsx";
 
 <DeepSeekV32Deployment />
 
 <Warning>
-  All recipes here run the DSA indexer top-k on the default `--dsa-topk-backend sgl-kernel`. Other top-k backend choices have not been fully validated on DeepSeek-V3.2.
+  本页所有方案都在默认的 `--dsa-topk-backend sgl-kernel` 下运行 DSA indexer top-k。其他 top-k 后端选择尚未在 DeepSeek-V3.2 上经过完整验证。
 </Warning>
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- **Short-sequence MHA prefill (adaptive):** For prefill sequences shorter than 2048 tokens (default threshold), the DSA backend automatically switches to standard MHA (using FlashAttention variable-length on SM90, TRT-LLM ragged MHA on SM100). To extend this to longer sequences set env var `SGLANG_DSA_PREFILL_DENSE_ATTN_KV_LEN_THRESHOLD` to a larger value (potential minor accuracy trade-off).
-- **DSA prefill/decode attention kernels (`--dsa-prefill-backend`, `--dsa-decode-backend`):** The `dsa` backend is automatically selected for DeepSeek-V3.2. Available kernels: `flashmla_sparse`, `flashmla_sparse_q8` (native FP8 e4m3 sparse prefill — no fp8→bf16 dequantization round-trip; Hopper SM90 + `--kv-cache-dtype fp8_e4m3` only, prefill only), `flashmla_kv`, `flashmla_auto`, `fa3` (Hopper only), `tilelang` (GPU/HPU/NPU), `aiter` (AMD, decode only), `trtllm` (Blackwell only). Defaults: Hopper BF16 KV → `flashmla_sparse` prefill / `fa3` decode; Hopper FP8 KV → `flashmla_kv` both; Blackwell BF16 → `flashmla_sparse` / `trtllm`; Blackwell FP8 → `trtllm` both.
-- **Index Cache:** Reuses indexer results across layers for efficiency at negligible accuracy cost. For **GLM-5** specifically, append `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'` for a better speed/accuracy tradeoff.
-- **HiSparse (experimental):** Reduces per-request GPU memory during long-context decode by offloading KV data to CPU pinned memory. Requires PD disaggregation mode (decode instance only). See [HiSparse Guide](../../../docs/advanced_features/hisparse_guide).
-- **NVFP4 on Blackwell:** Specify `--quantization modelopt_fp4` and `--moe-runner-backend flashinfer_trtllm` (recommended) / `flashinfer_cutlass` / `flashinfer_cutedsl`. Full example:
+- **短序列 MHA 预填充（自适应）：** 对于短于 2048 token（默认阈值）的预填充序列，DSA 后端会自动切换到标准 MHA（SM90 上用 FlashAttention 变长，SM100 上用 TRT-LLM ragged MHA）。要扩展到更长序列，把环境变量 `SGLANG_DSA_PREFILL_DENSE_ATTN_KV_LEN_THRESHOLD` 设为更大的值（可能有轻微精度取舍）。
+- **DSA 预填充/解码注意力 kernel（`--dsa-prefill-backend`、`--dsa-decode-backend`）：** `dsa` 后端会自动为 DeepSeek-V3.2 选择。可用 kernel：`flashmla_sparse`、`flashmla_sparse_q8`（原生 FP8 e4m3 稀疏预填充——没有 fp8→bf16 反量化往返；仅 Hopper SM90 + `--kv-cache-dtype fp8_e4m3`，仅预填充）、`flashmla_kv`、`flashmla_auto`、`fa3`（仅 Hopper）、`tilelang`（GPU/HPU/NPU）、`aiter`（AMD，仅解码）、`trtllm`（仅 Blackwell）。默认：Hopper BF16 KV → `flashmla_sparse` 预填充 / `fa3` 解码；Hopper FP8 KV → `flashmla_kv` 两者；Blackwell BF16 → `flashmla_sparse` / `trtllm`；Blackwell FP8 → `trtllm` 两者。
+- **索引缓存（Index Cache）：** 在层间复用 indexer 结果以提升效率，精度损失可忽略。**GLM-5** 特别地，追加 `--json-model-override-args '{"index_topk_pattern": "FFSFSSSFSSFFFSSSFFFSFSSSSSSFFSFFSFFSSFFFFFFSFFFFFSFFSSSSSSFSFFFSFSSSFSFFSFFSSS"}'` 以获得更好的速度/精度权衡。
+- **HiSparse（实验性）：** 通过把 KV 数据卸载到 CPU 固定内存，减少长上下文解码时每个请求的 GPU 内存。需要 PD 分离模式（仅解码实例）。参见 [HiSparse 指南](../../../docs/advanced_features/hisparse_guide)。
+- **Blackwell 上的 NVFP4：** 指定 `--quantization modelopt_fp4` 和 `--moe-runner-backend flashinfer_trtllm`（推荐）/ `flashinfer_cutlass` / `flashinfer_cutedsl`。完整示例：
   ```bash
   python -m sglang.launch_server --model nvidia/DeepSeek-V3.2-NVFP4 --tp 4 \
     --quantization modelopt_fp4 --moe-runner-backend flashinfer_trtllm \
     --tool-call-parser deepseekv32 --reasoning-parser deepseek-v3
   ```
-- **NCCL timeout:** Slow model loading → add `--dist-timeout 3600`.
+- **NCCL 超时：** 模型加载缓慢 → 加 `--dist-timeout 3600`。
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法与请求示例请参考：
 
-- [Basic API Usage](../../../docs/basic_usage/send_request)
+- [基础 API 用法](../../../docs/basic_usage/send_request)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Reasoning Parser
+#### 4.2.1 推理解析器
 
-DeepSeek-V3.2 supports reasoning mode. Enable the reasoning parser during deployment to separate the thinking and content sections:
+DeepSeek-V3.2 支持推理模式。部署时启用推理解析器，可把思考与内容部分分开：
 
 ```shell Command
 sglang serve \
@@ -98,7 +102,7 @@ sglang serve \
   --port 30000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -148,7 +152,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -161,13 +165,13 @@ Step 3: 240 × 0.15 = 36
 The answer is 36. To find 15% of 240, we multiply 240 by 0.15, which equals 36.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型的逐步思考过程，让你看到模型是如何得出结论的。
 
-#### 4.2.2 Tool Calling
+#### 4.2.2 工具调用
 
-DeepSeek-V3.2 and DeepSeek-V3.2-Exp support tool calling capabilities. But they use different parameters. Enable the tool call parser:
+DeepSeek-V3.2 与 DeepSeek-V3.2-Exp 都支持工具调用能力，但使用不同的参数。启用工具调用解析器：
 
-**Note:** DeepSeek-V3.2-Speciale does **NOT** support tool calling. Launch it with reasoning parser only:
+**注意：** DeepSeek-V3.2-Speciale **不**支持工具调用。只用推理解析器启动它：
 
 ```shell Command
 python3 -m sglang.launch_server \
@@ -177,9 +181,9 @@ python3 -m sglang.launch_server \
   --reasoning-parser deepseek-v3
 ```
 
-**Deployment Command:**
+**部署命令：**
 
-For DeepSeek-V3.2-Exp:
+对于 DeepSeek-V3.2-Exp：
 
 ```shell Command
 sglang serve \
@@ -192,9 +196,9 @@ sglang serve \
   --port 30000
 ```
 
-For DeepSeek-V3.2, use `--tool-call-parser deepseekv32` and remove `--chat-template`.
+对于 DeepSeek-V3.2，使用 `--tool-call-parser deepseekv32` 并去掉 `--chat-template`。
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -292,7 +296,7 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -304,13 +308,13 @@ Tool Call: get_weather
    Arguments: {"location": "Beijing", "unit": "celsius"}
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器会展示模型如何决定使用工具
+- 工具调用会用函数名与参数清晰地标出
+- 之后你可以执行该函数并把结果返回给模型以继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -350,11 +354,11 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-#### 4.2.3 Multi-Token Prediction (EAGLE Speculative Decoding)
+#### 4.2.3 多 token 预测（EAGLE 投机解码） {#4-2-3-multi-token-prediction-eagle-speculative-decoding}
 
-SGLang implements Multi-Token Prediction (MTP) for DeepSeek V3.2 based on [EAGLE speculative decoding](../../../docs/advanced_features/speculative_decoding#eagle-decoding). This optimization significantly improves decoding speed for small batch sizes.
+SGLang 基于 [EAGLE 投机解码](../../../docs/advanced_features/speculative_decoding#eagle-decoding) 为 DeepSeek V3.2 实现了多 token 预测（MTP）。这一优化能显著提升小批量场景的解码速度。
 
-**With DP Attention:**
+**配合 DP 注意力：**
 
 ```bash Command
 python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp --tp 8 --dp 8 \
@@ -363,7 +367,7 @@ python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp --tp 8 --dp
   --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4
 ```
 
-**With Pure TP:**
+**纯 TP：**
 
 ```bash Command
 python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp --tp 8 \
@@ -371,21 +375,25 @@ python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp --tp 8 \
   --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4
 ```
 
-Find optimal values for your workload with [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py). The minimum viable config is `--speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2`.
+用 [bench_speculative.py](https://github.com/sgl-project/sglang/blob/main/scripts/playground/bench_speculative.py) 为你的负载找到最优值。最小可用配置是 `--speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2`。
 
 <Note>
-`--max-running-requests` defaults to 48 for MTP. Increase it for larger batch sizes.
+`--max-running-requests` 在 MTP 下默认为 48。大批量场景下增大它。
 </Note>
 
 <Tip>
-The spec-v2 overlap scheduler is enabled by default. Pass `--disable-overlap-schedule` to disable.
+spec-v2 重叠调度器默认启用。传 `--disable-overlap-schedule` 可禁用。
 </Tip>
 
-#### 4.2.4 PD Disaggregation
+#### 4.2.4 PD 分离部署（PD Disaggregation）
 
-Prefill-Decode (PD) disaggregation separates prefill and decode stages onto different instances, improving GPU utilization for mixed workloads.
+预填充-解码（PD）分离部署把预填充与解码阶段拆到不同实例上，提升混合负载下的 GPU 利用率。
 
-**Prefill command:**
+<Note>
+💡 AI Infra 学习笔记：PD 分离（prefill-decode disaggregation）解决的是两个阶段负载特性冲突的问题——预填充计算密集、并行度高，解码访存密集、逐 token 串行。混在一起时，长请求的预填充会占满 GPU，拖慢所有正在解码的短请求、拉高 TTFT。拆开后各自调优、独立扩缩容，是长上下文与高并发生产部署的标配思路。
+</Note>
+
+**预填充命令：**
 
 ```bash Command
 python -m sglang.launch_server \
@@ -402,7 +410,7 @@ python -m sglang.launch_server \
   --mem-fraction-static 0.9
 ```
 
-**Decode command:**
+**解码命令：**
 
 ```bash Command
 python -m sglang.launch_server \
@@ -418,7 +426,7 @@ python -m sglang.launch_server \
   --mem-fraction-static 0.9
 ```
 
-**Router command:**
+**路由器命令：**
 
 ```bash Command
 python -m sglang_router.launch_router --pd-disaggregation \
@@ -428,13 +436,13 @@ python -m sglang_router.launch_router --pd-disaggregation \
   --port 30000
 ```
 
-For production deployments (RBG / LWS-based, DeepEP EP parallelism), see [multi_node_deployment docs](../../../docs/references/multi_node_deployment/rbg_pd/deepseekv32_pd).
+生产部署（RBG / LWS 为基础、DeepEP EP 并行）请参考 [multi_node_deployment 文档](../../../docs/references/multi_node_deployment/rbg_pd/deepseekv32_pd)。
 
-#### 4.2.5 DSA Long-Sequence Context Parallel and PP/CP
+#### 4.2.5 DSA 长序列上下文并行与 PP/CP
 
-SGLang provides two context parallel (CP) modes for long-sequence workloads, controlled with `--dsa-prefill-cp-mode`.
+SGLang 为长序列负载提供两种上下文并行（CP）模式，用 `--dsa-prefill-cp-mode` 控制。
 
-**In-sequence splitting** (`--dsa-prefill-cp-mode in-seq-split`): Each CP rank handles a uniform shard of the sequence; KV cache is gathered via all-gather. Batch size is restricted to 1 during prefill. See [PR #12065](https://github.com/sgl-project/sglang/pull/12065).
+**序列内切分**（`--dsa-prefill-cp-mode in-seq-split`）：每个 CP rank 处理序列的一个均匀分片；KV 缓存通过 all-gather 聚合。预填充期间批大小限制为 1。参见 [PR #12065](https://github.com/sgl-project/sglang/pull/12065)。
 
 ```bash Command
 # In-seq splitting mode — EP + DP, batch size 1
@@ -444,7 +452,7 @@ python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp \
   --dsa-prefill-cp-mode in-seq-split --max-running-requests 32
 ```
 
-**Round-robin splitting** (`--dsa-prefill-cp-mode round-robin-split`, default): Distributes tokens by `token_idx % cp_size`. Supports fused MoE, FP8 KV cache, and multi-batch prefill. Cannot be combined with DP attention. See [PR #13959](https://github.com/sgl-project/sglang/pull/13959).
+**轮转切分**（`--dsa-prefill-cp-mode round-robin-split`，默认）：按 `token_idx % cp_size` 分配 token。支持 fused MoE、FP8 KV 缓存与多批预填充。不能与 DP 注意力组合。参见 [PR #13959](https://github.com/sgl-project/sglang/pull/13959)。
 
 ```bash Command
 # Round-robin splitting — FusedMoE + CP8
@@ -453,9 +461,9 @@ python -m sglang.launch_server --model deepseek-ai/DeepSeek-V3.2-Exp \
   --dsa-prefill-cp-mode round-robin-split --max-running-requests 32
 ```
 
-**PP + CP (multi-node):** Combines Pipeline Parallelism and Context Parallelism for cross-node scaling. The production-optimized configurations below have been verified on Hopper:
+**PP + CP（多节点）：** 组合流水线并行与上下文并行实现跨节点扩展。下面经过生产优化的配置已在 Hopper 上验证：
 
-We suggested `DP2` + `MTP` for local deployment of agentic workflow with DeepSeek V3.2 on Hopper platform:
+我们建议在 Hopper 平台上用 `DP2` + `MTP` 本地部署 DeepSeek V3.2 的 agent 工作流：
 
 ```shell Command
 export SGLANG_DEEPEP_LL_COMBINE_SEND_NUM_SMS=32
@@ -486,7 +494,7 @@ sglang "${sglang_args[@]}" 2>&1 | tee $LOG_DIR/$RANK.log
 
 **CP + PP + EP + DP**
 
-`CP` is currently enabled with `PP=2` on Hopper platform and we can reduce TP=16 to TP=8 from standalone deployment:
+`CP` 目前在 Hopper 平台上与 `PP=2` 一起启用，相比独立部署可以把 TP=16 降到 TP=8：
 
 ```shell Command
 # verified on Hopper platform
@@ -518,7 +526,7 @@ sglang "${sglang_args[@]}" 2>&1 | tee $LOG_DIR/$RANK.log
 
 **fp8 KV + CP + PP**
 
-With FP8 KV, we can have less memory footprint. This can be combined with various parallel schemes:
+使用 FP8 KV 可减少显存占用。可组合各种并行方案：
 
 ```shell Command
 # verified in Hopper platform
@@ -566,22 +574,22 @@ sglang_args=($sglang_args)
 sglang "${sglang_args[@]}" 2>&1 | tee $LOG_DIR/$RANK.log
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark on Blackwell
+### 5.1 Blackwell 上的速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x)
-- Model: DeepSeek-V3.2-Exp
-- Tensor Parallelism: 8
-- sglang version: 0.5.6
+- 硬件：NVIDIA B200 GPU（8 卡）
+- 模型：DeepSeek-V3.2-Exp
+- 张量并行度：8
+- SGLang 版本：0.5.6
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios. To simulate real-world usage patterns, we configure each request with 1024 input tokens and 1024 output tokens, representing typical medium-length conversations with detailed responses.
+我们用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上做性能评估。该数据集包含真实对话数据，能更好地反映实际使用场景的性能。为模拟真实使用模式，我们把每个请求配置为 1024 个输入 token 与 1024 个输出 token，代表带详细回答的典型中等长度对话。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 sglang serve \
@@ -595,7 +603,7 @@ sglang serve \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -609,7 +617,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -653,9 +661,9 @@ Max ITL (ms):                            31.45
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐量敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 sglang serve \
@@ -668,7 +676,7 @@ sglang serve \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -682,7 +690,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -723,17 +731,17 @@ Max ITL (ms):                            975.03
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 准确率基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200 --port 30000
 ```
 
-- **Test Results**:
+- **测试结果**：
   - DeepSeek-V3.2-Exp
     ```
     Accuracy: 0.980
@@ -742,20 +750,20 @@ python3 -m sglang.test.few_shot_gsm8k --num-questions 200 --port 30000
     Output throughput: 965.919 token/s
     ```
 
-- **Full GSM8K (1319 questions)** — for a stricter accuracy check, run the full set 8-shot:
+- **完整 GSM8K（1319 题）** —— 要做更严格的准确率检查，运行完整的 8-shot 全量测试：
 
 ```shell Command
 python3 benchmark/gsm8k/bench_sglang.py --num-shots 8 --num-questions 1319 --parallel 1319
 ```
 
-  - 8-shot:
+  - 8-shot：
     ```
     Accuracy: 0.956
     Invalid: 0.000
     Latency: 25.109 s
     Output throughput: 5226.235 token/s
     ```
-  - 20-shot (long-context; stays close to the 8-shot result):
+  - 20-shot（长上下文；与 8-shot 结果接近）：
     ```
     Accuracy: 0.956
     Invalid: 0.000
@@ -763,9 +771,9 @@ python3 benchmark/gsm8k/bench_sglang.py --num-shots 8 --num-questions 1319 --par
     Output throughput: 4418.617 token/s
     ```
 
-#### 5.2.2 MMLU Benchmark
+#### 5.2.2 MMLU 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 cd sglang
@@ -773,7 +781,7 @@ bash benchmark/mmlu/download_data.sh
 python3 benchmark/mmlu/bench_sglang.py --nsub 10 --port 30000
 ```
 
-- **Test Results**:
+- **测试结果**：
   - DeepSeek-V3.2-Exp
     ```
     subject: abstract_algebra, #q:100, acc: 0.780
@@ -790,17 +798,17 @@ python3 benchmark/mmlu/bench_sglang.py --nsub 10 --port 30000
     Average accuracy: 0.879
     ```
 
-#### 5.2.3 GPQA-Diamond Benchmark
+#### 5.2.3 GPQA-Diamond 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.run_eval --port 30000 --eval-name gpqa --num-examples 198 --max-tokens 128000 --repeat 8 --thinking-mode deepseek-v3
 ```
 
-- **Test Results** (model: `deepseek-ai/DeepSeek-V3.2-Exp`, 8×B200):
-  - Default (`temperature=0`): mean **0.797** over 8 runs — closely matches the official GPQA-Diamond score of **79.9** for DeepSeek-V3.2-Exp reported in its [model card](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp)
-  - With `temperature=1.0, top_p=0.95` (as recommended by DeepSeek):
+- **测试结果**（模型：`deepseek-ai/DeepSeek-V3.2-Exp`，8×B200）：
+  - 默认（`temperature=0`）：8 次运行平均 **0.797**——与 DeepSeek-V3.2-Exp 在其[模型卡](https://huggingface.co/deepseek-ai/DeepSeek-V3.2-Exp)中报告的官方 GPQA-Diamond 分数 **79.9** 高度吻合
+  - 用 `temperature=1.0, top_p=0.95`（DeepSeek 推荐）：
 
 ```shell Command
 python3 -m sglang.test.run_eval --port 30000 --eval-name gpqa --num-examples 198 --max-tokens 128000 --repeat 8 --top-p 0.95 --temperature 1.0 --thinking-mode deepseek-v3
@@ -811,14 +819,14 @@ python3 -m sglang.test.run_eval --port 30000 --eval-name gpqa --num-examples 198
   Scores: ['0.848', '0.808', '0.848', '0.838', '0.879', '0.813', '0.838', '0.848']
   ```
 
-#### 5.2.4 AIME 2025 Benchmark
+#### 5.2.4 AIME 2025 基准测试
 
-Results on AIME 2025 (8×B200), evaluated with [NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills.git):
+AIME 2025 结果（8×B200），用 [NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills.git) 评估：
 
 <table style={{width: "100%", borderCollapse: "collapse"}}>
   <thead>
     <tr style={{borderBottom: "2px solid #d55816"}}>
-      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>Model</th>
+      <th style={{textAlign: "left", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>模型</th>
       <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>pass@1 avg-of-4</th>
       <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.02)"}}>majority@4</th>
       <th style={{textAlign: "right", padding: "10px 12px", fontWeight: 700, backgroundColor: "rgba(255,255,255,0.05)"}}>pass@4</th>
@@ -846,7 +854,7 @@ Results on AIME 2025 (8×B200), evaluated with [NeMo-Skills](https://github.com/
   </tbody>
 </table>
 
-**Reproduction.** Install [NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills), launch the server with the tool-call and reasoning parsers, then run `ns eval`:
+**复现。** 安装 [NeMo-Skills](https://github.com/NVIDIA/NeMo-Skills)，用工具调用与推理解析器启动服务端，然后运行 `ns eval`：
 
 ```bash Command
 pip install git+https://github.com/NVIDIA/NeMo-Skills.git --ignore-installed blinker
@@ -867,18 +875,18 @@ ns eval \
   # Use ++inference.tokens_to_generate=120000 for the DeepSeek-V3.2-Speciale model
 ```
 
-### 5.3 Speed Benchmark on Hopper
+### 5.3 Hopper 上的速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA H800 GPU (16x)
-- Model: DeepSeek-V3.2
-- Tensor Parallelism: 16
-- sglang version: 0.5.9
+- 硬件：NVIDIA H800 GPU（16 卡）
+- 模型：DeepSeek-V3.2
+- 张量并行度：16
+- SGLang 版本：0.5.9
 
-#### 5.3.1 Latency-Sensitive Benchmark
+#### 5.3.1 延迟敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 export SGLANG_DEEPEP_LL_COMBINE_SEND_NUM_SMS=32
@@ -907,7 +915,7 @@ sglang_args=($sglang_args)
 sglang "${sglang_args[@]}" 2>&1 | tee $LOG_DIR/$RANK.log
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -921,7 +929,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -964,9 +972,9 @@ Max ITL (ms):                            36.84
 ==================================================
 ```
 
-#### 5.3.2 Throughput-Sensitive Benchmark
+#### 5.3.2 吞吐量敏感基准测试
 
-We simply use the same deployment method and vary the throughput by maximizing concurrencies:
+我们用相同的部署方式，通过最大化并发来提升吞吐：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -980,12 +988,12 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1024 # see picture below why we use 1024 for concurrency, hence num prompts 2048
 ```
 
-DeepSeek 3.2 can steadily support concurrency up to `1024` and when concurrency is greater than `128`, the TTFT increase sharply:
+DeepSeek 3.2 可以稳定支持最高 `1024` 的并发，而当并发大于 `128` 时，TTFT 会急剧上升：
 
 ![DeepSeek V3.2 Concurrency ISL/OSL=1024/128](https://github.com/user-attachments/assets/d5c9c9fb-44f3-4793-a0fd-f8fa954546f5)
 
 
-Performance record:
+性能记录：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -1028,7 +1036,7 @@ Max ITL (ms):                            2666.37
 ==================================================
 ```
 
-By adding `--random-range-ratio 1`, we could get even higher statistical numbers:
+加上 `--random-range-ratio 1` 还能拿到更高的统计数值：
 
 ```text Output
 ============ Serving Benchmark Result ============

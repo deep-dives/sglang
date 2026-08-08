@@ -1,53 +1,57 @@
 ---
 title: Kimi-Linear
 metatags:
-    description: "Deploy Kimi-Linear with SGLang - community contribution guide for Moonshot AI's Kimi-Linear model deployment."
+    description: "用 SGLang 部署 Kimi-Linear——Moonshot AI Kimi-Linear 模型的社区贡献部署指南。"
 ---
 
 import { KimiLinearDeployment } from '/src/snippets/autoregressive/kimi-linear-deployment.jsx';
 
-## AMD GPU Support
+## AMD GPU 支持
 
-## 1. Model Introduction
-Kimi Linear is a hybrid linear attention architecture that outperforms traditional full attention methods across various contexts, including short, long, and reinforcement learning (RL) scaling regimes. At its core is Kimi Delta Attention (KDA)—a refined version of Gated DeltaNet that introduces a more efficient gating mechanism to optimize the use of finite-state RNN memory.
+## 1. 模型介绍
+Kimi Linear 是一种混合线性注意力架构，在短上下文、长上下文以及强化学习（RL）扩展等多种场景下都优于传统的全注意力方法。其核心是 Kimi Delta Attention（KDA）——Gated DeltaNet 的精炼版本，引入更高效的门控机制，以优化有限状态 RNN 记忆的利用。
 
-This generation delivers comprehensive upgrades across the board:
+<Note>
+💡 AI Infra 学习笔记：标准 Transformer 的注意力复杂度随序列长度二次增长，KV 缓存也随之线性膨胀；Mamba 类线性注意力则把历史压缩进一个固定大小的循环状态（不再缓存完整 KV），推理时每一步的成本恒定，因此长上下文下解码显著更快（这里号称最高 6×）。代价是「记忆」有损——于是就有了 KDA 与全局 MLA 按 3:1 混合的架构，用少量全注意力层兜住长程精度。推理引擎需要为这类模型单独管理循环状态内存，并配套专门的 kernel。
+</Note>
 
-Kimi Delta Attention (KDA): A linear attention mechanism that refines the gated delta rule with finegrained gating.
-Hybrid Architecture: A 3:1 KDA-to-global MLA ratio reduces memory usage while maintaining or surpassing the quality of full attention.
-Superior Performance: Outperforms full attention in a variety of tasks, including long-context and RL-style benchmarks on 1.4T token training runs with fair comparisons.
-High Throughput: Achieves up to 6× faster decoding and significantly reduces time per output token (TPOT).
+这一代模型在各方面都带来了全面升级：
 
-For more details, please refer to the [official Kimi Linear GitHub Repository]: https://github.com/MoonshotAI/Kimi-Linear
+Kimi Delta Attention（KDA）：一种线性注意力机制，用细粒度门控改良了带门控的 delta 规则。
+混合架构：KDA 与全局 MLA 按 3:1 混合，在保持甚至超过全注意力质量的同时降低显存占用。
+性能更优：在多种任务上胜过全注意力，包括在 1.4T token 训练上的长上下文与 RL 类基准（做了公平对比）。
+高吞吐：解码速度最高提升 6 倍，显著降低每输出 token 的时间（TPOT）。
 
-## 2. SGLang Installation
+更多细节请参考 [Kimi Linear 官方 GitHub 仓库]: https://github.com/MoonshotAI/Kimi-Linear
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+## 2. SGLang 安装
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+SGLang 提供多种安装方式。你可以根据硬件平台和需求选择最合适的安装方法。
 
-## 3. Model Deployment
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-This section provides a progressive guide from quick deployment to performance optimization, suitable for users at different levels.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供从快速部署到性能优化的渐进式指南，适合不同水平的用户。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model variant, deployment strategy, and thinking capabilities.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下方的配置选择器，根据你的硬件平台、模型版本、部署策略和思考能力自动生成对应的部署命令。
 
 <KimiLinearDeployment />
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基础用法
 
-For basic API usage and request examples, please refer to:
+基础 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+- [SGLang 基础用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-### 4.2 Advanced Usage
+### 4.2 进阶用法
 
-#### 4.2.1 Launch the docker
+#### 4.2.1 启动 docker
 ```shell Command
 docker pull lmsysorg/sglang:v0.5.7-rocm700-mi30x
 ```
@@ -65,13 +69,13 @@ docker run -d -it --ipc=host --network=host --privileged \
   /bin/bash
 ```
 
-#### 4.2.2 pre-installation steps inside the docker
+#### 4.2.2 进入 docker 后的安装步骤
 
 ```shell Command
 pip install sentencepiece tiktoken
 ```
 
-#### 4.2.3 Launch the server
+#### 4.2.3 启动服务
 ```shell Command
 export SGLANG_ROCM_FUSED_DECODE_MLA=0
 
@@ -82,19 +86,23 @@ SGLANG_ROCM_FUSED_DECODE_MLA=0 python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-## 5. Benchmark
-### 5.1 Speed Benchmark
-Test Environment:
+## 5. 基准测试
+### 5.1 速度基准测试
+测试环境：
 
-Hardware: AMD MI300X GPU
+硬件：AMD MI300X GPU
 
-Model: Kimi-Linear-48B-A3B-Instruct
+模型：Kimi-Linear-48B-A3B-Instruct
 
-Tensor Parallelism: 4
+张量并行：4
 
-sglang version: 0.5.7
+SGLang 版本：0.5.7
 
-- **Model Deployment**
+<Note>
+💡 AI Infra 学习笔记：基准里的 TTFT 与 TPOT/ITL 分别刻画「首个 token 之前」和「逐 token」的延迟。对线性注意力模型，解码步不依赖历史长度，TPOT 基本恒定——这正是它吞吐高的原因。解读结果时要注意，只有同硬件、同并发的对比才有意义。
+</Note>
+
+- **模型部署**
 
 ```bash Command
 SGLANG_ROCM_FUSED_DECODE_MLA=0 python3 -m sglang.launch_server \
@@ -104,9 +112,9 @@ SGLANG_ROCM_FUSED_DECODE_MLA=0 python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-### 5.1.1 Low Concurrency (Latency-Optimized)
+### 5.1.1 低并发（延迟优化）
 
-- Benchmark Command:
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -119,7 +127,7 @@ python3 -m sglang.bench_serving \
   --request-rate inf
 ```
 
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -159,8 +167,8 @@ Max ITL (ms):                            11.46
 ==================================================
 ```
 
-### 5.1.2 Medium Concurrency (Balanced)
-- Benchmark Command:
+### 5.1.2 中等并发（均衡）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -173,7 +181,7 @@ python3 -m sglang.bench_serving \
   --request-rate inf
 ```
 
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -214,8 +222,8 @@ Max ITL (ms):                            299.89
 
 ```
 
-### 5.1.3 High Concurrency (Throughput-Optimized)
-- Benchmark Command:
+### 5.1.3 高并发（吞吐优化）
+- 基准测试命令：
 ```bash Command
 python3 -m sglang.bench_serving \
   --backend sglang \
@@ -228,7 +236,7 @@ python3 -m sglang.bench_serving \
   --request-rate inf
 ```
 
-- Test Results:
+- 测试结果：
 ```text Output
 ============ Serving Benchmark Result ============
 Backend:                                 sglang
@@ -267,11 +275,11 @@ P99 ITL (ms):                            157.80
 Max ITL (ms):                            2481.11
 ==================================================
 ```
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- Server Command
+- 服务端命令
 
 ```shell Command
 SGLANG_ROCM_FUSED_DECODE_MLA=0 python3 -m sglang.launch_server \
@@ -281,13 +289,13 @@ SGLANG_ROCM_FUSED_DECODE_MLA=0 python3 -m sglang.launch_server \
   --trust-remote-code
 ```
 
-- Benchmark Command
+- 基准测试命令
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200
 ```
 
-- **Result**:
+- **结果**：
 
 ```text Output
 Accuracy: 0.705

@@ -1,64 +1,69 @@
 ---
 title: Qwen3-VL
 metatags:
-    description: "Deploy Qwen3-VL vision-language models with SGLang - open model for text, 262K context, enhanced visual reasoning and agent capabilities."
+    description: "使用 SGLang 部署 Qwen3-VL 视觉语言模型——开源文本模型，262K 上下文，增强的视觉推理与智能体能力。"
 ---
 
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Qwen3-VL series](https://github.com/QwenLM/Qwen3-VL) are the most powerful vision-language models in the Qwen series to date, featuring advanced capabilities in multi-modal understanding, reasoning, and agentic applications.
+[Qwen3-VL 系列](https://github.com/QwenLM/Qwen3-VL) 是 Qwen 系列目前最强的视觉语言模型，具备多模态理解、推理和智能体应用等先进能力。
 
-This generation delivers comprehensive upgrades across the board:
+这一代模型在各个方面都有全面升级：
 
-- **Superior text understanding & generation**: Qwen3-VL-235B-A22B-Instruct was ranked as the [#1 open model for text on lmarena.ai](https://x.com/arena/status/1973151703563460942)
-- **Deeper visual perception & reasoning**: Enhanced image and video understanding capabilities.
-- **Extended context length**: Supports up to 262K tokens for processing long documents and videos.
-- **Enhanced spatial and video dynamics comprehension**: Better understanding of spatial relationships and temporal dynamics.
-- **Stronger agent interaction capabilities**: Improved tool use and search-based agent performance.
-- **Flexible deployment options**: Available in Dense and MoE architectures that scale from edge to cloud, with Instruct and reasoning-enhanced Thinking editions.
+- **卓越的文本理解与生成**：Qwen3-VL-235B-A22B-Instruct 在 lmarena.ai 上被评为[文本类排名第一的开源模型](https://x.com/arena/status/1973151703563460942)
+- **更深入的视觉感知与推理**：图像和视频理解能力增强。
+- **更长的上下文**：支持最长 262K token，可处理长文档和长视频。
+- **更强的空间与视频动态理解**：对空间关系和时序动态的理解更好。
+- **更强的智能体交互能力**：工具使用和基于搜索的智能体表现更好。
+- **灵活的部署选项**：提供 Dense 和 MoE 两种架构，可从边缘设备扩展到云端，并有 Instruct 和增强推理的 Thinking 版本。
 
-For more details, please refer to the [official Qwen3-VL GitHub Repository](https://github.com/QwenLM/Qwen3-VL).
+更多细节请参考 [Qwen3-VL 官方 GitHub 仓库](https://github.com/QwenLM/Qwen3-VL)。
 
-## 2. SGLang Installation
+## 2. 安装 SGLang
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+SGLang 提供多种安装方式，你可以根据自己的硬件平台和需求选择最合适的一种。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-The Qwen3-VL series offers models in various sizes and architectures, optimized for different hardware platforms including NVIDIA and AMD GPUs, as well as Intel Xeon CPUs. The recommended launch configurations vary by hardware and model size.
+Qwen3-VL 系列提供多种尺寸和架构的模型，针对 NVIDIA、AMD GPU 以及 Intel Xeon CPU 等不同硬件平台做了优化。推荐的启动配置因硬件和模型尺寸而异。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model size, quantization method, and thinking capabilities.
+<Note>
+💡 AI Infra 学习笔记：多模态请求的输入 token 主要由视觉 token 构成：图片/视频先经过视觉编码器切块编码成若干「视觉 token」，再与文本 token 拼成一个序列走预填充。`--mm-attention-backend` 选的是视觉 token 与文本 token 之间的注意力计算 kernel（fa3/fa4/triton_attn 等），不同后端对不同硬件和页大小的支持不同；`--keep-mm-feature-on-device` 则避免图像特征在 CPU/GPU 间反复拷贝。长视频会把视觉 token 数放大到几万甚至几十万，直接决定显存与 TTFT，这是多模态部署与纯文本部署最大的差异点。
+</Note>
+
+
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台、模型尺寸、量化方法和思考能力自动生成对应的部署命令。
 
 import { Qwen3VLDeployment } from "/src/snippets/autoregressive/qwen3-vl-deployment.jsx";
 
 <Qwen3VLDeployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-* **Multimodal attention backend** : Usually, `--mm-attention-backend` is default to `fa3` on H100/H200/A100 for better performance, but it is default to `triton_attn` on B200 for compatibility.
-* **TTFT Optimization** : Set `SGLANG_USE_CUDA_IPC_TRANSPORT=1` to use CUDA IPC for transferring multimodal features, which significantly improves TTFT. This consumes additional memory and may require adjusting `--mem-fraction-static` and/or `--max-running-requests`. (additional memory is proportional to image size * number of images in current running requests.)
-* **Memory Management** : Set lower `--context-length` to conserve memory. A value of `128000` is sufficient for most scenarios, down from the default 262K.
-* **Expert Parallelism** : SGLang supports Expert Parallelism (EP) via `--ep`, allowing experts in MoE models to be deployed on separate GPUs for better throughput. One thing to note is that, for quantized models, you need to set `--ep` to a value that satisfies the requirement: `(moe_intermediate_size / moe_tp_size) % weight_block_size_n == 0, where moe_tp_size is equal to tp_size divided by ep_size.` Note that EP may perform worse in low concurrency scenarios due to additional communication overhead. Check out [Expert Parallelism Deployment](../../../docs/advanced_features/expert_parallelism) for more details.
-* **Kernel Tuning** : For MoE Triton kernel tuning on your specific hardware, refer to [fused_moe_triton](https://github.com/sgl-project/sglang/tree/main/benchmark/kernels/fused_moe_triton).
+* **多模态注意力后端**：通常 `--mm-attention-backend` 在 H100/H200/A100 上默认为 `fa3`（性能更好），在 B200 上默认为 `triton_attn`（出于兼容性考虑）。
+* **TTFT 优化**：设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1`，用 CUDA IPC 传输多模态特征，可显著改善 TTFT。这会额外消耗显存，可能需要调整 `--mem-fraction-static` 和/或 `--max-running-requests`（额外显存与「图像大小 × 当前运行请求中的图像数量」成正比）。
+* **显存管理**：设置更小的 `--context-length` 以节省显存。默认是 262K，多数场景下 `128000` 就够了。
+* **专家并行**：SGLang 通过 `--ep` 支持专家并行（EP），可以把 MoE 模型中的专家部署到不同的 GPU 上以获得更高吞吐。需要注意的是，对于量化模型，`--ep` 必须满足约束：`(moe_intermediate_size / moe_tp_size) % weight_block_size_n == 0, where moe_tp_size is equal to tp_size divided by ep_size.` 另外，低并发场景下 EP 可能因为额外的通信开销而表现更差。更多细节见 [专家并行部署](../../../docs/advanced_features/expert_parallelism)。
+* **kernel 调优**：要在你的特定硬件上调整 MoE Triton kernel，参考 [fused_moe_triton](https://github.com/sgl-project/sglang/tree/main/benchmark/kernels/fused_moe_triton)。
 
-**Hardware-specific notes:**
-- **H100 (FP8):** Use the `Qwen/Qwen3-VL-235B-A22B-Instruct-FP8` checkpoint for best memory efficiency.
-- **A100 / H100 (BF16):** Use standard multimodal parameters to manage throughput and GPU memory usage.
-- **H200 / B200:** Runs out of the box, supporting full context length plus concurrent image + video processing.
+**硬件相关说明：**
+- **H100（FP8）**：使用 `Qwen/Qwen3-VL-235B-A22B-Instruct-FP8` 检查点以获得最佳显存效率。
+- **A100 / H100（BF16）**：使用标准多模态参数来平衡吞吐与 GPU 显存占用。
+- **H200 / B200**：开箱即用，支持完整上下文长度以及图像 + 视频并发处理。
 
-**Additional multimodal server parameters:**
-- `--keep-mm-feature-on-device`: Retain multimodal feature tensors on GPU after processing to avoid device-to-host memory copies, improving performance for high-frequency inference.
+**其它多模态服务端参数：**
+- `--keep-mm-feature-on-device`：处理完成后把多模态特征张量保留在 GPU 上，避免设备到主机的显存拷贝，可提升高频推理的性能。
 
-**Example with full multimodal optimizations:**
+**完整多模态优化的示例：**
 ```bash Command
 SGLANG_USE_CUDA_IPC_TRANSPORT=1 \
 SGLANG_VLM_CACHE_SIZE_MB=0 \
@@ -78,22 +83,22 @@ python -m sglang.launch_server \
   --enable-metrics
 ```
 
-* **Xeon CPU service configuration:** Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+* **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-## 4. Model Invocation
+## 4. 模型调用
 
-### 4.1 Basic Usage
+### 4.1 基本用法
 
-For basic API usage and request examples, please refer to:
+基本的 API 用法和请求示例请参考：
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-### 4.2 Advanced Usage
+### 4.2 高级用法
 
-#### 4.2.1 Multi-Modal Inputs
+#### 4.2.1 多模态输入
 
-Qwen3-VL supports both image and video inputs. Here's a basic example with image input:
+Qwen3-VL 同时支持图像和视频输入。下面是一个图像输入的基础示例：
 
 ```python Example
 import time
@@ -133,7 +138,7 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Example Output:**
+**示例输出：**
 
 ```text Output
 Response costs: 3.37s
@@ -151,9 +156,9 @@ CASH IDR                     20,000
 CHANGE DUE                  3,000
 ```
 
-**Multi-Image Input Example:**
+**多图输入示例：**
 
-Qwen3-VL can process multiple images in a single request for comparison or analysis:
+Qwen3-VL 可以在一次请求中处理多张图片，用于对比或分析：
 
 ```python Example
 import time
@@ -199,7 +204,7 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Example Output:**
+**示例输出：**
 
 ```text Output
 Response costs: 10.18s
@@ -214,9 +219,9 @@ Key contrasts emerge: the first image is kinetic and personal, emphasizing the t
 In essence, the first image celebrates the individual taxi in its natural habitat; the second reveals the scale and structure behind the fleet, transforming the familiar red icon into a symbol of coordination, maintenance, or collective action. Both are quintessentially Hong Kong, yet they offer vastly different narratives — one of motion and commerce, the other of assembly and purpose.
 ```
 
-**Video Input Example:**
+**视频输入示例：**
 
-Qwen3-VL supports video understanding by processing video URLs:
+Qwen3-VL 通过处理视频 URL 支持视频理解：
 
 ```python Example
 import time
@@ -256,22 +261,22 @@ print(f"Response costs: {time.time() - start:.2f}s")
 print(f"Generated text: {response.choices[0].message.content}")
 ```
 
-**Note:**
+**注意：**
 
-- For video processing, ensure you have sufficient context length configured (up to 262K tokens)
-- Video processing may require more memory; adjust `--mem-fraction-static` accordingly
-- You can also provide local file paths using `file://` protocol
+- 处理视频时，请确保配置了足够的上下文长度（最长 262K token）
+- 视频处理可能需要更多显存，请相应调整 `--mem-fraction-static`
+- 你也可以使用 `file://` 协议提供本地文件路径
 
-**Example Output:**
+**示例输出：**
 
 ```text Output
 Response costs: 3.89s
 Generated text: A person wearing blue gloves is using a microscope. They are adjusting the focus knob with one hand while holding a pipette with the other, suggesting they are preparing or examining a sample on the slide beneath the objective lens. The microscope's 40x objective lens is positioned over the slide, indicating a high-magnification observation. The person carefully manipulates the slide and the microscope controls, likely to achieve a clear view of the specimen.
 ```
 
-#### 4.2.2 Reasoning Parser
+#### 4.2.2 推理解析器
 
-Qwen3-VL-Thinking supports reasoning mode. Enable the reasoning parser during deployment to separate the thinking and content sections:
+Qwen3-VL-Thinking 支持推理模式。部署时启用推理解析器，可以把思考过程和回答内容分开：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -282,7 +287,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -331,7 +336,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -344,11 +349,11 @@ Step 3: 240 × 0.15 = 36
 The answer is 36. To find 15% of 240, we multiply 240 by 0.15, which equals 36.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步思考的过程，让你能看到模型是如何得出结论的。
 
-#### 4.2.3 Tool Calling
+#### 4.2.3 工具调用
 
-Qwen3-VL supports tool calling capabilities. Enable the tool call parser:
+Qwen3-VL 支持工具调用。启用工具调用解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -360,7 +365,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -457,7 +462,7 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -469,13 +474,13 @@ I should call the function with location="Beijing".
    Arguments: {"location": "Beijing", "unit": "celsius"}
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器展示了模型如何决定使用某个工具
+- 工具调用会清楚标出函数名和参数
+- 之后你可以执行该函数并把结果传回，继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -515,22 +520,22 @@ print(final_response.choices[0].message.content)
 # Output: "The weather in Beijing is currently 22°C and sunny."
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x)
-- Model: Qwen3-VL-235B-A22B-Instruct
-- Tensor Parallelism: 8
-- sglang version: 0.5.6
+- 硬件：NVIDIA B200 GPU（8 块）
+- 模型：Qwen3-VL-235B-A22B-Instruct
+- 张量并行：8
+- SGLang 版本：0.5.6
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation with random images. To simulate real-world usage, you can specify different input and output lengths for each request. For example, each request can have 128 input tokens, two 720p images, and 1024 output tokens.
+我们使用 SGLang 内置的基准测试工具，用随机图像进行性能评估。为模拟真实使用场景，你可以为每个请求指定不同的输入、输出长度。例如每个请求可以包含 128 个输入 token、两张 720p 图片和 1024 个输出 token。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感型基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -540,7 +545,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -557,7 +562,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -598,11 +603,16 @@ Max ITL (ms):                            31.92
 ==================================================
 ```
 
-**Optimized Results (with CUDA IPC Transport):**
+**优化结果（启用 CUDA IPC 传输）：**
 
-For further TTFT optimization, enable CUDA IPC Transport for multimodal features by setting `SGLANG_USE_CUDA_IPC_TRANSPORT=1`. This significantly reduces TTFT by using CUDA IPC for transferring multimodal features.
+要进一步优化 TTFT，可以设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1` 启用多模态特征的 CUDA IPC 传输。通过 CUDA IPC 传输多模态特征可以显著降低 TTFT。
 
-- Model Deployment Command:
+<Note>
+💡 AI Infra 学习笔记：多模态场景下 TTFT 的瓶颈往往不在注意力计算，而在「图像特征张量的搬运」：视觉编码器在 GPU 上算出的特征要传给做注意力/采样的模块，默认可能经过 CPU（设备到主机再回设备），延迟很高。CUDA IPC（进程间共享显存）让特征直接在 GPU 间传递，显著降低首 token 延迟，代价是额外显存（与图像大小、并发请求数成正比）——这也是 `--mem-fraction-static` 要调低的原因。
+</Note>
+
+
+- 模型部署命令：
 
 ```shell Command
 SGLANG_USE_CUDA_IPC_TRANSPORT=1 python -m sglang.launch_server \
@@ -612,7 +622,7 @@ SGLANG_USE_CUDA_IPC_TRANSPORT=1 python -m sglang.launch_server \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -629,9 +639,9 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
-  With `SGLANG_USE_CUDA_IPC_TRANSPORT=1`, TTFT improves significantly:
+  设置 `SGLANG_USE_CUDA_IPC_TRANSPORT=1` 后，TTFT 显著改善：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -672,9 +682,9 @@ Max ITL (ms):                            42.36
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐量敏感型基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -684,7 +694,7 @@ python -m sglang.launch_server \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -701,7 +711,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -742,13 +752,13 @@ Max ITL (ms):                            33453.23
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 MMMU Benchmark
+#### 5.2.1 MMMU 基准测试
 
-You can evaluate the model's accuracy using the MMMU dataset with `lmms_eval`:
+你可以使用 `lmms_eval` 在 MMMU 数据集上评估模型的精度：
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 uv pip install lmms_eval
@@ -764,7 +774,7 @@ python3 -m lmms_eval \
   --gen_kwargs "max_new_tokens=4096"
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 <table style={{width: "100%", borderCollapse: "collapse", tableLayout: "fixed"}}>

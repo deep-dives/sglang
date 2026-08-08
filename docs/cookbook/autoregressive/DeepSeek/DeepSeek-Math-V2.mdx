@@ -1,65 +1,73 @@
 ---
 title: DeepSeek-Math-V2
 metatags:
-    description: "Deploy DeepSeek-Math-V2 with SGLang - advanced mathematical reasoning model with gold-level IMO/CMO performance and theorem-proving capabilities."
+    description: "使用 SGLang 部署 DeepSeek-Math-V2——具备金牌级 IMO/CMO 成绩与定理证明能力的高级数学推理模型。"
 ---
 
 import { DeepSeekMathV2Deployment } from '/src/snippets/autoregressive/deepseek-math-v2-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[DeepSeek-Math-V2](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2) is DeepSeek's advanced mathematical reasoning model with strong theorem-proving capabilities. The model demonstrates exceptional performance on mathematical competitions, achieving gold-level scores on IMO 2025 and CMO 2024, and a near-perfect 118/120 on Putnam 2024 with scaled test-time compute.
+[DeepSeek-Math-V2](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2) 是 DeepSeek 推出的高级数学推理模型，具备强大的定理证明能力。该模型在数学竞赛中表现优异：在 IMO 2025 与 CMO 2024 上取得金牌级成绩，并在扩展测试时计算（scaled test-time compute）下于 Putnam 2024 拿到接近满分（118/120）的成绩。
 
-**Key Features:**
+**核心特性：**
 
-- **Strong Theorem-Proving**: Gold-level performance on IMO 2025 and CMO 2024
-- **Self-Verifiable Reasoning**: Implements self-verifiable mathematical reasoning for improved accuracy
-- **Competition-Level Math**: Near-perfect score (118/120) on Putnam 2024
-- **Large MoE Model**: ~671B total parameters, requires high-memory GPUs (B200 183GB or B300 275GB)
+- **强大的定理证明能力**：IMO 2025 与 CMO 2024 金牌级表现
+- **可自验证的推理**：通过自验证的数学推理提升正确率
+- **竞赛级数学能力**：Putnam 2024 接近满分（118/120）
+- **大型 MoE 模型**：总参数约 671B，需要高显存 GPU（B200 183GB 或 B300 275GB）
 
-**Available Models:**
+<Note>
+💡 AI Infra 学习笔记：DeepSeek 系模型是典型的 MoE（混合专家）架构——总参数 671B，但每个 token 只激活其中一小部分专家，所以显存占用取决于全部权重、算力消耗取决于激活参数。部署时用 `--ep 8`（专家并行）把不同专家分布到多张卡上，是支撑千亿级 MoE 服务的关键手段。
+</Note>
 
-- **BF16 (Full Weights)**: [deepseek-ai/DeepSeek-Math-V2](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2) - Full precision weights
+**可用模型：**
 
-**License:**
-To use DeepSeek-Math-V2, you must agree to DeepSeek's Community License. See [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2/blob/main/LICENSE) for details.
+- **BF16（完整权重）**：[deepseek-ai/DeepSeek-Math-V2](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2) - 全精度权重
 
-## 2. SGLang Installation
+**许可协议：**
+使用 DeepSeek-Math-V2 需要同意 DeepSeek 社区许可协议。详见 [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-Math-V2/blob/main/LICENSE)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. SGLang 安装
 
-## 3. Model Deployment
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供针对不同硬件平台与使用场景优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, and deployment strategy.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下面的配置选择器，可根据你的硬件平台、量化方式与部署策略自动生成对应的部署命令。
 
 <DeepSeekMathV2Deployment />
 
 <Warning>
-  DeepSeek-Math-V2 is built on DeepSeek-V3.2 and uses DSA sparse attention. All recipes here run the DSA indexer top-k on the default `--dsa-topk-backend sgl-kernel`. Other top-k backend choices have not been fully validated on this model.
+  DeepSeek-Math-V2 基于 DeepSeek-V3.2 构建，采用 DSA 稀疏注意力。本页所有方案都在默认的 `--dsa-topk-backend sgl-kernel` 下运行 DSA indexer top-k。其他 top-k 后端选择尚未在该模型上经过完整验证。
 </Warning>
 
-### 3.2 Configuration Tips
+<Note>
+💡 AI Infra 学习笔记：DSA（DeepSeek Sparse Attention，稀疏注意力）让注意力只作用于少数关键 token，把长序列的注意力开销从 O(n²) 降到接近线性。代价是要先跑一个 indexer 选出 top-k 关键 token——这也是部署参数里 `--dsa-topk-backend` 存在的意义。理解稀疏注意力对处理超长上下文（128K+）的推理成本至关重要。
+</Note>
 
-**Hardware Requirements:**
+### 3.2 配置技巧
 
-- **B200 (183GB)**: BF16 tp=8
-- **B300 (275GB)**: BF16 tp=8
+**硬件要求：**
 
-**DP Attention:**
+- **B200（183GB）**：BF16 tp=8
+- **B300（275GB）**：BF16 tp=8
 
-- Enable DP attention for high-throughput scenarios
-- The `--dp` value commonly matches the `--tp` value
-- Trade-off: Higher throughput at the cost of slightly increased latency
+**DP 注意力：**
 
-## 4. Model Invocation
+- 高吞吐场景下启用 DP 注意力
+- `--dp` 取值通常与 `--tp` 相同
+- 权衡：吞吐更高，但延迟略增
 
-### 4.1 Deployment Command
+## 4. 模型调用
 
-Deploy the model using the command generated above. Example for B200:
+### 4.1 部署命令
+
+用上面生成的命令部署模型。以 B200 为例：
 
 ```shell Command
 sglang serve --model-path deepseek-ai/DeepSeek-Math-V2 \
@@ -70,11 +78,11 @@ sglang serve --model-path deepseek-ai/DeepSeek-Math-V2 \
   --port 30000
 ```
 
-### 4.2 Mathematical Reasoning
+### 4.2 数学推理
 
-DeepSeek-Math-V2 excels at mathematical problem-solving with step-by-step reasoning.
+DeepSeek-Math-V2 擅长分步推理的数学问题求解。
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -121,7 +129,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -205,9 +213,9 @@ S = \frac{n(n+1)}{2}.
 Both proofs are rigorous and show that the formula holds for all positive integers \(n\).
 ```
 
-### 4.3 Competition-Level Problems
+### 4.3 竞赛级问题
 
-**Example: IMO-style Problem:**
+**示例：IMO 风格问题：**
 
 ```python Example
 from openai import OpenAI
@@ -252,7 +260,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**输出示例：**
 
 ```text Output
 =============== Thinking =================
@@ -379,19 +387,19 @@ Thus for all positive \(a,b,c\) with \(abc=1\),
 ∎
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Accuracy Benchmark
+### 5.1 准确率基准测试
 
-#### 5.1.1 GSM8K Benchmark
+#### 5.1.1 GSM8K 基准测试
 
-**Benchmark Command:**
+**基准测试命令：**
 
 ```shell Command
 python3 benchmark/gsm8k/bench_sglang.py --num-questions 200 --port 30000
 ```
 
-**Test Results:**
+**测试结果：**
 
 ```text Output
 Accuracy: 0.975
@@ -400,18 +408,18 @@ Latency: 34.358 s
 Output throughput: 540.162 token/s
 ```
 
-### 5.2 Speed Benchmark
+### 5.2 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x, 183GB each)
-- Model: DeepSeek-Math-V2
-- Tensor Parallelism: 8
-- SGLang Version: 0.5.8
+- 硬件：NVIDIA B200 GPU（8 卡，每卡 183GB）
+- 模型：DeepSeek-Math-V2
+- 张量并行度：8
+- SGLang 版本：0.5.8
 
-#### 5.2.1 Latency Benchmark
+#### 5.2.1 延迟基准测试
 
-**Benchmark Command:**
+**基准测试命令：**
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -425,7 +433,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-**Test Results:**
+**测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -467,9 +475,9 @@ Max ITL (ms):                            24.93
 ==================================================
 ```
 
-#### 5.2.2 Throughput Benchmark
+#### 5.2.2 吞吐量基准测试
 
-**Benchmark Command:**
+**基准测试命令：**
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -483,7 +491,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-**Test Results:**
+**测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============

@@ -1,61 +1,69 @@
 ---
 title: DeepSeek-OCR-2
 metatags:
-    description: "Deploy DeepSeek-OCR-2 with SGLang - high-accuracy text extraction from images and documents for OCR tasks."
+    description: "使用 SGLang 部署 DeepSeek-OCR-2——面向 OCR 任务、从图像和文档中高精度提取文字的下一代模型。"
 ---
 
 import { DeepSeekOCR2Deployment } from '/src/snippets/autoregressive/deepseek-ocr-v2-deployment.jsx';
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[DeepSeek-OCR-2](https://github.com/deepseek-ai/DeepSeek-OCR-2) is DeepSeek's next-generation OCR (Optical Character Recognition) model, building on DeepSeek-OCR with improved accuracy and broader document understanding capabilities. The model is optimized for high-accuracy text extraction from images across a wide variety of document types and formats.
+[DeepSeek-OCR-2](https://github.com/deepseek-ai/DeepSeek-OCR-2) 是 DeepSeek 的下一代 OCR（光学字符识别）模型，在 DeepSeek-OCR 的基础上提升了精度与文档理解能力。该模型针对从各种文档类型与格式中高精度提取文字做了优化。
 
-**Key Features:**
+**核心特性：**
 
-- **Semantic-Aware Visual Encoding (DeepEncoder V2)**: DeepSeek-OCR-2 introduces DeepEncoder V2, which models document reading order in a more human-like, semantic-driven manner rather than relying on fixed raster scanning. This significantly improves logical reading flow in complex layouts (e.g., multi-column documents).
-- **Stronger Layout and Structural Understanding**: DeepSeek-OCR-2 demonstrates improved performance on structured documents such as tables, forms, and dense multi-column pages. It reduces reading-order errors and improves overall document parsing robustness compared to the original version.
-- **Improved Accuracy While Maintaining Token Efficiency**: The original DeepSeek-OCR emphasized aggressive visual token compression. OCR-2 maintains high token efficiency while delivering higher benchmark performance, particularly on document-level understanding tasks.
-- **Better Generalization Across Complex Document Tasks**: DeepSeek-OCR-2 performs more consistently across multilingual documents, structured data extraction, and visually complex content, making it more suitable for real-world document intelligence scenarios beyond plain text OCR.
+- **语义感知视觉编码（DeepEncoder V2）**：DeepSeek-OCR-2 引入 DeepEncoder V2，用更接近人类、以语义驱动的方式建模文档阅读顺序，而非依赖固定的栅格扫描。这显著改善了复杂版式（如多栏文档）中的逻辑阅读顺序。
+- **更强的版式与结构理解**：DeepSeek-OCR-2 在表格、表单、密集多栏页面等结构化文档上表现更好。相比原版，它减少了阅读顺序错误，整体文档解析更稳健。
+- **保持 token 效率的同时提升精度**：初代 DeepSeek-OCR 强调激进的视觉 token 压缩。OCR-2 在保持高 token 效率的同时，在基准测试上取得了更高成绩，尤其在文档级理解任务上。
+- **更复杂的文档任务泛化能力更好**：DeepSeek-OCR-2 在多语言文档、结构化数据抽取、视觉复杂内容上表现更一致，更适合纯文本 OCR 之外的现实文档智能场景。
 
-**Available Models:**
+<Note>
+💡 AI Infra 学习笔记：视觉编码器直接决定一张图要"花多少 token"。栅格扫描按固定网格切分图像，token 数与图像大小强相关；DeepEncoder V2 这类语义驱动编码则按内容语义分配 token，还能顺带建模阅读顺序。对推理引擎来说，视觉 token 越少，预填充与 KV 缓存开销越小——这也是"token 效率"在多模态模型里如此重要的原因。
+</Note>
 
-- **Base Model**: [deepseek-ai/DeepSeek-OCR-2](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - Recommended for OCR tasks
+**可用模型：**
 
-**License:**
-To use DeepSeek-OCR-2, you must agree to DeepSeek's Community License. See [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2/blob/main/LICENSE.txt) for details.
+- **基础模型**：[deepseek-ai/DeepSeek-OCR-2](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2) - 推荐用于 OCR 任务
 
-For more details, please refer to the [official DeepSeek-OCR-2 repository](https://github.com/deepseek-ai/DeepSeek-OCR-2).
+**许可协议：**
+使用 DeepSeek-OCR-2 需要同意 DeepSeek 社区许可协议。详见 [LICENSE](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2/blob/main/LICENSE.txt)。
 
-## 2. SGLang Installation
+更多细节请参考[官方 DeepSeek-OCR-2 仓库](https://github.com/deepseek-ai/DeepSeek-OCR-2)。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+## 2. SGLang 安装
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+安装说明请参考[官方 SGLang 安装指南](../../../docs/get-started/install)。
 
-## 3. Model Deployment
+SGLang CPU 版安装请参考 [CPU 版本安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+## 3. 模型部署
 
-### 3.1 Basic Configuration
+本节提供针对不同硬件平台与使用场景优化的部署配置。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, quantization method, and deployment strategy. SGLang supports serving DeepSeek-OCR-2 on NVIDIA H200 and B200, AMD MI300X, MI355X, and MI325X GPUs, as well as Intel Xeon CPUs.
+### 3.1 基础配置
+
+**交互式命令生成器**：用下面的配置选择器，可根据你的硬件平台、量化方式与部署策略自动生成对应的部署命令。SGLang 支持在 NVIDIA H200 与 B200、AMD MI300X、MI355X、MI325X 以及 Intel Xeon CPU 上服务 DeepSeek-OCR-2。
 
 <DeepSeekOCR2Deployment />
 
-**Note**: DeepSeek-OCR-2 has ~3B parameters and easily fits on a single modern GPU. For low-latency serving, no model parallelism is needed. For high-throughput requirements, consider using data parallelism with the SGLang Model Gateway — see [DP, DPA and SGLang DP Router](../../../docs/advanced_features/sgl_model_gateway) for more details.
+**注意**：DeepSeek-OCR-2 约 3B 参数，单块现代 GPU 即可轻松容纳。低延迟服务无需模型并行。若追求高吞吐，可考虑用 SGLang Model Gateway 做数据并行——详见 [DP、DPA 与 SGLang DP Router](../../../docs/advanced_features/sgl_model_gateway)。
 
-### 3.2 Configuration Tips
+### 3.2 配置技巧
 
-- **Single GPU Deployment:** DeepSeek-OCR-2 (~3B parameters) fits on a single modern GPU — no tensor parallelism required for low-latency serving.
-- **High Throughput:** For high-throughput scenarios, use data parallelism with the SGLang Model Gateway. See [DP, DPA and SGLang DP Router](../../../docs/advanced_features/sgl_model_gateway).
-- **NCCL timeout:** If model loading is slow, increase `--dist-timeout 3600`.
-- **Xeon CPU service configuration:** Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for NUMA binding settings.
+- **单 GPU 部署**：DeepSeek-OCR-2（约 3B 参数）单块现代 GPU 即可容纳——低延迟服务无需张量并行。
+- **高吞吐**：高吞吐场景下用 SGLang Model Gateway 做数据并行。参见 [DP、DPA 与 SGLang DP Router](../../../docs/advanced_features/sgl_model_gateway)。
+- **NCCL 超时**：若模型加载缓慢，增大 `--dist-timeout 3600`。
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动服务引擎一节的 `Notes` 部分，了解如何配置参数，尤其是 NUMA 绑定设置。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：小模型（3B）与大 MoE 模型（671B）的并行策略完全不同——前者单卡放得下，加张量并行反而引入通信开销、收益有限；后者必须靠 TP/EP 切分。提高吞吐的另一条路是数据并行（DP）：多份模型副本各处理一批请求，再靠 Router/Gateway 分配流量。选并行策略的关键是先算清楚「显存装不装得下、通信是否成为瓶颈」。
+</Note>
 
-### 4.1 Basic Usage
+## 4. 模型调用
 
-**OpenAI-compatible request example**
+### 4.1 基本用法
+
+**兼容 OpenAI 的请求示例**
 
 ```python Example
 import requests
@@ -80,43 +88,43 @@ response = requests.post(url, json=data)
 print(response.text)
 ```
 
-**Reference**
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
+**参考资料**
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
 
-### 4.2 Recommended Prompts
+### 4.2 推荐提示词
 
-The following prompts are recommended by the [official model card](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2#main-prompts).
+以下是[官方模型卡](https://huggingface.co/deepseek-ai/DeepSeek-OCR-2#main-prompts)推荐的提示词。
 
-**Structured document conversion** — extracts text while preserving layout:
+**结构化文档转换**——提取文字同时保留版式：
 
 ```text Example
 <image>
 <|grounding|>Convert the document to markdown.
 ```
 
-**Free-form OCR** — extracts without layouts:
+**自由式 OCR**——只提取文字、不带版式：
 
 ```text Example
 <image>
 Free OCR.
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA H200 GPU (1x)
-- Model: DeepSeek-OCR-2
-- Tensor Parallelism: 1
-- sglang version: 0.0.0.dev1+g93fca0bbc
+- 硬件：NVIDIA H200 GPU（1 卡）
+- 模型：DeepSeek-OCR-2
+- 张量并行度：1
+- SGLang 版本：0.0.0.dev1+g93fca0bbc
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios. To simulate real-world usage patterns, we configure each request with 1024 input tokens and 1024 output tokens, representing typical medium-length conversations with detailed responses. For more details on how to perform evaluation, see [Evaluating New Models with SGLang](../../../docs/developer_guide/evaluating_new_models).
+我们用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上做性能评估。该数据集包含真实对话数据，能更好地反映实际使用场景的性能。为模拟真实使用模式，我们把每个请求配置为 1024 个输入 token 与 1024 个输出 token，代表带详细回答的典型中等长度对话。更多评估方法请见[用 SGLang 评估新模型](../../../docs/developer_guide/evaluating_new_models)。
 
-#### 5.1.1 Latency-Sensitive Benchmark
+#### 5.1.1 延迟敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 sglang serve \
@@ -126,7 +134,7 @@ sglang serve \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -140,7 +148,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -182,9 +190,9 @@ Max ITL (ms):                            4.32
 ==================================================
 ```
 
-#### 5.1.2 Throughput-Sensitive Benchmark
+#### 5.1.2 吞吐量敏感基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 sglang serve \
@@ -198,7 +206,7 @@ sglang serve \
   --port 30000
 ```
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -212,7 +220,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- **Test Results:**
+- **测试结果：**
 
 ```text Output
 ============ Serving Benchmark Result ============

@@ -1,74 +1,84 @@
 ---
 title: Qwen3
 metatags:
-    description: "Deploy Qwen3 series models with SGLang - featuring advanced reasoning, 256K context, and flexible Dense/MoE architectures for edge to cloud."
+    description: "使用 SGLang 部署 Qwen3 系列模型——支持高级推理、256K 上下文，并提供 Dense/MoE 灵活架构，覆盖从边缘到云端。"
 ---
 
 
-## 1. Model Introduction
+## 1. 模型介绍
 
-[Qwen3 series](https://github.com/QwenLM/Qwen3) are the most powerful vision-language models in the Qwen series to date, featuring advanced capabilities in multi-modal understanding, reasoning, and agentic applications.
+[Qwen3 系列](https://github.com/QwenLM/Qwen3) 是 Qwen 系列目前最强的视觉语言模型，具备多模态理解、推理和智能体应用等先进能力。
 
-This generation delivers comprehensive upgrades across the board:
+这一代模型在各个方面都有全面升级：
 
-- **Stronger general intelligence**: Significant improvements in instruction following, logical reasoning, text comprehension, mathematics, science, coding, and tool usage.
-- **Broader multilingual knowledge**: Substantial gains in long-tail knowledge coverage across multiple languages.
-- **More helpful & aligned responses**: Markedly better alignment with user preferences in subjective and open-ended tasks, enabling higher-quality, more useful text generation.
-- **Extended context length**: Enhanced capabilities in understanding and reasoning over 256K-token long contexts.
-- **Stronger agent interaction capabilities**: Improved tool use and search-based agent performance.
-- **Flexible deployment options**: Available in Dense and MoE architectures that scale from edge to cloud, with Instruct and reasoning-enhanced Thinking editions.
+- **更强的通用智能**：在指令遵循、逻辑推理、文本理解、数学、科学、编码和工具使用上显著提升。
+- **更广泛的多语言知识**：多种语言的长尾知识覆盖大幅提升。
+- **更有帮助、更对齐的回答**：在主观和开放式任务中与用户偏好对齐得更好，生成质量更高、更有用的文本。
+- **更长的上下文**：对超过 256K token 的长上下文理解和推理能力增强。
+- **更强的智能体交互能力**：工具使用和基于搜索的智能体表现更好。
+- **灵活的部署选项**：提供 Dense 和 MoE 两种架构，可从边缘设备扩展到云端，并有 Instruct 和增强推理的 Thinking 版本。
 
-For more details, please refer to the [official Qwen3 GitHub Repository](https://github.com/QwenLM/Qwen3).
+更多细节请参考 [Qwen3 官方 GitHub 仓库](https://github.com/QwenLM/Qwen3)。
 
-## 2. SGLang Installation
+## 2. 安装 SGLang
 
-SGLang offers multiple installation methods. You can choose the most suitable installation method based on your hardware platform and requirements.
+SGLang 提供多种安装方式，你可以根据自己的硬件平台和需求选择最合适的一种。
 
-Please refer to the [official SGLang installation guide](../../../docs/get-started/install) for installation instructions.
+安装说明请参考 [SGLang 官方安装指南](../../../docs/get-started/install)。
 
-For SGLang CPU installation, please refer to the [CPU version installation guide](../../../docs/hardware-platforms/cpu_server#installation).
+如需在 CPU 上安装 SGLang，请参考 [CPU 版安装指南](../../../docs/hardware-platforms/cpu_server#installation)。
 
-## 3. Model Deployment
+## 3. 模型部署
 
-This section provides deployment configurations optimized for different hardware platforms and use cases.
+本节提供针对不同硬件平台和使用场景优化的部署配置。
 
-### 3.1 Basic Configuration
+### 3.1 基础配置
 
-The Qwen3 series offers models in various sizes and architectures, optimized for different hardware platforms including NVIDIA GPUs, AMD GPUs, and Intel Xeon CPUs. The recommended launch configurations vary by hardware and model size.
+Qwen3 系列提供多种尺寸和架构的模型，针对 NVIDIA GPU、AMD GPU 和 Intel Xeon CPU 等不同硬件平台做了优化。推荐的启动配置因硬件和模型尺寸而异。
 
-**Interactive Command Generator**: Use the configuration selector below to automatically generate the appropriate deployment command for your hardware platform, model size, quantization method, and thinking capabilities.
+<Note>
+💡 AI Infra 学习笔记：MoE（混合专家）架构把 FFN 层拆成多个「专家」子网络，每个 token 只激活其中 top-k 个（如 Qwen3-235B-A22B 总参数 235B、每个 token 仅激活 22B）。这样既保留大模型的容量，又把单 token 的计算量压到小模型量级——这是超大规模模型能在有限 GPU 上部署的关键。代价是专家路由引入额外显存（全部专家权重都要驻留）与通信开销，低并发时收益可能被抵消，这也是「激活参数」「top-k 路由」常成为推理优化面试考点的主要原因。
+</Note>
+
+
+**交互式命令生成器**：使用下面的配置选择器，根据你的硬件平台、模型尺寸、量化方法和思考能力自动生成对应的部署命令。
 
 import { Qwen3Deployment } from "/src/snippets/autoregressive/qwen3-deployment.jsx";
 
 <Qwen3Deployment />
 
-### 3.2 Configuration Tips
+### 3.2 配置建议
 
-- **Memory Management:** Set lower `--context-length` to conserve memory. A value of `128000` is sufficient for most scenarios, down from the default 262K.
-- **Expert Parallelism:** SGLang supports Expert Parallelism (EP) via `--ep`, allowing experts in MoE models to be deployed on separate GPUs for better throughput. One thing to note is that, for quantized models, you need to set `--ep` to a value that satisfies the requirement: `(moe_intermediate_size / moe_tp_size) % weight_block_size_n == 0, where moe_tp_size is equal to tp_size divided by ep_size.` Note that EP may perform worse in low concurrency scenarios due to additional communication overhead. Check out [Expert Parallelism Deployment](../../../docs/advanced_features/expert_parallelism) for more details.
-- **Kernel Tuning:** For MoE Triton kernel tuning on your specific hardware, refer to [fused_moe_triton](https://github.com/sgl-project/sglang/tree/main/benchmark/kernels/fused_moe_triton).
-- **Speculative Decoding:** Using Speculative Decoding for latency-sensitive scenarios.
-  - `--speculative-algorithm EAGLE3`: Speculative decoding algorithm
-  - `--speculative-num-steps 3`: Number of speculative verification rounds
-  - `--speculative-eagle-topk 1`: Top-k sampling for draft tokens
-  - `--speculative-num-draft-tokens 4`: Number of draft tokens per step
-  - `--speculative-draft-model-path`: The path of the draft model weights. This can be a local folder or a Hugging Face repo ID such as [`lmsys/SGLang-EAGLE3-Qwen3-235B-A22B-Instruct-2507-SpecForge-Meituan`](https://huggingface.co/lmsys/SGLang-EAGLE3-Qwen3-235B-A22B-Instruct-2507-SpecForge-Meituan).
-- **Xeon CPU service configuration:** Please refer to the `Notes` part in the serving engine launching section in [the SGLang CPU server document](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) to better understand how to configure the arguments, especially for TP (tensor parallel) and NUMA binding settings.
+- **显存管理**：设置更小的 `--context-length` 以节省显存。默认是 262K，多数场景下 `128000` 就够了。
+- **专家并行**：SGLang 通过 `--ep` 支持专家并行（EP），可以把 MoE 模型中的专家部署到不同的 GPU 上以获得更高吞吐。需要注意的是，对于量化模型，`--ep` 必须满足约束：`(moe_intermediate_size / moe_tp_size) % weight_block_size_n == 0, where moe_tp_size is equal to tp_size divided by ep_size.` 另外，低并发场景下 EP 可能因为额外的通信开销而表现更差。更多细节见 [专家并行部署](../../../docs/advanced_features/expert_parallelism)。
+- **kernel 调优**：要在你的特定硬件上调整 MoE Triton kernel，参考 [fused_moe_triton](https://github.com/sgl-project/sglang/tree/main/benchmark/kernels/fused_moe_triton)。
+- **投机解码**：在延迟敏感场景下使用投机解码。
+  - `--speculative-algorithm EAGLE3`：投机解码算法
+  - `--speculative-num-steps 3`：投机验证轮数
+  - `--speculative-eagle-topk 1`：草稿 token 的 top-k 采样
+  - `--speculative-num-draft-tokens 4`：每步生成的草稿 token 数量
+  - `--speculative-draft-model-path`：草稿模型权重的路径。可以是本地文件夹，也可以是 Hugging Face 仓库 ID，例如 [`lmsys/SGLang-EAGLE3-Qwen3-235B-A22B-Instruct-2507-SpecForge-Meituan`](https://huggingface.co/lmsys/SGLang-EAGLE3-Qwen3-235B-A22B-Instruct-2507-SpecForge-Meituan)。
+- **Xeon CPU 服务配置**：请参考 [SGLang CPU 服务端文档](../../../docs/hardware-platforms/cpu_server#launch-of-the-serving-engine) 中启动推理引擎一节的 `Notes` 部分，以更好地理解如何配置相关参数，尤其是 TP（张量并行）和 NUMA 绑定设置。
 
-## 4. Model Invocation
+<Note>
+💡 AI Infra 学习笔记：投机解码（speculative decoding）用一个更小的「草稿模型」先快速生成 N 个候选 token，再由主模型一次性并行验证，全部命中则一次前向产出 N 个 token，显著降低解码延迟。EAGLE-3 是其中的一种算法，`--speculative-num-steps` 控制验证步数、`--speculative-num-draft-tokens` 控制每步草稿数量——这两者与草稿接受率共同决定加速比，需要按实际负载调参（可用仓库中的 bench_speculative.py 基准脚本对比）。
+</Note>
 
-### 4.1 Basic Usage
 
-For basic API usage and request examples, please refer to:
+## 4. 模型调用
 
-- [SGLang Basic Usage Guide](../../../docs/basic_usage/send_request)
-- [SGLang OpenAI Vision API Guide](../../../docs/basic_usage/openai_api_vision)
+### 4.1 基本用法
 
-### 4.2 Advanced Usage
+基本的 API 用法和请求示例请参考：
 
-#### 4.2.1 Reasoning Parser
+- [SGLang 基本用法指南](../../../docs/basic_usage/send_request)
+- [SGLang OpenAI 视觉 API 指南](../../../docs/basic_usage/openai_api_vision)
 
-Qwen3-235B-A22B supports reasoning mode. Enable the reasoning parser during deployment to separate the thinking and content sections:
+### 4.2 高级用法
+
+#### 4.2.1 推理解析器
+
+Qwen3-235B-A22B 支持推理模式。部署时启用推理解析器，可以把思考过程和回答内容分开：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -79,7 +89,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Streaming with Thinking Process:**
+**带思考过程的流式输出：**
 
 ```python Example
 from openai import OpenAI
@@ -128,7 +138,7 @@ for chunk in response:
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -153,11 +163,11 @@ $$
 Thus, 15% of 240 is **36**.
 ```
 
-**Note:** The reasoning parser captures the model's step-by-step thinking process, allowing you to see how the model arrives at its conclusions.
+**注意：** 推理解析器会捕获模型逐步思考的过程，让你能看到模型是如何得出结论的。
 
-#### 4.2.3 Tool Calling
+#### 4.2.3 工具调用
 
-Qwen3 supports tool calling capabilities. Enable the tool call parser:
+Qwen3 支持工具调用。启用工具调用解析器：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -169,7 +179,7 @@ python -m sglang.launch_server \
   --port 8000
 ```
 
-**Python Example (with Thinking Process):**
+**Python 示例（带思考过程）：**
 
 ```python Example
 from openai import OpenAI
@@ -266,7 +276,7 @@ for index, tool_call in sorted(tool_calls_accumulator.items()):
 print()
 ```
 
-**Output Example:**
+**示例输出：**
 
 ```text Output
 =============== Thinking =================
@@ -281,13 +291,13 @@ Okay, the user is asking for the weather in Beijing. Let me check the tools avai
    Arguments: {"location": "Beijing", "unit": "celsius"}
 ```
 
-**Note:**
+**注意：**
 
-- The reasoning parser shows how the model decides to use a tool
-- Tool calls are clearly marked with the function name and arguments
-- You can then execute the function and send the result back to continue the conversation
+- 推理解析器展示了模型如何决定使用某个工具
+- 工具调用会清楚标出函数名和参数
+- 之后你可以执行该函数并把结果传回，继续对话
 
-**Handling Tool Call Results:**
+**处理工具调用结果：**
 
 ```python Example
 # After getting the tool call, execute the function
@@ -327,22 +337,22 @@ print(final_response.choices[0].message.content)
 # Output: "The current weather in Beijing is **22°C** and **sunny**. A perfect day to enjoy outdoor activities! 🌞"
 ```
 
-## 5. Benchmark
+## 5. 基准测试
 
-### 5.1 Speed Benchmark
+### 5.1 速度基准测试
 
-**Test Environment:**
+**测试环境：**
 
-- Hardware: NVIDIA B200 GPU (8x)
-- Model: Qwen3-235B-A22B-Instruct-2507
-- Tensor Parallelism: 8
-- sglang version: 0.5.6
+- 硬件：NVIDIA B200 GPU（8 块）
+- 模型：Qwen3-235B-A22B-Instruct-2507
+- 张量并行：8
+- SGLang 版本：0.5.6
 
-We use SGLang's built-in benchmarking tool to conduct performance evaluation on the [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) dataset. This dataset contains real conversation data and can better reflect performance in actual use scenarios.
+我们使用 SGLang 内置的基准测试工具，在 [ShareGPT_Vicuna_unfiltered](https://huggingface.co/datasets/anon8231489123/ShareGPT_Vicuna_unfiltered) 数据集上进行性能评估。该数据集包含真实对话数据，能更好地反映实际使用场景下的性能。
 
-#### 5.1.1 Standard Scenario Benchmark
+#### 5.1.1 标准场景基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -350,9 +360,9 @@ python -m sglang.launch_server \
   --tp 8
 ```
 
-##### 5.1.1.1 Low Concurrency
+##### 5.1.1.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -365,7 +375,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -406,9 +416,9 @@ Max ITL (ms):                            13.45
 ==================================================
 ```
 
-##### 5.1.1.2 Medium Concurrency
+##### 5.1.1.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -421,7 +431,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -462,9 +472,9 @@ Max ITL (ms):                            457.52
 ==================================================
 ```
 
-##### 5.1.1.3 High Concurrency
+##### 5.1.1.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -477,7 +487,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 100
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -518,9 +528,9 @@ Max ITL (ms):                            577.70
 ==================================================
 ```
 
-#### 5.1.2 Reasoning Scenario Benchmark
+#### 5.1.2 推理场景基准测试
 
-- Model Deployment Command:
+- 模型部署命令：
 
 ```shell Command
 python -m sglang.launch_server \
@@ -528,9 +538,9 @@ python -m sglang.launch_server \
   --tp 8
 ```
 
-##### 5.1.2.1 Low Concurrency
+##### 5.1.2.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -543,7 +553,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -584,9 +594,9 @@ Max ITL (ms):                            15.79
 ==================================================
 ```
 
-##### 5.1.2.2 Medium Concurrency
+##### 5.1.2.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -599,7 +609,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -640,9 +650,9 @@ Max ITL (ms):                            104.94
 ==================================================
 ```
 
-##### 5.1.2.3 High Concurrency
+##### 5.1.2.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -655,7 +665,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 64
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -696,11 +706,11 @@ Max ITL (ms):                            408.30
 ==================================================
 ```
 
-#### 5.1.3 Summarization Scenario Benchmark
+#### 5.1.3 摘要场景基准测试
 
-##### 5.1.3.1 Low Concurrency
+##### 5.1.3.1 低并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -713,7 +723,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 1
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -754,9 +764,9 @@ Max ITL (ms):                            14.48
 ==================================================
 ```
 
-##### 5.1.3.2 Medium Concurrency
+##### 5.1.3.2 中并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -769,7 +779,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 16
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -810,9 +820,9 @@ Max ITL (ms):                            574.64
 ==================================================
 ```
 
-##### 5.1.3.3 High Concurrency
+##### 5.1.3.3 高并发
 
-- Benchmark Command:
+- 基准测试命令：
 
 ```shell Command
 python3 -m sglang.bench_serving \
@@ -825,7 +835,7 @@ python3 -m sglang.bench_serving \
   --max-concurrency 64
 ```
 
-- Test Results:
+- 测试结果：
 
 ```text Output
 ============ Serving Benchmark Result ============
@@ -866,17 +876,17 @@ Max ITL (ms):                            352.79
 ==================================================
 ```
 
-### 5.2 Accuracy Benchmark
+### 5.2 精度基准测试
 
-#### 5.2.1 GSM8K Benchmark
+#### 5.2.1 GSM8K 基准测试
 
-- **Benchmark Command:**
+- **基准测试命令：**
 
 ```shell Command
 python3 -m sglang.test.few_shot_gsm8k --num-questions 200
 ```
 
-- **Results**:
+- **结果**：
 
   - Qwen/Qwen3-235B-A22B-Instruct-2507
     ```text Output
